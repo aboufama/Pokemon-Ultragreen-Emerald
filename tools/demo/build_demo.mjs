@@ -4,9 +4,13 @@
 //   node tools/demo/build_demo.mjs [--base http://127.0.0.1:5173/]
 //
 //   build/demo/index.html   page content with the whole app inlined as one
-//                           module script (for hosts that only allow inline JS)
+//                           module script and every asset embedded: a single
+//                           self-contained file (for hosts that allow nothing else)
 //   build/demo/page.html    the same wrapped in a full HTML document
-//   build/demo/assets/...   exactly the files a battle requests
+//   build/demo/site/        the same as three files: index.html (tiny), app.js
+//                           (the bundle) and data.js (models and assets), for
+//                           hosts that take a page with a couple of scripts
+//   build/demo/assets/...   exactly the files a battle requests (also embedded)
 //
 // The asset list is recorded from a real battle on the dev server (npm run
 // dev), so it stays in sync with the code, plus what the in-page picker can
@@ -79,6 +83,15 @@ for (const rel of [...assets].sort()) {
   files.push(rel);
 }
 
+// Every other file goes in the page too, as a data: URL (window.__EMBEDDED_ASSETS__),
+// so index.html is a single self-contained file; assets/ is kept for reference.
+const MIME = { png: 'image/png', json: 'application/json' };
+const embedded = {};
+for (const rel of files) {
+  const type = MIME[rel.split('.').pop()] ?? 'application/octet-stream';
+  embedded[rel.replace(/^assets\//, '')] = `data:${type};base64,${(await readFile(join(OUT, rel))).toString('base64')}`;
+}
+
 // 4. Page: the app inlined as one module script (escape closing tags).
 const script = bundle.replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '<\\!--');
 const content = `<title>Ultragreen Emerald Battle</title>
@@ -88,7 +101,8 @@ const content = `<title>Ultragreen Emerald Battle</title>
   body { margin: 0; background: #101018; color: #d9d8e6; }
 </style>
 <div id="app"></div>
-<script>window.__EMBEDDED_MODELS__ = ${JSON.stringify(models)};</script>
+<script>window.__EMBEDDED_MODELS__ = ${JSON.stringify(models)};
+window.__EMBEDDED_ASSETS__ = ${JSON.stringify(embedded)};</script>
 <script type="module">
 ${script}
 </script>
@@ -100,4 +114,8 @@ await writeFile(join(OUT, 'page.html'), `<!doctype html>
 ${content}</body></html>
 `);
 await writeFile(join(OUT, 'assets.json'), JSON.stringify(files, null, 2) + '\n');
+await mkdir(join(OUT, 'site'), { recursive: true });
+await writeFile(join(OUT, 'site/data.js'), `window.__EMBEDDED_MODELS__ = ${JSON.stringify(models)};\nwindow.__EMBEDDED_ASSETS__ = ${JSON.stringify(embedded)};\n`);
+await writeFile(join(OUT, 'site/app.js'), bundle);
+await writeFile(join(OUT, 'site/index.html'), content.replace(/<script>window\.__EMBEDDED_MODELS__[\s\S]*$/, '<script src="data.js"></script>\n<script type="module" src="app.js"></script>\n'));
 console.log(`demo: ${files.length} files (${(bytes / 1024).toFixed(0)} KB), ${Object.keys(models).length} embedded model(s), page ${(content.length / 1024).toFixed(0)} KB -> ${OUT}`);
