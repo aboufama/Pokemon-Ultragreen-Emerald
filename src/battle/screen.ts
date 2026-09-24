@@ -39,7 +39,14 @@ export class GbaScreen {
     };
     resize();
     if (fixedScale === undefined) addEventListener('resize', resize);
+    this.dispose = () => {
+      removeEventListener('resize', resize);
+      this.element.remove();
+    };
   }
+
+  /** Remove the screen from the page. */
+  readonly dispose: () => void;
 
   presentUi(): void {
     this.imageData.data.set(this.ui.data);

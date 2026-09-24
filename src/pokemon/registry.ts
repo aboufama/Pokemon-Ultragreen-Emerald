@@ -14,6 +14,11 @@ export function hasProfile(slug: string): boolean {
   return slug in FACTORIES;
 }
 
+/** Every species with a 3D profile. */
+export function profiledSpecies(): string[] {
+  return Object.keys(FACTORIES);
+}
+
 export function getSpeciesProfile(slug: string): Promise<SpeciesProfile> {
   let p = cache.get(slug);
   if (!p) {

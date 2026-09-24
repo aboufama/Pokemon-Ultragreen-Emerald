@@ -16,18 +16,29 @@ export class Input {
   private pressedThisFrame = new Set<Button>();
   private queue: Button[] = [];
 
-  constructor(target: HTMLElement | Window = window) {
-    target.addEventListener('keydown', (e) => {
-      const b = KEYMAP[(e as KeyboardEvent).code];
-      if (!b) return;
-      e.preventDefault();
-      if (!(e as KeyboardEvent).repeat) this.queue.push(b);
-      this.held.add(b);
-    });
-    target.addEventListener('keyup', (e) => {
-      const b = KEYMAP[(e as KeyboardEvent).code];
-      if (b) this.held.delete(b);
-    });
+  private readonly onKeyDown = (e: Event): void => {
+    // Keys typed into page controls (the species picker) are theirs.
+    if ((e.target as HTMLElement | null)?.closest?.('select, input, textarea, button')) return;
+    const b = KEYMAP[(e as KeyboardEvent).code];
+    if (!b) return;
+    e.preventDefault();
+    if (!(e as KeyboardEvent).repeat) this.queue.push(b);
+    this.held.add(b);
+  };
+
+  private readonly onKeyUp = (e: Event): void => {
+    const b = KEYMAP[(e as KeyboardEvent).code];
+    if (b) this.held.delete(b);
+  };
+
+  constructor(private readonly target: HTMLElement | Window = window) {
+    target.addEventListener('keydown', this.onKeyDown);
+    target.addEventListener('keyup', this.onKeyUp);
+  }
+
+  dispose(): void {
+    this.target.removeEventListener('keydown', this.onKeyDown);
+    this.target.removeEventListener('keyup', this.onKeyUp);
   }
 
   /** Programmatic press (autoplay, tests). */
