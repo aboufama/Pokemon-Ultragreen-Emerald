@@ -99,6 +99,9 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `tools/gauntlet/brief.mjs` | a species' Pokédex entry, stats and every move it can use with its motif |
 | `tools/gauntlet/skeleton.mjs` | a model's skeleton, what each bone moves, and its textures |
 | `tools/gauntlet/check.mjs` | the gauntlet's quality gates for a species (`--render` adds battles) |
+| `tools/gauntlet/setup_worktree.mjs` | ready a git worktree for a gauntlet run beside other agents |
+| `tools/gauntlet/review_page.mjs` | one review page with every clip GIF, brief and review note of one or more species |
+| `tools/calibrate/candidates.mjs` | compare stance variants by how well each fits the stock sprites |
 | `tools/models/optimize_model.mjs` | strip upstream animations and recompress a fetched model |
 | `tools/shots/move_sheet.mjs` | contact sheets of moves and clips in the battle view |
 | `.claude/skills/pokemon-gauntlet`, `pokemon-animation` | the process and the animation craft, as skills for agents |
