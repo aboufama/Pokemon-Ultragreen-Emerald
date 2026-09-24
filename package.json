@@ -1,0 +1,25 @@
+{
+  "name": "pokemon-ultragreen-emerald",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pokemon Emerald remake built from the pret/pokeemerald decompilation, with 3D rigged battles rendered through a GBA pixelation pass.",
+  "scripts": {
+    "postinstall": "node tools/prepare_libs.mjs",
+    "dev": "node tools/prepare_libs.mjs && vite",
+    "build": "node tools/prepare_libs.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "extract": "python3 tools/extract/extract_all.py",
+    "shots": "node tools/shots/shoot.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "playwright": "1.56.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}

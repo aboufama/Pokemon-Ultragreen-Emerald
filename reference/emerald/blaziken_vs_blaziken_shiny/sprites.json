@@ -1,0 +1,88 @@
+{
+  "playerSpecies": 282,
+  "enemySpecies": 282,
+  "introFrames": 674,
+  "sprites": {
+    "playerMon": {
+      "spriteId": 6,
+      "x": 72,
+      "y": 80,
+      "x2": 0,
+      "y2": 0,
+      "centerToCornerX": -32,
+      "centerToCornerY": -32,
+      "oam": [
+        48,
+        1,
+        40,
+        196,
+        149,
+        9,
+        0,
+        0
+      ]
+    },
+    "enemyMon": {
+      "spriteId": 4,
+      "x": 176,
+      "y": 40,
+      "x2": 0,
+      "y2": 0,
+      "centerToCornerX": -32,
+      "centerToCornerY": -32,
+      "oam": [
+        8,
+        1,
+        144,
+        194,
+        85,
+        25,
+        0,
+        0
+      ]
+    },
+    "playerHealthbox": {
+      "spriteId": 0,
+      "x": 158,
+      "y": 88,
+      "x2": 0,
+      "y2": 0,
+      "centerToCornerX": -32,
+      "centerToCornerY": -16,
+      "oam": [
+        72,
+        0,
+        126,
+        192,
+        0,
+        68,
+        63,
+        0
+      ]
+    },
+    "enemyHealthbox": {
+      "spriteId": 1,
+      "x": 44,
+      "y": 30,
+      "x2": 0,
+      "y2": 0,
+      "centerToCornerX": -32,
+      "centerToCornerY": -16,
+      "oam": [
+        14,
+        64,
+        12,
+        192,
+        128,
+        68,
+        61,
+        0
+      ]
+    }
+  },
+  "player": "blaziken",
+  "enemy": "blaziken",
+  "environment": "grass",
+  "level": 50,
+  "shiny": true
+}
