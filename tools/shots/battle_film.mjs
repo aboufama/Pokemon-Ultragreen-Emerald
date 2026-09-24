@@ -5,6 +5,7 @@
 //   node tools/shots/battle_film.mjs --query "autoplay=1&seed=7&loop=0" \
 //        --every 10 --until 700 --out build/film/intro [--cols 8] [--scale 1]
 //   node tools/shots/battle_film.mjs --frames 150,230,480 ...
+//   --presses "620:RIGHT,640:DOWN,660:A"   scripted buttons (pressed on that frame)
 //
 // Needs the dev server (npm run dev) at --base (default http://127.0.0.1:5173/).
 
@@ -54,10 +55,25 @@ const grab = () => page.evaluate(() => {
   return c.toDataURL('image/png');
 });
 
+const presses = String(args.presses ?? '').split(',').filter(Boolean).map((p) => {
+  const [f, b] = p.split(':');
+  return { f: Number(f), b: b.trim().toUpperCase() };
+});
+const stepTo = async (f, current) => {
+  // Stop at every scripted press on the way; a press is seen on the next frame.
+  for (const p of presses) {
+    if (p.f <= current || p.f > f) continue;
+    await page.evaluate((n) => window.__battle.step(n), p.f - 1 - current);
+    await page.evaluate((b) => window.__battle.scene.input.press(b), p.b);
+    current = p.f - 1;
+  }
+  if (f > current) await page.evaluate((n) => window.__battle.step(n), f - current);
+};
+
 let current = 0;
 const shots = [];
 for (const f of frames) {
-  if (f > current) await page.evaluate((n) => window.__battle.step(n), f - current);
+  await stepTo(f, current);
   current = Math.max(current, f);
   const url = await grab();
   const state = await page.evaluate(() => window.__battle.state());

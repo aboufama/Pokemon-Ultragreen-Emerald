@@ -16,7 +16,7 @@ import { loadAllFonts } from '../gba/font';
 import { BattleStage } from '../render3d/stage';
 import { Battler3D } from '../battle3d/battler';
 import { VfxSystem, preloadSheets } from '../battle3d/vfx';
-import { bodyPoint, performMove } from '../battle3d/director';
+import { bodyPoint, performMove, towardCamera } from '../battle3d/director';
 import { hasProfile } from '../pokemon/registry';
 import { GbaScreen } from './screen';
 import { type Button, Input } from './input';
@@ -816,7 +816,7 @@ export class BattleScene {
     const b = this.battler(side);
     for (let i = 0; i < 3; i++) {
       this.vfx.after(i * 0.2, () => {
-        const p = bodyPoint(b, 0.25 + i * 0.2);
+        const p = towardCamera(b, bodyPoint(b, 0.25 + i * 0.2), 0.35);
         void this.vfx.sprite('SmallEmber', p, { px: 24, fps: 12, velocity: new THREE.Vector3(0, b.height * 0.5, 0) });
       });
     }

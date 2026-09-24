@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import type { MoveData } from '../data';
+import { toScreen } from '../render3d/stage';
 import type { Battler3D } from './battler';
 import type { VfxSystem } from './vfx';
 
@@ -41,6 +42,38 @@ export function bodyPoint(b: Battler3D, heightFraction: number): THREE.Vector3 {
   return p;
 }
 
+/**
+ * Slide a point toward the camera along its view ray: same screen position
+ * and pixel scale, but in front of the body it sits in (sprites drawn inside
+ * a model would be hidden by it).
+ */
+export function towardCamera(b: Battler3D, p: THREE.Vector3, heights: number): THREE.Vector3 {
+  const cam = b.stage.homeCamera.position;
+  return p.clone().add(cam.clone().sub(p).normalize().multiplyScalar(b.height * heights));
+}
+
+/**
+ * Where effects hit a battler: in front of its body center, raised while
+ * that projects below y=92 (the player's back view is cut off by the text
+ * box, so its visible body is higher up).
+ */
+export function hitPoint(b: Battler3D, fraction = 0.55): THREE.Vector3 {
+  let f = fraction;
+  let p = bodyPoint(b, f);
+  while (f < 0.85 && toScreen(b.stage.homeCamera, p)[1] > 92) {
+    f += 0.05;
+    p = bodyPoint(b, f);
+  }
+  return towardCamera(b, p, 0.35);
+}
+
+/** Where breath/beam effects leave the attacker: in front of its head. */
+function mouthPoint(b: Battler3D): THREE.Vector3 {
+  const head = bonePoint(b, 'head');
+  head.y -= 0.03 * b.height;
+  return towardCamera(b, head, 0.12);
+}
+
 export interface PerformHooks {
   /** Called for every hit that lands (multi-hit moves call it several times). */
   onHit?: (index: number) => void;
@@ -54,7 +87,7 @@ function hitReaction(target: Battler3D, vfx: VfxSystem, strong: boolean): void {
 
 /** Impact VFX at the target for a contact move. */
 function contactFx(move: MoveData, target: Battler3D, vfx: VfxSystem, index: number): void {
-  const at = bodyPoint(target, 0.55);
+  const at = hitPoint(target);
   const upp = vfx.unitsPerPixel(at);
   const jitter = new THREE.Vector3((index % 2 ? 6 : -6) * upp, (index % 2 ? -4 : 4) * upp, 0);
   const strong = categorize(move) === 'physical_strong';
@@ -87,7 +120,7 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
         hitReaction(target, vfx, category === 'special_strong');
       }));
     } else if (name === 'charge') {
-      const hand = bonePoint(attacker, 'handR');
+      const hand = towardCamera(attacker, bonePoint(attacker, 'handR'), 0.1);
       for (let i = 0; i < 3; i++) vfx.after(i * 0.15, () => void vfx.sprite('SmallEmber', hand, { px: 24, fps: 12 }));
     } else if (name === 'aura') {
       auraFx(attacker, vfx);
@@ -103,9 +136,8 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
 }
 
 async function releaseFx(attacker: Battler3D, target: Battler3D, move: MoveData, vfx: VfxSystem, category: AnimCategory): Promise<void> {
-  const from = bonePoint(attacker, 'head');
-  from.add(new THREE.Vector3(0, -0.05, 0));
-  const to = bodyPoint(target, 0.55);
+  const from = mouthPoint(attacker);
+  const to = hitPoint(target);
   const fire = move.type === 'TYPE_FIRE';
   if (category === 'special_weak') {
     // Ember: a small fireball arcs over, then bursts on the target.
@@ -142,8 +174,8 @@ function auraFx(attacker: Battler3D, vfx: VfxSystem): void {
 }
 
 async function emitFx(attacker: Battler3D, target: Battler3D, move: MoveData, vfx: VfxSystem): Promise<void> {
-  const from = bonePoint(attacker, 'head');
-  const to = bodyPoint(target, 0.6);
+  const from = mouthPoint(attacker);
+  const to = hitPoint(target, 0.6);
   const sprite = move.name.includes('SAND') ? 'MudUnk' : 'NoiseLine';
   const waves: Promise<void>[] = [];
   for (let i = 0; i < 4; i++) {
