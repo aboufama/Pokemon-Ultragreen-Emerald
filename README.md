@@ -88,6 +88,7 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `/?mode=uifit` | pixel check of the UI against real captures |
 | `/?mode=bonedump&species=…` | skeleton dump |
 | `tools/shots/battle_film.mjs` | frame-stepped battle recordings with scripted button presses |
+| `tools/shots/clip_gifs.mjs` | every clip of a species as looping GIFs from both sides (review) |
 | `tools/gauntlet/new_species.mjs` | scaffold a new species (see the pipeline doc) |
 | `tools/reference/` | build a harness ROM from the decomp and capture real frames with mGBA |
 

@@ -172,6 +172,17 @@ behind and cropped by the text box, so check that the motion reads there too:
 
 Batch them with `node tools/shots/shoot.mjs --plan plan.json`.
 
+For a sign-off pass, export every clip from both sides as looping GIFs, in the
+battle view with the in-game UI:
+
+```sh
+node tools/shots/clip_gifs.mjs --species <slug> --out build/clips/<slug>
+```
+
+This writes one GIF per clip and side, plus a `manifest.json` with each clip's
+duration and events. The GIFs are 30 fps with exact colors. `/?mode=clipreview`
+plays a single clip the same way in the browser.
+
 ## 7. Battle check
 
 ```sh
