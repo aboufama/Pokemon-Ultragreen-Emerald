@@ -7,13 +7,27 @@
 //
 //   node tools/gauntlet/brief.mjs --slug swampert [--json]
 
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { importTs } from './tsimport.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const DECOMP = join(ROOT, 'decomp/pokeemerald/src/data/pokemon');
+
+/** The decomp's species data: this checkout's submodule, else the main checkout's (in a git worktree). */
+function decompDir() {
+  const sub = 'decomp/pokeemerald/src/data/pokemon';
+  if (existsSync(join(ROOT, sub))) return join(ROOT, sub);
+  try {
+    const common = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    const main = join(dirname(resolve(ROOT, common)), sub);
+    if (existsSync(main)) return main;
+  } catch {}
+  return join(ROOT, sub);
+}
+const DECOMP = decompDir();
 
 function parseArgs(argv) {
   const args = {};
