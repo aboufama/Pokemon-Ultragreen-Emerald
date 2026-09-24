@@ -17,8 +17,11 @@ Before anything else, read these and follow them exactly:
 
 Rules:
 
-- Use the dev-server port you were given for every browser tool (`--base`).
-  Start the server yourself if it isn't running; stop it when you finish.
+- In a git worktree, run `node tools/gauntlet/setup_worktree.mjs` first. Use
+  the dev-server port you were given (or the one it prints) for every browser
+  tool (`--base`). Start the server yourself if it isn't running; stop it when
+  you finish.
+- Commit by explicit paths, never `git add -A`.
 - Stay inside `src/pokemon/<slug>/`, `public/assets/pokemon/<slug>/` and the
   registry line. If a shared tool or engine file blocks you, make the smallest
   fix, and list it in your report.

@@ -18,16 +18,27 @@ keep it minimal and say so in your report).
 
 ## 0. Setup
 
+In the main checkout:
+
 ```sh
-npm install                     # if node_modules is missing (in a git worktree you can
-                                # symlink the main checkout's node_modules instead)
+npm install                     # if node_modules is missing
 node tools/prepare_libs.mjs     # copies the Draco decoder into public/libs (npm run dev does this)
-npx vite --port 5173 --strictPort --host 127.0.0.1 &   # pick a free port if several agents run
+npx vite --port 5173 --strictPort --host 127.0.0.1 &
 ```
 
+In a git worktree (several agents at once, each in its own):
+
+```sh
+node tools/gauntlet/setup_worktree.mjs   # links the main checkout's node_modules, copies the
+                                         # decoder, prints the vite command on a free port
+```
+
+Commit by explicit paths (`git add src/pokemon/<slug> ...`), never `git add -A`:
+a worktree holds links and scratch files that must not be committed.
+
 `tools/gauntlet/brief.mjs` reads the Pokédex text from the decomp
-(`decomp/pokeemerald`, a git submodule): `git submodule update --init --depth 1
-decomp/pokeemerald`, or symlink the main checkout's copy in a worktree.
+(`decomp/pokeemerald`, a git submodule; `git submodule update --init --depth 1
+decomp/pokeemerald`). In a worktree it reads the main checkout's copy.
 
 Every browser tool takes `--base http://127.0.0.1:<port>/`. Rendering is
 headless Chromium on the CPU: slow. Render only what you need while iterating
@@ -104,6 +115,23 @@ Gates: IoU ≥ 0.55 and box IoU ≥ 0.75 on both sides, color loss ≤ 1.0. A po
 fit means the stance is wrong — fix the stance and re-run, never the
 thresholds. Check `reference/calibration/<slug>.png`. Floating species set
 `slots.enemy.lift` by hand.
+
+Steps 4 and 5 go together: when a fit is poor, write two to four stance
+variants as extra named poses (`c1`, `c2`... each a copy of `stance` with the
+change you are testing: more crouch, head up, arms wider) and compare them in
+one run instead of editing the stance back and forth:
+
+```sh
+node tools/calibrate/candidates.mjs --species <slug> --poses stance,c1,c2,c3 --quick
+```
+
+It prints each candidate's height, yaws and fit against the gates, marks the
+best, and saves `build/calibrate/<slug>-<pose>.png` (battle view and overlap:
+green both, red sprite only, blue model only — red at the top means the model
+is too short there, blue at the sides means it stands too wide). Confirm the
+finalists without `--quick`, make the winner the `stance`, delete the
+candidates, then run `run.mjs`. If the fit turns the model side-on or away
+from the foe to cover a wide back sprite, pass `--init yawLimit=60`.
 
 ## 6. Life: springs, eyes, effects, emitters
 

@@ -241,9 +241,13 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
     keys.forEach((k, i) => (p[k] = v[i]));
     return p;
   };
+  // Optional bound on the slot yaws (&yawLimit=60): wide, cut-off back
+  // sprites can fit best side-on, facing away from the foe.
+  const yawLimit = Number(params.get('yawLimit') ?? 360);
   const objective = (v: number[]) => {
     const p = fromVec(v);
     if (p.fov < 8 || p.fov > 70 || p.pitch < 0 || p.pitch > 60 || p.height < 0.3) return 10;
+    if (Math.abs(p.enemyYaw) > yawLimit || Math.abs(p.playerYaw) > yawLimit) return 10;
     const s = score(p);
     // Silhouette overlap plus bounding-box agreement (size and placement are
     // what matter most; the box term keeps the fit stable when poses differ).
@@ -255,8 +259,9 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
     let best = { x: toVec(base), fx: objective(toVec(base)) };
     const initial = -best.fx;
     // Multi-start over the slot yaws (silhouettes have mirror-like local optima),
-    // then refine the best candidate with shrinking simplex sizes.
-    const yawStarts = [-40, -15, 0, 15, 40];
+    // then refine the best candidate with shrinking simplex sizes. Fewer
+    // starts (&starts=-15,15) give a quick look when comparing stances.
+    const yawStarts = (params.get('starts') ?? '-40,-15,0,15,40').split(',').map(Number);
     for (const ey of yawStarts) {
       for (const py of yawStarts) {
         const start = fromVec(best.x);
