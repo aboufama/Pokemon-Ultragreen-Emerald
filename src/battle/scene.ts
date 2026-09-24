@@ -460,6 +460,8 @@ export class BattleScene {
     // frames sinks behind the text box, BG3 halves slide in 2px/frame. The
     // wild Pokémon and the trainer ride along with their half.
     let slide = 240, bg1x = 0, bg1y = 0, top = 80, bottom = 81, delay = 32, state = 2;
+    // Long grass sinks further and faster (BATTLE_ENVIRONMENT_LONG_GRASS).
+    const [sinkTo, sinkStep] = this.opts.environment === 'long_grass' ? [-80, 2] : [-56, 1];
     const apply = () => {
       env.slide = slide;
       env.setEntry(state < 4, bg1x, bg1y);
@@ -476,7 +478,7 @@ export class BattleScene {
         if (top === 48) state = 3;
       } else {
         if (delay > 0) delay--;
-        else if (bg1y > -56) bg1y--;
+        else if (bg1y > sinkTo) bg1y -= sinkStep;
         if (top > 0) {
           top -= 4;
           bottom += 4;

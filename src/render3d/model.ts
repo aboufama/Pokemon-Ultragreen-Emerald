@@ -38,8 +38,11 @@ export interface LoadedModel {
 }
 
 export async function loadPokemonModel(slug: string, variant: 'regular' | 'shiny' = 'regular'): Promise<LoadedModel> {
-  const file = variant === 'shiny' ? 'model.shiny.glb' : 'model.glb';
-  const gltf = await loadGltf(asset(`pokemon/${slug}/${file}`));
+  // Not every species has an upstream shiny model: fall back to the regular
+  // one (the pixel pass still snaps it to the shiny GBA palette).
+  const gltf = variant === 'shiny'
+    ? await loadGltf(asset(`pokemon/${slug}/model.shiny.glb`)).catch(() => loadGltf(asset(`pokemon/${slug}/model.glb`)))
+    : await loadGltf(asset(`pokemon/${slug}/model.glb`));
   const scene = gltf.scene;
   const root = new THREE.Group();
   root.name = `${slug}-root`;
