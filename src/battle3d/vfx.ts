@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { asset } from '../gba/assets';
 import type { BattleStage } from '../render3d/stage';
+import { TYPE_SHEETS } from './type_fx';
 
 /** Object id range for effects: never palette-snapped or outlined. */
 export const FX_PIXEL_ID = 9;
@@ -42,7 +43,7 @@ function sheet(name: string): Promise<SheetInfo> {
 }
 
 /** Sheets used by the standard move choreography (loaded before battles). */
-export const COMMON_SHEETS = ['Fire', 'SmallEmber', 'FirePlume', 'Impact', 'ClawSlash', 'HumanoidFoot', 'FocusEnergy', 'NoiseLine', 'MudUnk', 'Particles'];
+export const COMMON_SHEETS = [...new Set([...TYPE_SHEETS, 'Particles', 'SmallEmber', 'Fire', 'FirePlume'])];
 
 export function preloadSheets(names: string[] = COMMON_SHEETS): Promise<unknown> {
   return Promise.all(names.map(sheet));

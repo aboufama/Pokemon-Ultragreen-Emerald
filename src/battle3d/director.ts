@@ -8,6 +8,7 @@ import type { MoveData } from '../data';
 import { toScreen } from '../render3d/stage';
 import type { Battler3D } from './battler';
 import type { VfxSystem } from './vfx';
+import { statusSprite, typeFx } from './type_fx';
 
 export type AnimCategory = 'physical_weak' | 'physical_strong' | 'special_weak' | 'special_strong' | 'status_self' | 'status_target';
 
@@ -85,21 +86,22 @@ function hitReaction(target: Battler3D, vfx: VfxSystem, strong: boolean): void {
   if (strong) vfx.shake(0.06, 0.3);
 }
 
-/** Impact VFX at the target for a contact move. */
+/** Impact VFX at the target for a contact move (per-type recipe). */
 function contactFx(move: MoveData, target: Battler3D, vfx: VfxSystem, index: number): void {
   const at = hitPoint(target);
   const upp = vfx.unitsPerPixel(at);
   const jitter = new THREE.Vector3((index % 2 ? 6 : -6) * upp, (index % 2 ? -4 : 4) * upp, 0);
   const strong = categorize(move) === 'physical_strong';
-  if (move.type === 'TYPE_FIRE') {
-    void vfx.sprite('Impact', at.clone().add(jitter), { px: 32, life: 0.2, scaleFrom: 0.6, scaleTo: 1.1 });
-    void vfx.sprite('FirePlume', at.clone().add(new THREE.Vector3(0, -8 * upp, 0)), { px: 32, fps: 14 });
-  } else if (move.type === 'TYPE_NORMAL' && !move.name.includes('KICK') && !strong) {
+  const kick = move.name.includes('KICK');
+  const fx = typeFx(move.type);
+  if (move.type === 'TYPE_NORMAL' && !kick && !strong) {
+    // Scratch, Slash, Fury Swipes...: claw marks instead of a bump.
     void vfx.sprite('ClawSlash', at.clone().add(jitter), { px: 32, fps: 18 });
-  } else {
-    void vfx.sprite('Impact', at.clone().add(jitter), { px: strong ? 40 : 30, life: strong ? 0.28 : 0.18, scaleFrom: 0.5, scaleTo: 1.15 });
-    if (move.name.includes('KICK')) void vfx.sprite('HumanoidFoot', at.clone().add(jitter.multiplyScalar(-1)), { px: 24, life: 0.2 });
+    return;
   }
+  void vfx.sprite(fx.impact, at.clone().add(jitter), { px: strong ? 40 : 30, life: strong ? 0.28 : 0.2, scaleFrom: 0.5, scaleTo: 1.15 });
+  if (fx.extra) void vfx.sprite(fx.extra, at.clone().add(new THREE.Vector3(0, -8 * upp, 0)), { px: 32, fps: 14, life: 0.36, loop: true });
+  if (kick) void vfx.sprite('HumanoidFoot', at.clone().add(jitter.multiplyScalar(-1)), { px: 24, life: 0.2 });
 }
 
 export async function performMove(attacker: Battler3D, target: Battler3D, move: MoveData, vfx: VfxSystem, hooks: PerformHooks = {}): Promise<void> {
@@ -120,8 +122,9 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
         hitReaction(target, vfx, category === 'special_strong');
       }));
     } else if (name === 'charge') {
-      const hand = towardCamera(attacker, bonePoint(attacker, 'handR'), 0.1);
-      for (let i = 0; i < 3; i++) vfx.after(i * 0.15, () => void vfx.sprite('SmallEmber', hand, { px: 24, fps: 12 }));
+      const at = towardCamera(attacker, bonePoint(attacker, attacker.inst.rig.node('handR') ? 'handR' : 'head'), 0.1);
+      const sheet = typeFx(move.type).charge;
+      for (let i = 0; i < 3; i++) vfx.after(i * 0.15, () => void vfx.sprite(sheet, at, { px: 24, fps: 12, life: 0.4, loop: true }));
     } else if (name === 'aura') {
       auraFx(attacker, vfx);
     } else if (name === 'emit') {
@@ -138,26 +141,26 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
 async function releaseFx(attacker: Battler3D, target: Battler3D, move: MoveData, vfx: VfxSystem, category: AnimCategory): Promise<void> {
   const from = mouthPoint(attacker);
   const to = hitPoint(target);
-  const fire = move.type === 'TYPE_FIRE';
+  const fx = typeFx(move.type);
   if (category === 'special_weak') {
-    // Ember: a small fireball arcs over, then bursts on the target.
-    await vfx.projectile(fire ? 'SmallEmber' : 'Impact', from, to, 0.45, { px: 24, fps: 12, arc: 0.25 });
-    void vfx.sprite(fire ? 'Fire' : 'Impact', to, { px: 32, fps: 16, life: 0.45 });
+    // Ember, Water Gun, Thundershock...: a projectile arcs over and bursts.
+    await vfx.projectile(fx.projectile, from, to, 0.45, { px: 24, fps: 12, arc: 0.25 });
+    void vfx.sprite(fx.burst, to, { px: 32, fps: 16, life: 0.45, loop: true });
     return;
   }
-  // Flamethrower & co: a stream of flame sprites for ~0.8s.
+  // Flamethrower, Surf, Thunderbolt...: a stream of sprites for ~0.8s.
   const stream: Promise<void>[] = [];
   const count = 12;
   for (let i = 0; i < count; i++) {
     stream.push(new Promise((resolve) => {
       vfx.after(i * 0.065, () => {
         const wobble = new THREE.Vector3(0, Math.sin(i * 1.7) * 0.06, Math.cos(i * 1.3) * 0.06);
-        void vfx.projectile(fire ? 'Fire' : 'Impact', from, to.clone().add(wobble), 0.32, { px: 20 + (i % 3) * 4, fps: 20, arc: 0.05 }).then(resolve);
+        void vfx.projectile(fx.stream, from, to.clone().add(wobble), 0.32, { px: 20 + (i % 3) * 4, fps: 20, arc: 0.05 }).then(resolve);
       });
     }));
   }
   await Promise.all(stream);
-  void vfx.sprite(fire ? 'FirePlume' : 'Impact', to, { px: 40, fps: 12 });
+  void vfx.sprite(fx.extra ?? fx.burst, to, { px: 40, fps: 12, life: 0.42, loop: true });
   vfx.shake(0.05, 0.35);
 }
 
@@ -176,7 +179,13 @@ function auraFx(attacker: Battler3D, vfx: VfxSystem): void {
 async function emitFx(attacker: Battler3D, target: Battler3D, move: MoveData, vfx: VfxSystem): Promise<void> {
   const from = mouthPoint(attacker);
   const to = hitPoint(target, 0.6);
-  const sprite = move.name.includes('SAND') ? 'MudUnk' : 'NoiseLine';
+  const { sheet: sprite, at } = statusSprite(move.name);
+  if (at === 'eyes') {
+    // Leer, Scary Face: a glint at the attacker's eyes.
+    void vfx.sprite(sprite, towardCamera(attacker, bonePoint(attacker, 'head'), 0.15), { px: 32, fps: 14 });
+    await new Promise<void>((resolve) => vfx.after(0.5, resolve));
+    return;
+  }
   const waves: Promise<void>[] = [];
   for (let i = 0; i < 4; i++) {
     waves.push(new Promise((resolve) => vfx.after(i * 0.12, () => void vfx.projectile(sprite, from, to, 0.4, { px: 14 + i * 3, fps: 12 }).then(resolve))));
