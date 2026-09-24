@@ -173,6 +173,7 @@ int main(int argc, char** argv) {
 	const char* prefix = argv[3];
 
 	int introEvery = 0;
+	int dumpMemory = 0;
 	struct HarnessConfig override = { 0 };
 	int haveOverride[16] = { 0 };
 
@@ -190,6 +191,7 @@ int main(int argc, char** argv) {
 		else if (!strcmp(argv[i], "env")) { override.environment = v; haveOverride[4] = 1; }
 		else if (!strcmp(argv[i], "flags")) { override.flags = v; haveOverride[5] = 1; }
 		else if (!strcmp(argv[i], "intro-every")) { introEvery = (int) v; }
+		else if (!strcmp(argv[i], "dump")) { dumpMemory = (int) v; }
 		else { fprintf(stderr, "unknown option %s\n", argv[i]); return 1; }
 	}
 
@@ -281,6 +283,24 @@ int main(int argc, char** argv) {
 	enemyBox = readSprite(core, spritesAddr, core->busRead8(core, healthboxIdsAddr + 1));
 	printf("action menu reached after %d frames\n", frameNo);
 
+	if (dumpMemory) {
+		// Raw VRAM / palette RAM / OAM at the captured frame, for exactness checks.
+		static const struct { const char* name; uint32_t base; uint32_t size; } regions[] = {
+			{ "vram", 0x06000000u, 0x18000u }, { "pal", 0x05000000u, 0x400u }, { "oam", 0x07000000u, 0x400u },
+			{ "io", 0x04000000u, 0x60u },
+		};
+		for (size_t r = 0; r < sizeof(regions) / sizeof(regions[0]); ++r) {
+			snprintf(path, sizeof(path), "%s_%s.bin", prefix, regions[r].name);
+			FILE* df = fopen(path, "wb");
+			for (uint32_t a = 0; a < regions[r].size; a += 2) {
+				uint16_t v = core->busRead16(core, regions[r].base + a);
+				fwrite(&v, 2, 1, df);
+			}
+			fclose(df);
+			printf("saved %s\n", path);
+		}
+	}
+
 	size_t stateSize = core->stateSize(core);
 	void* state = malloc(stateSize);
 	core->saveState(core, state);
@@ -308,7 +328,18 @@ int main(int argc, char** argv) {
 	writeSpriteJson(jf, "enemyMon", enemyMon, 0);
 	writeSpriteJson(jf, "playerHealthbox", playerBox, 0);
 	writeSpriteJson(jf, "enemyHealthbox", enemyBox, 1);
-	fprintf(jf, "  }\n}\n");
+	fprintf(jf, "  },\n");
+	// Runtime palette RAM (BGR555, expanded like mGBA does): 256 BG + 256 OBJ colors.
+	for (int bank = 0; bank < 2; ++bank) {
+		fprintf(jf, "  \"%s\": [", bank ? "objPalette" : "bgPalette");
+		for (int i = 0; i < 256; ++i) {
+			uint16_t c = core->busRead16(core, 0x05000000u + bank * 0x200u + i * 2u);
+			int r5 = c & 31, g5 = (c >> 5) & 31, b5 = (c >> 10) & 31;
+			fprintf(jf, "%s[%d,%d,%d]", i ? "," : "", (r5 << 3) | (r5 >> 2), (g5 << 3) | (g5 >> 2), (b5 << 3) | (b5 >> 2));
+		}
+		fprintf(jf, "]%s\n", bank ? "" : ",");
+	}
+	fprintf(jf, "}\n");
 	fclose(jf);
 	printf("saved %s\n", path);
 
