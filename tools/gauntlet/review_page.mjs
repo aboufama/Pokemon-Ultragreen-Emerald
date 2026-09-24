@@ -8,7 +8,10 @@
 //
 // The page references GIFs at clips/<slug>/<file>; --files <map.json> writes
 // the published-path -> source-path map for hosting the page with its GIFs.
+// --pair joins each clip's two sides into one side-by-side GIF (half the
+// files, easier to compare; needs the frames clip_gifs.mjs keeps).
 
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -91,13 +94,24 @@ for (const slug of slugs) {
   const order = [...Object.keys(bySide).filter((n) => !MOMENTS.includes(n)), ...MOMENTS.filter((n) => bySide[n])];
   const motifOfClip = {};
   for (const [k, v] of Object.entries(profile.motifClips ?? {})) if (v) motifOfClip[v] = k;
-  const cards = order.map((name) => {
+  const cards = [];
+  for (const name of order) {
     const sides = bySide[name];
     const first = sides.player ?? sides.enemy;
     const move = first.move ? first.move.replace(/_/g, ' ') : null;
     const motif = motifOfClip[name] ?? (data.MOTIFS[name.replace(/_strong$/, '')] ? name : null);
     const kind = KINDS[name] ?? (motif ? `Motif clip: ${motif.replace('_', ' ')}` : 'Clip');
-    const figs = ['player', 'enemy'].filter((s) => sides[s]).map((side) => {
+    let figs;
+    if (args.pair && sides.player && sides.enemy) {
+      const gif = join(dirname(out), 'clips', slug, `${name}.gif`);
+      await mkdir(dirname(gif), { recursive: true });
+      const r = spawnSync('python3', [join(ROOT, 'tools/shots/make_gif.py'), join(clipsDir, slug, 'frames', `player_${name}`), gif, '--pair', join(clipsDir, slug, 'frames', `enemy_${name}`), '--scale', '2'], { encoding: 'utf8' });
+      if (r.status !== 0) throw new Error(r.stderr);
+      const pub = `clips/${slug}/${name}.gif`;
+      files[pub] = relative(ROOT, gif);
+      const alt = `${title(sp.name)} ${move ? `uses ${move}` : `plays ${name}`}: our side (left) and the opponent's side (right)`;
+      figs = `<figure class="paired"><button class="gif" type="button" title="Restart"><img src="${pub}" alt="${esc(alt)}" width="964" height="320" loading="lazy"></button><figcaption><span>Our side</span><span>Opponent</span></figcaption></figure>`;
+    } else figs = ['player', 'enemy'].filter((s) => sides[s]).map((side) => {
       const e = sides[side];
       const pub = `clips/${slug}/${e.file}`;
       files[pub] = relative(ROOT, join(clipsDir, slug, e.file));
@@ -105,7 +119,7 @@ for (const slug of slugs) {
       return `<figure><button class="gif" type="button" title="Restart"><img src="${pub}" alt="${esc(alt)}" width="480" height="320" loading="lazy"></button><figcaption>${side === 'player' ? 'Our side' : 'Opponent'}</figcaption></figure>`;
     }).join('');
     const note = notes[name] ?? '';
-    return `<article class="card" id="${slug}-${name}">
+    cards.push(`<article class="card" id="${slug}-${name}">
   <header class="card-head">
     <div class="card-title"><h4><code>${esc(name)}</code></h4><p class="kind">${esc(kind)}</p></div>
     <p class="meta"><span>${esc(move ?? 'clip only')}</span>${name === 'idle' ? '' : `<span>${first.duration.toFixed(2)} s</span>`}</p>
@@ -113,8 +127,8 @@ for (const slug of slugs) {
   ${note ? `<p class="desc">${esc(note)}</p>` : ''}
   <div class="pair">${figs}</div>
   ${timeline(first)}
-</article>`;
-  });
+</article>`);
+  }
   const brief = profile.brief ?? {};
   const types = sp.types.map((t) => title(t.replace('TYPE_', ''))).join(' / ');
   const showcase = (profile.showcaseMoves ?? []).map((m) => m.replace(/_/g, ' ')).join(' · ');
