@@ -72,7 +72,7 @@ export function compose(base: Pose, ...deltas: Pose[]): Pose {
       for (const a of ['x', 'y', 'z', 'yaw', 'pitch', 'roll'] as const) out.root[a] = (out.root[a] ?? 0) + (d.root[a] ?? 0);
     }
     if (d.fx) out.fx = { ...(out.fx ?? {}), ...d.fx };
-    for (const k of ['advance', 'plantFeet', 'plantLeft', 'plantRight', 'expression', 'scale'] as const) {
+    for (const k of ['advance', 'plantFeet', 'plantLeft', 'plantRight', 'plantFront', 'expression', 'scale'] as const) {
       if (d[k] !== undefined) (out as Record<string, unknown>)[k] = d[k];
     }
   }

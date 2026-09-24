@@ -45,6 +45,8 @@ export interface Pose {
   /** Per-leg overrides of plantFeet (a kick lifts one foot, the other stays down). */
   plantLeft?: number;
   plantRight?: number;
+  /** Override of plantFeet for both front feet of a quadruped (rearing up lifts them). */
+  plantFront?: number;
   /** Eye expression cell name (species specific). */
   expression?: string;
   /** Effect intensities, e.g. { flames: 1 }. */
@@ -57,6 +59,8 @@ export interface LegChain {
   thigh: string;
   shin: string;
   foot: string;
+  /** Which way the middle joint bends: 1 = forward like a knee (default), -1 = back like a quadruped's front leg. */
+  bend?: number;
 }
 
 export interface RigProfile {
@@ -67,6 +71,8 @@ export interface RigProfile {
   /** Node names that together form the pelvis (moved by Pose.pelvis). */
   pelvisNodes: string[];
   legs?: { left: LegChain; right: LegChain };
+  /** Quadrupeds: the front legs (arm, forearm, hand), planted like the hind legs. */
+  frontLegs?: { left: LegChain; right: LegChain };
 }
 
 interface NodeInfo {
@@ -116,8 +122,9 @@ export class Rig {
     for (const n of profile.pelvisNodes) collect(n);
     // Also keep every bone so unmapped nodes reset cleanly.
     for (const name of model.bones.keys()) collect(name);
-    if (profile.legs) {
-      for (const leg of [profile.legs.left, profile.legs.right]) {
+    for (const pair of [profile.legs, profile.frontLegs]) {
+      if (!pair) continue;
+      for (const leg of [pair.left, pair.right]) {
         const foot = this.node(leg.foot)!;
         this.footBind.set(leg.foot, { pos: this.modelPos(foot, new THREE.Vector3()), q: this.modelQuat(foot, new THREE.Quaternion()) });
       }
@@ -186,11 +193,15 @@ export class Rig {
         );
       }
     }
+    const both = pose.plantFeet ?? 0;
     if (this.profile.legs) {
-      const both = pose.plantFeet ?? 0;
       const left = pose.plantLeft ?? both;
       const right = pose.plantRight ?? both;
-      if (left > 0 || right > 0) this.plantFeet(left, right);
+      if (left > 0 || right > 0) this.plantFeet(this.profile.legs, left, right);
+    }
+    if (this.profile.frontLegs) {
+      const front = pose.plantFront ?? both;
+      if (front > 0) this.plantFeet(this.profile.frontLegs, front, front);
     }
   }
 
@@ -236,8 +247,7 @@ export class Rig {
   }
 
   /** Two-bone IK: keep each foot at its bind (planted) position and orientation. */
-  private plantFeet(left: number, right: number): void {
-    const legs = this.profile.legs!;
+  private plantFeet(legs: { left: LegChain; right: LegChain }, left: number, right: number): void {
     for (const [leg, weight] of [[legs.left, left], [legs.right, right]] as const) {
       if (weight <= 0) continue;
       const bind = this.footBind.get(leg.foot)!;
@@ -255,7 +265,7 @@ export class Rig {
     }
   }
 
-  /** Analytic two-bone IK in model space with the knee bending forward (+Z). */
+  /** Analytic two-bone IK in model space, the knee bending forward (+Z) or back (leg.bend = -1). */
   solveTwoBone(leg: LegChain, target: THREE.Vector3): void {
     const thigh = this.node(leg.thigh)!;
     const shin = this.node(leg.shin)!;
@@ -271,8 +281,9 @@ export class Rig {
     const toTarget = target.clone().sub(a).normalize();
     const kneeDir = b.clone().sub(a);
     const pole = kneeDir.clone().sub(toTarget.clone().multiplyScalar(kneeDir.dot(toTarget)));
-    pole.add(new THREE.Vector3(0, 0, 0.02));
-    if (pole.lengthSq() < 1e-8) pole.set(0, 0, 1);
+    const bend = leg.bend ?? 1;
+    pole.add(new THREE.Vector3(0, 0, 0.02 * bend));
+    if (pole.lengthSq() < 1e-8) pole.set(0, 0, bend);
     pole.normalize();
 
     // Knee position from the law of cosines.
@@ -355,7 +366,7 @@ export function addPoses(...poses: Pose[]): Pose {
       out.root ??= {};
       for (const a of ['x', 'y', 'z', 'yaw', 'pitch', 'roll'] as const) out.root[a] = (out.root[a] ?? 0) + (p.root[a] ?? 0);
     }
-    for (const k of ['advance', 'plantFeet', 'plantLeft', 'plantRight', 'expression', 'scale'] as const) {
+    for (const k of ['advance', 'plantFeet', 'plantLeft', 'plantRight', 'plantFront', 'expression', 'scale'] as const) {
       if (p[k] !== undefined) (out as Record<string, unknown>)[k] = p[k];
     }
     if (p.fx) out.fx = { ...(out.fx ?? {}), ...p.fx };
@@ -398,7 +409,7 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     const d = ((((y ?? 0) - a + 180) % 360) + 360) % 360 - 180;
     return a + d * t;
   };
-  const plant = (p: Pose, side: 'plantLeft' | 'plantRight') => p[side] ?? p.plantFeet;
+  const plant = (p: Pose, side: 'plantLeft' | 'plantRight' | 'plantFront') => p[side] ?? p.plantFeet;
   const lerpObj = <T extends Record<string, number | undefined>>(x?: T, y?: T): T | undefined => {
     if (!x && !y) return undefined;
     const keys = new Set([...Object.keys(x ?? {}), ...Object.keys(y ?? {})]);
@@ -438,6 +449,7 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     plantFeet: lerp(a.plantFeet, b.plantFeet),
     plantLeft: a.plantLeft !== undefined || b.plantLeft !== undefined ? lerp(plant(a, 'plantLeft'), plant(b, 'plantLeft')) : undefined,
     plantRight: a.plantRight !== undefined || b.plantRight !== undefined ? lerp(plant(a, 'plantRight'), plant(b, 'plantRight')) : undefined,
+    plantFront: a.plantFront !== undefined || b.plantFront !== undefined ? lerp(plant(a, 'plantFront'), plant(b, 'plantFront')) : undefined,
     expression: t < 0.5 ? a.expression ?? b.expression : b.expression ?? a.expression,
     fx,
     scale: lerp(a.scale ?? 1, b.scale ?? 1),

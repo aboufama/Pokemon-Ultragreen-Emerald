@@ -2,8 +2,18 @@
 
 Blaziken is the finished reference species. Every other Pokémon goes through the
 same steps so that it looks like its stock Emerald sprites (size, angle, colors,
-outline) and has an animation for every attack category. This page is the
-checklist for one species; run it for each slug in `src/data/generated/species.json`.
+outline) and has an animation for every attack category and for the move motifs
+it uses. This page is the reference for the tools; the step-by-step process an
+agent (or you) follows lives in the repo skills:
+
+- `.claude/skills/pokemon-gauntlet/SKILL.md`: the process, from the species brief
+  to the gates, and `REVIEW_TEMPLATE.md` for the review log;
+- `.claude/skills/pokemon-animation/SKILL.md` and its `reference/motif-cookbook.md`:
+  how to author clips that fit the species, its type and each move;
+- `.claude/agents/pokemon-gauntlet.md`: a subagent that runs the gauntlet for one
+  species (several can run in parallel in their own worktrees).
+
+The gates are automated: `node tools/gauntlet/check.mjs --slug <slug> [--render]`.
 
 All commands run from the repository root with the dev server up
 (`npm run dev`, http://127.0.0.1:5173/).
@@ -20,9 +30,13 @@ A species is done when all of these hold:
 - [ ] Color calibration is fitted (histogram loss ≤ 1.0; Blaziken 0.94) and the outline
       policy is checked in `reference/calibration/<slug>.png`.
 - [ ] Clips exist for `idle`, `intro`, `hit`, `faint` and all six categories, with the
-      events the director needs (below). They are reviewed as filmstrips from both sides.
+      events the director needs (below), and for the move motifs the species needs
+      (its showcase moves and its most common motifs). No generic placeholders remain.
+- [ ] The species brief (`bodyPlan`, `character`, `powerSource`), emitters and four
+      showcase moves are set; loose parts have spring chains.
+- [ ] Every clip is reviewed frame by frame from both sides (`REVIEW.md`).
 - [ ] A full autoplay battle runs with the species on each side with no errors.
-- [ ] `npm run build` passes.
+- [ ] `node tools/gauntlet/check.mjs --slug <slug> --render` passes, and so does `npm run build`.
 
 ## 1. Scaffold
 

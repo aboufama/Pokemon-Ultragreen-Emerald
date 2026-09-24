@@ -1,0 +1,24 @@
+{
+  "dex": 157,
+  "slug": "typhlosion",
+  "upstream": "https://github.com/Pokemon-3D-api/assets",
+  "fetchedAt": "2026-09-24T21:40:18.492Z",
+  "license": "Model assets are property of Nintendo / Creatures Inc. / GAME FREAK inc. (per upstream README).",
+  "files": [
+    {
+      "file": "model.glb",
+      "variant": "regular",
+      "url": "https://raw.githubusercontent.com/Pokemon-3D-api/assets/main/models/opt/regular/157.glb",
+      "bytes": 80504,
+      "sha256": "b4f932b74412ba6af1d967ab329000211b4542fd93c210939638fef37c48300d"
+    }
+  ],
+  "optimized": {
+    "tool": "tools/models/optimize_model.mjs",
+    "removedAnimations": 0,
+    "droppedNodes": 0,
+    "bytesBefore": 80504,
+    "bytes": 80164,
+    "sha256": "54695b6d0f67bdc1dc2d6d52869846ef906461a6fd4b1bf0e44e08891813f3ac"
+  }
+}

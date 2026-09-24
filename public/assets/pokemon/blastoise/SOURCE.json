@@ -1,0 +1,24 @@
+{
+  "dex": 9,
+  "slug": "blastoise",
+  "upstream": "https://github.com/Pokemon-3D-api/assets",
+  "fetchedAt": "2026-09-24T21:40:17.293Z",
+  "license": "Model assets are property of Nintendo / Creatures Inc. / GAME FREAK inc. (per upstream README).",
+  "files": [
+    {
+      "file": "model.glb",
+      "variant": "regular",
+      "url": "https://raw.githubusercontent.com/Pokemon-3D-api/assets/main/models/opt/regular/9.glb",
+      "bytes": 84744,
+      "sha256": "64edfae1880699dc57b8da749aebcd67a692138cc6d7f43cc56a7265a8cf4dff"
+    }
+  ],
+  "optimized": {
+    "tool": "tools/models/optimize_model.mjs",
+    "removedAnimations": 0,
+    "droppedNodes": 0,
+    "bytesBefore": 84744,
+    "bytes": 84992,
+    "sha256": "9bd653967e8a829b8f795d251c08bfec8aada5d37730b3b186b24671c85250f1"
+  }
+}

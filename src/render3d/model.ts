@@ -63,7 +63,10 @@ export interface LoadedModel {
   rawHeight: number;
 }
 
-export async function loadPokemonModel(slug: string, variant: 'regular' | 'shiny' = 'regular'): Promise<LoadedModel> {
+/** Extra level-of-detail meshes (newer exports ship lod1..lod3 next to lod0). */
+const EXTRA_LOD = /(^|[_\s-])lod[1-9]/i;
+
+export async function loadPokemonModel(slug: string, variant: 'regular' | 'shiny' = 'regular', opts: { hiddenParts?: string[] } = {}): Promise<LoadedModel> {
   // Battles use the regular mesh for shiny Pokémon too (they recolor through
   // the palette, as in Gen 3). An upstream shiny export, if present, is only
   // for inspection; fall back to the regular mesh when there is none.
@@ -71,6 +74,16 @@ export async function loadPokemonModel(slug: string, variant: 'regular' | 'shiny
     ? await loadGltf(`pokemon/${slug}/model.shiny.glb`).catch(() => loadGltf(`pokemon/${slug}/model.glb`))
     : await loadGltf(`pokemon/${slug}/model.glb`);
   const scene = gltf.scene;
+  // Drop extra LODs and parts the profile hides (alternate meshes) before
+  // measuring the model, so they neither render nor skew its size.
+  const hidden = opts.hiddenParts ?? [];
+  const drop: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    if (!(o as THREE.Mesh).isMesh) return;
+    const names = [o.name, o.parent?.name ?? ''];
+    if (names.some((n) => EXTRA_LOD.test(n) || hidden.some((h) => n.includes(h)))) drop.push(o);
+  });
+  for (const o of drop) o.removeFromParent();
   const root = new THREE.Group();
   root.name = `${slug}-root`;
   root.add(scene);

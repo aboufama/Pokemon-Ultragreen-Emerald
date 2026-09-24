@@ -30,10 +30,25 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['ankleFxR'], damping: 0.25, elasticity: 0.18, maxDrift: 0.35 },
     ],
     moveClips: {
-      MOVE_DOUBLE_KICK: 'physical_weak_kick',
       MOVE_LOW_KICK: 'physical_weak_kick',
-      MOVE_SAND_ATTACK: 'status_target_kick',
     },
+    // Clips by move motif (src/battle3d/motifs.ts). Blaziken's clips keep
+    // their category names; this maps the motifs they perform.
+    motifClips: {
+      kick: 'physical_weak_kick',
+      kick_strong: 'physical_strong',
+      kick_sand: 'status_target_kick',
+      breath: 'special_strong',
+      spit: 'special_weak',
+      buff: 'status_self',
+      roar: 'status_target',
+    },
+    brief: {
+      bodyPlan: 'biped',
+      character: 'A lean martial artist: springy, fast, fights with kicks from a wide stance; proud and fiery.',
+      powerSource: 'Fire from its beak (breath, embers) and flames that flare from its wrists when it powers up.',
+    },
+    showcaseMoves: ['BLAZE_KICK', 'FLAMETHROWER', 'DOUBLE_KICK', 'BULK_UP'],
     palette: palettes.normal,
     shinyPalette: palettes.shiny,
     calibration: cal,

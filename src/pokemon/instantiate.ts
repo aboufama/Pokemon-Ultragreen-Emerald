@@ -21,7 +21,7 @@ export async function instantiatePokemon(stage: BattleStage, slot: SlotName, slu
   const profile = await getSpeciesProfile(slug);
   // Shiny recolors through the palette (paletteSlot); the upstream shiny
   // meshes are separate exports whose skeletons don't match the rig map.
-  const model = await loadPokemonModel(slug, 'regular');
+  const model = await loadPokemonModel(slug, 'regular', { hiddenParts: profile.hiddenParts });
   const toon = applyToonMaterials(model, { effectParts: profile.effectParts, grade: profile.calibration.grade });
   model.root.userData.pixelId = SLOT_PIXEL_ID[slot];
   stage.slots[slot].add(model.root);

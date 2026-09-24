@@ -153,7 +153,7 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
 
   const models: Record<SlotName, { root: THREE.Object3D; rig: Rig; toon: ToonHandles }> = {} as never;
   for (const slot of ['player', 'enemy'] as SlotName[]) {
-    const model = await loadPokemonModel(slug);
+    const model = await loadPokemonModel(slug, 'regular', { hiddenParts: profile.hiddenParts });
     const toon = applyToonMaterials(model, { effectParts: profile.effectParts, grade: profile.calibration.grade });
     model.root.userData.pixelId = slot === 'player' ? 1 : 2;
     stage.slots[slot].add(model.root);

@@ -96,11 +96,18 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `tools/shots/battle_film.mjs` | frame-stepped battle recordings with scripted button presses |
 | `tools/shots/clip_gifs.mjs` | every clip of a species as looping GIFs from both sides (review) |
 | `tools/gauntlet/new_species.mjs` | scaffold a new species (see the pipeline doc) |
+| `tools/gauntlet/brief.mjs` | a species' Pokédex entry, stats and every move it can use with its motif |
+| `tools/gauntlet/skeleton.mjs` | a model's skeleton, what each bone moves, and its textures |
+| `tools/gauntlet/check.mjs` | the gauntlet's quality gates for a species (`--render` adds battles) |
+| `tools/models/optimize_model.mjs` | strip upstream animations and recompress a fetched model |
+| `tools/shots/move_sheet.mjs` | contact sheets of moves and clips in the battle view |
+| `.claude/skills/pokemon-gauntlet`, `pokemon-animation` | the process and the animation craft, as skills for agents |
 | `tools/reference/` | build a harness ROM from the decomp and capture real frames with mGBA |
 
 ## Status
 
-- Species with 3D profiles: Blaziken. Other species are added through the gauntlet.
+- Species with 3D profiles: Blaziken. Other species are added through the gauntlet
+  (`.claude/skills/pokemon-gauntlet`).
 - Not in this milestone:
   - the overworld;
   - trainer battles and double battles;

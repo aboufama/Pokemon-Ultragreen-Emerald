@@ -20,6 +20,7 @@
   "devDependencies": {
     "@gltf-transform/core": "^4.5.0",
     "@gltf-transform/extensions": "^4.5.0",
+    "@gltf-transform/functions": "^4.5.0",
     "@types/three": "^0.186.0",
     "draco3dgltf": "^1.5.7",
     "playwright": "1.56.1",

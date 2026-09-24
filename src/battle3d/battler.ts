@@ -49,6 +49,8 @@ export class Battler3D {
   private readonly fireMaterials = new Map<string, THREE.ShaderMaterial[]>();
   /** Jaw tip in the jaw's frame, and the jaw's bind transform under the head. */
   private mouth: { tip: THREE.Vector3; bind: THREE.Matrix4 } | null = null;
+  /** Emitter points (bone + local offset), resolved once. */
+  private readonly emitterCache = new Map<string, { node: THREE.Object3D; local: THREE.Vector3 }[]>();
   private eyeMap: THREE.Texture | null = null;
   pose: Pose = {};
   onEvent: ((name: string) => void) | null = null;
@@ -128,6 +130,58 @@ export class Battler3D {
     const lower = this.mouth.tip.clone().applyMatrix4(jaw.matrixWorld);
     const upper = this.mouth.tip.clone().applyMatrix4(this.mouth.bind).applyMatrix4(jaw.parent.matrixWorld);
     return lower.add(upper).multiplyScalar(0.5);
+  }
+
+  /**
+   * World positions of a named effect origin: the profile's emitters
+   * (cannons, flower...) or the built-in mouth, eyes, hands, feet and body.
+   */
+  emitterPoints(name: string): THREE.Vector3[] {
+    if (name === 'mouth' && !this.profile.emitters?.mouth) {
+      const m = this.mouthPosition();
+      if (m) return [m];
+    }
+    let points = this.emitterCache.get(name);
+    if (!points) {
+      points = this.resolveEmitter(name);
+      this.emitterCache.set(name, points);
+    }
+    if (!points.length) return [this.fallbackPoint(name)];
+    return points.map(({ node, local }) => {
+      node.updateWorldMatrix(true, false);
+      return local.clone().applyMatrix4(node.matrixWorld);
+    });
+  }
+
+  private resolveEmitter(name: string): { node: THREE.Object3D; local: THREE.Vector3 }[] {
+    const rig = this.inst.rig;
+    const spec = this.profile.emitters?.[name];
+    const builtin: Record<string, string[]> = { mouth: ['head'], eyes: ['head'], hands: ['handR', 'handL'], feet: ['footR', 'footL'], body: ['chest'] };
+    const bones = spec?.bones ?? builtin[name] ?? [];
+    const out: { node: THREE.Object3D; local: THREE.Vector3 }[] = [];
+    for (const bone of bones) {
+      const node = rig.node(bone);
+      if (!node) continue;
+      let local: THREE.Vector3;
+      if (spec?.offset) {
+        local = new THREE.Vector3(...spec.offset);
+        // Offsets are authored for the left/center bone; mirror for right-side bones.
+        if (/R$/.test(bone) && bones.some((b) => b === bone.slice(0, -1) + 'L')) local.x *= -1;
+      } else if (name === 'eyes' || name === 'body') {
+        local = new THREE.Vector3();
+      } else {
+        local = skinnedExtent(this.inst.model.scene, node, spec?.reach ?? 0.9) ?? new THREE.Vector3();
+      }
+      out.push({ node, local });
+    }
+    return out;
+  }
+
+  private fallbackPoint(name: string): THREE.Vector3 {
+    this.inst.root.updateWorldMatrix(true, false);
+    const p = new THREE.Vector3().setFromMatrixPosition(this.inst.root.matrixWorld);
+    p.y += this.height * (name === 'feet' ? 0.05 : name === 'mouth' || name === 'eyes' ? 0.8 : 0.55);
+    return p;
   }
 
   private setupDynamics(): void {
