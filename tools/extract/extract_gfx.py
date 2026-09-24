@@ -30,7 +30,7 @@ import gbagfx as G  # noqa: E402
 def save(im: Image.Image, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if im.mode == "P":
-        im.save(path, optimize=True, transparency=im.info.get("transparency", 0), bits=4 if max(im.getdata()) < 16 else 8)
+        im.save(path, optimize=True, transparency=im.info.get("transparency", 0), bits=4 if int(np.array(im).max()) < 16 else 8)
     else:
         im.save(path, optimize=True)
 
@@ -73,13 +73,35 @@ def extract_environments(decomp: Path, out: Path, meta: dict) -> None:
     meta["environments"] = envs
 
 
-def extract_textbox(decomp: Path, out: Path, meta: dict) -> None:
+def extract_textbox(decomp: Path, out: Path, meta: dict, frame_type: int = 0) -> None:
+    """Compose BG0 exactly as LoadBattleTextboxAndBackground leaves it.
+
+    LoadBattleMenuWindowGfx then copies the player's window frame (options
+    frame type, default 0 = text_window/1.png) over BG0 tiles 0x12 and 0x22
+    and its palette into BG palette 1; the menu borders use those tiles.
+    """
     bi = decomp / "graphics/battle_interface"
     pal = G.read_jasc_pal(bi / "textbox_0.pal") + G.read_jasc_pal(bi / "textbox_1.pal")
     tiles = G.tiles_of(G.indexed(bi / "textbox.png"))
+    frame_png = decomp / "graphics/text_window" / f"{frame_type + 1}.png"
+    frame_tiles = G.tiles_of(G.indexed(frame_png))[:9]
+    tiles = tiles.copy()
+    # Verified against a VRAM dump of the running battle (capture dump=1): the
+    # copy at 0x12 - the one the menu borders use - has its transparent
+    # pixels turned into color 15 (the dark outline), the copy at 0x22 is raw.
+    ringed = frame_tiles.copy()
+    ringed[ringed == 0] = 15
+    tiles[0x12 : 0x12 + len(frame_tiles)] = ringed
+    tiles[0x22 : 0x22 + len(frame_tiles)] = frame_tiles
+    pal[16:32] = G.png_palette(frame_png)[:16]
     tm = np.fromfile(bi / "textbox_map.bin", dtype="<u2")
     im = G.compose_tilemap(tiles, tm, 32, G.palette_blocks(pal, 0))
     save(im, out / "battle_interface" / "textbox.png")
+    # Menu cursor: BG0 tiles 1 and 2 stacked. CopyToBgTilemapBufferRect_ChangePalette
+    # is called with palette 0x11, which CopyTileMapEntry treats as "keep the
+    # source entry", i.e. palette 0.
+    cursor = np.vstack([tiles[1], tiles[2]])
+    save(G.to_rgba(cursor, pal[0:16]), out / "battle_interface" / "cursor.png")
     # Text colors: message windows use BG palette 0, menus use palette 5
     # (gBattleWindowTextPalette = text.pal); PP colors come from text_pp.pal.
     meta["textboxPalette"] = [list(c) for c in pal[:16]]
@@ -104,6 +126,7 @@ def extract_interface(decomp: Path, out: Path, meta: dict) -> None:
         ("misc", healthbox_pal),
         ("status", healthbox_pal),
         ("hpbar", healthbar_pal),
+        ("hpbar_anim", healthbar_pal),
         ("level_up_banner", None),
     ]:
         p = bi / f"{name}.png"
