@@ -20,5 +20,15 @@
     "bytesBefore": 78732,
     "bytes": 78524,
     "sha256": "acd9fdc93ee9713cce743e2ce91f84c2d38c845c94ebc37debec08ffe77cbdd8"
+  },
+  "recolored": {
+    "why": "The upstream body/belly contrast (luma 163 vs 216) is much flatter than the stock sprite ramp (palette 13 vs 1: luma 115 vs 224), so no single toon grade renders a mid-blue body with a white belly: the fitted grade turned the body white and the belly lavender (color loss floor ~1.04). Only the saturated body blue is deepened; belly, fins, orange parts, mouth and eyes are untouched.",
+    "textures": ["pm0260_00_BodyA1.png", "pm0260_00_BodyB1.png"],
+    "weight": "w = smoothstep(45, 75, max(r,g,b) - min(r,g,b)) * smoothstep(30, 60, b - r)",
+    "transform": "c' = L * (1 - 0.40 w) + (c - L) * (1 - 0.15 w), with L = 0.299 r + 0.587 g + 0.114 b",
+    "encode": "WebP quality 92 (sharp); meshes re-encoded with Draco edgebreaker, quantizePosition 14",
+    "fromSha256": "acd9fdc93ee9713cce743e2ce91f84c2d38c845c94ebc37debec08ffe77cbdd8",
+    "bytes": 86640,
+    "sha256": "9abf44c2288cf5e2f4649f777c72b35b8fcec2b061c002d5faaacfa83e1aced4"
   }
 }
