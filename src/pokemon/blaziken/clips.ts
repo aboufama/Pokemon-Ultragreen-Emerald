@@ -280,6 +280,41 @@ const tackle: Clip = {
   events: [{ t: 0.25, name: 'impact' }],
 };
 
+/** Arms swept back for balance while the head leads (dashes, beak jabs). */
+const ARMS_BACK: Pose = {
+  aim: { armR: { dir: [-0.35, -0.5, -0.8] }, forearmR: { dir: [-0.25, -0.3, -0.92] }, armL: { dir: [0.35, -0.5, -0.8] }, forearmL: { dir: [0.25, -0.3, -0.92] } },
+};
+
+/**
+ * Peck: the beak is the weapon. The head cocks back, Blaziken leaps in, then
+ * the neck and head drive the beak down into the foe with the arms swept
+ * back; the head rebounds and it hops home.
+ */
+const peck: Clip = {
+  name: 'peck',
+  duration: 1.25,
+  keys: [
+    key(0),
+    // Cock the head back, beak up, weight settling.
+    key(0.12, pelvis(0, -0.03), bend(-4, -6, -14, -20), GUARD, ANGRY),
+    // Leap in along an arc, head still drawn back.
+    key(0.26, { advance: 0.6, root: { y: 0.07 } }, TUCK, bend(4, -4, -14, -20), GUARD, ANGRY),
+    // Land in front of the foe and coil: the head goes further back.
+    key(0.36, { advance: 1 }, LAND, bend(0, -8, -18, -24), GUARD, ANGRY),
+    // The jab: spine, neck and head all pitch forward, the beak leads.
+    snap(0.44, { advance: 1 }, pelvis(0, -0.04), bend(22, 12, 18, 18), ARMS_BACK, ANGRY),
+    // Rebound: the head springs back up off the hit.
+    key(0.6, { advance: 1 }, pelvis(0, -0.035), bend(14, 6, 2, -2), ARMS_BACK, ANGRY),
+    key(0.78, { advance: 1 }, pelvis(0, -0.03), bend(10, 2, 0, 0), GUARD, ANGRY),
+    // Hop home.
+    key(0.94, { advance: 0.45, root: { y: 0.06 } }, HOP, bend(8, 0, 0, 0), GUARD, ANGRY),
+    key(1.06, { advance: 0 }, LAND, GUARD, ANGRY),
+    key(1.25, OPEN_EYES),
+  ],
+  // The head trails the spine a little (overlap), so the beak lands just after the key.
+  events: [{ t: 0.49, name: 'impact' }],
+};
+
 /** Weak contact kicks (Double Kick, Low Kick): leap in, two alternating snap kicks, hop back. */
 const physicalWeakKick: Clip = {
   name: 'physical_weak_kick',
@@ -477,7 +512,7 @@ const faint: Clip = {
 };
 
 export const BLAZIKEN_CLIPS: Record<string, Clip> = Object.fromEntries(
-  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
+  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, peck, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
 );
 
 /** Eye atlas (pm0257_00_Eye1): 2 columns x 4 rows of 128x64 cells. */

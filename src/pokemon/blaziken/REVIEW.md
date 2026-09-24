@@ -28,7 +28,8 @@ the text box) and the opponent's side, starts and ends on the stance.
 - [x] `status_target_kick` (kick_sand): Sand-Attack — weight back, the front foot scoops, sand arcs from the foot
 - [x] `punch` (punch): Sky Uppercut, Fire Punch, Mega Punch — dashes in low, coils with the fist at the hip, drives up through the foe with the feet leaving the ground, drops into a crouch, hops home
 - [x] `tackle` (tackle): Quick Attack, Take Down — a low dash with the right shoulder leading and arms swept back, bounces off the foe, hops home
-- Also mapped: kick_strong → `physical_strong`, breath → `special_strong`, spit → `special_weak`, buff → `status_self`, roar → `status_target`
+- [x] `peck` (peck): Peck — head cocked back, leaps in, the neck and head drive the beak down into the foe with the arms swept back, the head rebounds, hops home
+- Also mapped: kick_strong → `physical_strong`, breath and beam → `special_strong` (the stream from the beak), spit and orb → `special_weak` (the spat ember), strike → `physical_weak` (Slash), buff → `status_self`, roar → `status_target`
 
 ## Showcase moves in battle
 

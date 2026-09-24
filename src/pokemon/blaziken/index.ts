@@ -35,6 +35,11 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     // Clips by move motif (src/battle3d/motifs.ts). Blaziken's clips keep
     // their category names; this maps the motifs they perform.
     motifClips: {
+      // Category clips that depict a motif: Slash is a claw strike, the beak
+      // stream serves beams, the spat ember serves thrown orbs.
+      strike: 'physical_weak',
+      beam: 'special_strong',
+      orb: 'special_weak',
       kick: 'physical_weak_kick',
       kick_strong: 'physical_strong',
       kick_sand: 'status_target_kick',
