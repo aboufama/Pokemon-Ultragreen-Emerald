@@ -151,9 +151,14 @@ def extract_fonts(decomp: Path, out: Path) -> None:
         rgba[..., 0] = (idx * 85).astype(np.uint8)
         rgba[..., 3] = 255
         save(Image.fromarray(rgba, "RGBA"), out / "fonts" / f"{name}.png")
-    for name in ["down_arrow"]:
-        p = decomp / "graphics/fonts" / f"{name}.png"
-        save(G.to_rgba(G.indexed(p), G.png_palette(p)), out / "fonts" / f"{name}.png")
+    # Text "continue" arrows are drawn with the window's palette: keep the
+    # 4bpp index (red channel * 16, alpha 0 for index 0).
+    for name in ["down_arrow", "down_arrow_alt"]:
+        idx = G.indexed(decomp / "graphics/fonts" / f"{name}.png").astype(np.uint16)
+        rgba = np.zeros(idx.shape + (4,), dtype=np.uint8)
+        rgba[..., 0] = (idx * 16).astype(np.uint8)
+        rgba[..., 3] = np.where(idx > 0, 255, 0).astype(np.uint8)
+        save(Image.fromarray(rgba, "RGBA"), out / "fonts" / f"{name}.png")
 
 
 def resolve_gfx(decomp: Path, rel: str | None) -> Path | None:

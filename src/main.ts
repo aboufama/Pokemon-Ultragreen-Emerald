@@ -31,6 +31,9 @@ async function start(): Promise<void> {
   } else if (mode === 'stage') {
     const { runStagePreview } = await import('./devtools/stage_preview');
     (window as unknown as { preview: unknown }).preview = await runStagePreview(root);
+  } else if (mode === 'battle') {
+    const { runBattle } = await import('./battle/run');
+    await runBattle(root);
   } else {
     root.textContent = `unknown mode ${mode}`;
   }

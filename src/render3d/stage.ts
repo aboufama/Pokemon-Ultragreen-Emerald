@@ -113,6 +113,12 @@ export class BattleStage {
     this.scene.add(env.group);
   }
 
+  /** World units per GBA pixel at a point, seen from the resting camera. */
+  unitsPerPixel(at: THREE.Vector3, camera: THREE.PerspectiveCamera = this.homeCamera): number {
+    const depth = at.clone().sub(camera.position).dot(camera.getWorldDirection(new THREE.Vector3()));
+    return (2 * depth * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / 160;
+  }
+
   resetCamera(): void {
     this.camera.copy(this.homeCamera);
   }

@@ -42,7 +42,7 @@ function sheet(name: string): Promise<SheetInfo> {
 }
 
 /** Sheets used by the standard move choreography (loaded before battles). */
-export const COMMON_SHEETS = ['Fire', 'SmallEmber', 'FirePlume', 'Impact', 'ClawSlash', 'HumanoidFoot', 'FocusEnergy', 'NoiseLine', 'MudUnk'];
+export const COMMON_SHEETS = ['Fire', 'SmallEmber', 'FirePlume', 'Impact', 'ClawSlash', 'HumanoidFoot', 'FocusEnergy', 'NoiseLine', 'MudUnk', 'Particles'];
 
 export function preloadSheets(names: string[] = COMMON_SHEETS): Promise<unknown> {
   return Promise.all(names.map(sheet));
@@ -53,6 +53,8 @@ export interface SpriteFxOptions {
   px?: number;
   fps?: number;
   loop?: boolean;
+  /** First frame of the sheet to show; with fps 0 the frame is held. */
+  frame?: number;
   /** Lifetime in seconds (defaults to one pass through the frames). */
   life?: number;
   /** World-space velocity (units/s). */
@@ -97,6 +99,7 @@ interface Particle {
   life: number;
   fps: number;
   loop: boolean;
+  startFrame: number;
   velocity: THREE.Vector3;
   spin: number;
   basePx: number;
@@ -122,9 +125,7 @@ export class VfxSystem {
 
   /** World units per GBA pixel at a point (for pixel-exact sprite sizes). */
   unitsPerPixel(at: THREE.Vector3): number {
-    const cam = this.stage.camera;
-    const depth = at.clone().sub(cam.position).dot(cam.getWorldDirection(new THREE.Vector3()));
-    return (2 * depth * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))) / 160;
+    return this.stage.unitsPerPixel(at, this.stage.camera);
   }
 
   after(seconds: number, fn: () => void): void {
@@ -149,14 +150,16 @@ export class VfxSystem {
     sprite.renderOrder = 10;
     this.group.add(sprite);
     const fps = opts.fps ?? 15;
+    const held = fps === 0;
     const p: Particle = {
       sprite,
       rotation: opts.rotation ?? 0,
       info,
       age: 0,
-      life: opts.life ?? info.frames / fps,
+      life: opts.life ?? (held ? 0.5 : info.frames / fps),
       fps,
       loop: opts.loop ?? false,
+      startFrame: opts.frame ?? 0,
       velocity: opts.velocity ?? new THREE.Vector3(),
       spin: opts.spin ?? 0,
       basePx: opts.px ?? info.frameW,
@@ -202,7 +205,9 @@ export class VfxSystem {
     const t = Math.min(1, p.age / p.life);
     if (p.path) p.sprite.position.copy(p.path(t));
     else p.sprite.position.addScaledVector(p.velocity, dt);
-    const frame = p.loop ? Math.floor(p.age * p.fps) % p.info.frames : Math.min(p.info.frames - 1, Math.floor(p.age * p.fps));
+    const n = p.info.frames;
+    const step = Math.floor(p.age * p.fps);
+    const frame = (p.startFrame + (p.loop ? step % n : Math.min(n - 1 - p.startFrame, step))) % n;
     const mat = p.sprite.material as THREE.MeshBasicMaterial;
     const map = mat.map!;
     // Sheets run top to bottom; flipY puts frame 0 at the top of the texture.
