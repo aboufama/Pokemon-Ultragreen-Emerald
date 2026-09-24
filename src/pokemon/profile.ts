@@ -9,8 +9,13 @@ import type { PaletteSlot } from '../render3d/pipeline';
 import type { FireOptions } from '../render3d/fire';
 
 export interface SlotCalibration {
-  /** Extra yaw (degrees) on top of facing the opponent. */
+  /** Extra yaw (degrees) on top of facing the opponent, fitted to the stock sprite. */
   yaw: number;
+  /**
+   * Art-directed turn on top of the fitted yaw (degrees, + toward the
+   * battler's own left). Not part of the fit; recalibration keeps it.
+   */
+  yawAdjust?: number;
   /** Offsets in the slot's local frame (world units): x = its left, z = toward opponent. */
   dx: number;
   dz: number;
@@ -78,9 +83,14 @@ export interface SpeciesProfile {
   placeInSlot(root: THREE.Object3D, slot: SlotName, stage: BattleStage): void;
 }
 
+/** Resting yaw of a slot in degrees: the fitted yaw plus the art adjustment. */
+export function slotYaw(c: SlotCalibration): number {
+  return c.yaw + (c.yawAdjust ?? 0);
+}
+
 export function applyCalibration(root: THREE.Object3D, cal: Calibration, slot: SlotName): void {
   const c = cal.slots[slot];
   root.scale.setScalar(cal.height);
-  root.rotation.set(0, THREE.MathUtils.degToRad(c.yaw), 0);
+  root.rotation.set(0, THREE.MathUtils.degToRad(slotYaw(c)), 0);
   root.position.set(c.dx, c.lift, c.dz);
 }

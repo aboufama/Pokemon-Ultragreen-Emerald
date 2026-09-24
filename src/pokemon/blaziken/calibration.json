@@ -11,7 +11,8 @@
       "yaw": 32.3,
       "dx": 0,
       "dz": 0,
-      "lift": 0
+      "lift": 0,
+      "yawAdjust": -12
     }
   },
   "fit": {
