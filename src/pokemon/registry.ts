@@ -1,4 +1,4 @@
-// Species with 3D profiles. Species without one fall back to stock sprites.
+// Species with 3D profiles (tools/gauntlet/new_species.mjs adds entries).
 import { asset } from '../gba/assets';
 import type { SpeciesProfile } from './profile';
 
