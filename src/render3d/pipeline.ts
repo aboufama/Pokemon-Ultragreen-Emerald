@@ -7,7 +7,8 @@
 //   3. composite   -> canvas: per output pixel pick the majority object among
 //      its supersamples, average that object's color, outline silhouettes with
 //      the species' outline color, snap Pokémon pixels to their stock GBA
-//      palette and quantize everything to RGB555.
+//      palette, apply palette blends (BlendPalette-style fades and glows)
+//      and quantize everything to RGB555.
 
 import * as THREE from 'three';
 import type { RGB } from '../gba/bitmap';
@@ -94,6 +95,8 @@ const compositeFrag = /* glsl */ `
   uniform int innerIndex[${MAX_PALETTES}];
   uniform int darkOf[${MAX_PALETTES * 16}];
   uniform bool selective[${MAX_PALETTES}];
+  // Per-slot palette blend: rgb target, a = coefficient (GBA BlendPalette / 16).
+  uniform vec4 blend[${MAX_PALETTES}];
   uniform float cameraNear;
   uniform float cameraFar;
   uniform float innerThreshold;
@@ -212,6 +215,9 @@ const compositeFrag = /* glsl */ `
           c = sc;
         }
       }
+      // Blending the palette on the GBA recolors every pixel of the sprite,
+      // outline included, so it applies after snapping.
+      c = mix(c, blend[slot].rgb, blend[slot].a);
     }
     if (rgb555) c = toRgb555(c);
     gl_FragColor = vec4(c, 1.0);
@@ -260,6 +266,7 @@ export class PixelPipeline {
         innerIndex: { value: new Array(MAX_PALETTES).fill(0) },
         darkOf: { value: new Array(MAX_PALETTES * 16).fill(0) },
         selective: { value: new Array(MAX_PALETTES).fill(false) },
+        blend: { value: Array.from({ length: MAX_PALETTES }, () => new THREE.Vector4(0, 0, 0, 0)) },
         cameraNear: { value: 0.1 },
         cameraFar: { value: 100 },
         innerThreshold: { value: 0.03 },
@@ -321,6 +328,14 @@ export class PixelPipeline {
     u.selective.value[slot] = palette.selective ?? true;
     const dark = darkestInRamp(palette.colors, [0, palette.outerIndex, palette.innerIndex]);
     for (let i = 0; i < 16; i++) u.darkOf.value[slot * 16 + i] = dark[i] ?? i;
+  }
+
+  /**
+   * Blend a palette slot toward a color (amount 0..1, i.e. coefficient / 16),
+   * like BlendPalette / BeginNormalPaletteFade on a sprite palette.
+   */
+  setBlend(slot: number, color: RGB, amount: number): void {
+    (this.composite.uniforms.blend.value as THREE.Vector4[])[slot].set(color[0] / 255, color[1] / 255, color[2] / 255, Math.max(0, Math.min(1, amount)));
   }
 
   private idMaterial(id: number): THREE.MeshBasicMaterial {

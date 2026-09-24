@@ -2,7 +2,7 @@
 // Window rectangles, fonts and colors come from sStandardBattleWindowTemplates
 // and sTextOnWindowsInfo_Normal in the decomp (src/battle_bg.c, src/battle_message.c).
 
-import { type Bitmap, type RGB, blit, loadBitmap } from '../../gba/bitmap';
+import { type Bitmap, type RGB, blit, createBitmap, loadBitmap } from '../../gba/bitmap';
 import { asset } from '../../gba/assets';
 import { type Font, type FontName, type TextToken, decimal, drawText, encodeText } from '../../gba/font';
 import { GFX_META, TYPES } from '../../data';
@@ -40,6 +40,20 @@ const WIN: Record<string, WindowSpec> = {
 
 const BATTLE_MENU_TEXT = 'FIGHT{CLEAR_TO 56}BAG\nPOKéMON{CLEAR_TO 56}RUN';
 
+/** Map an index bitmap (red = index * 16) through a palette. */
+function colorize(indexed: Bitmap, palette: readonly RGB[]): Bitmap {
+  const out = createBitmap(indexed.width, indexed.height);
+  for (let i = 0; i < indexed.data.length; i += 4) {
+    if (!indexed.data[i + 3]) continue;
+    const c = palette[Math.round(indexed.data[i] / 16)];
+    out.data[i] = c[0];
+    out.data[i + 1] = c[1];
+    out.data[i + 2] = c[2];
+    out.data[i + 3] = 255;
+  }
+  return out;
+}
+
 /**
  * GetCurrentPpToMaxPpState: 3 = normal, 0 = at most half, 1 = at most a
  * quarter, 2 = empty. SetPpNumbersPaletteInMoveSelection copies the matching
@@ -67,8 +81,11 @@ export class BattleTextbox {
   /** Message shown in the message page (already paginated by the caller). */
   message: TextToken[] = [];
   visibleGlyphs = Infinity;
-  /** Blinking "more" arrow at the end of a message waiting for input. */
-  showPromptArrow = false;
+  /**
+   * Clock frame at which the message started waiting for input ("more"
+   * arrow shown), or null.
+   */
+  promptSince: number | null = null;
   actionPrompt: TextToken[] = [];
   actionCursor = 0;
   moveCursor = 0;
@@ -85,15 +102,16 @@ export class BattleTextbox {
     const [box, cursor, arrow] = await Promise.all([
       loadBitmap(asset('gba/battle_interface/textbox.png')),
       loadBitmap(asset('gba/battle_interface/cursor.png')),
-      loadBitmap(asset('gba/fonts/down_arrow.png')),
+      // Battle windows use the alternate arrow (gTextFlags.useAlternateDownArrow).
+      loadBitmap(asset('gba/fonts/down_arrow_alt.png')),
     ]);
-    return new BattleTextbox(box, cursor, arrow, fonts);
+    return new BattleTextbox(box, cursor, colorize(arrow, GFX_META.textboxPalette), fonts);
   }
 
   setMessage(text: string): void {
     this.message = encodeText(text);
     this.visibleGlyphs = Infinity;
-    this.showPromptArrow = false;
+    this.promptSince = null;
   }
 
   setActionPrompt(monName: string): void {
@@ -133,10 +151,11 @@ export class BattleTextbox {
 
     if (this.page === 'message') {
       const layout = this.text(fb, WIN.msg, this.message, scroll, this.visibleGlyphs);
-      if (this.showPromptArrow && layout.glyphsDrawn >= layout.totalGlyphs) {
-        // The prompt arrow bobs 0..3 px (sDownArrowYCoords) every 8 frames.
-        const bob = [0, 1, 2, 1][(frame >> 3) & 3];
-        blit(fb, this.arrow, 0, 0, 8, 16, layout.endX + 2, WIN.msg.top * 8 + WIN.msg.y + bob);
+      if (this.promptSince !== null && layout.glyphsDrawn >= layout.totalGlyphs) {
+        // DrawDownArrow: redrawn every 9 frames from source rows
+        // sDownArrowYCoords = {0, 1, 2, 1}, placed at (x, y - 2) after the text.
+        const step = Math.floor(Math.max(0, frame - this.promptSince) / 9) & 3;
+        blit(fb, this.arrow, 0, [0, 1, 2, 1][step], 8, 16, layout.endX, layout.endY - 2);
       }
     } else if (this.page === 'action') {
       this.text(fb, WIN.actionPrompt, this.actionPrompt, scroll);

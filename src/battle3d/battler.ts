@@ -8,7 +8,8 @@ import type { Pose } from '../anim/rig';
 import { makeFireIdMaterial, makeFireMaterial } from '../render3d/fire';
 import { FX_PIXEL_ID } from './vfx';
 import type { BattleStage, SlotName } from '../render3d/stage';
-import { instantiatePokemon, type PokemonInstance } from '../pokemon/instantiate';
+import type { RGB } from '../gba/bitmap';
+import { SLOT_PIXEL_ID, instantiatePokemon, type PokemonInstance } from '../pokemon/instantiate';
 
 const DEG = Math.PI / 180;
 const ATTACK_CLIPS = /^(physical|special|status)/;
@@ -20,7 +21,14 @@ export class Battler3D {
   facing = 0;
   /** Scale multiplier for the Poke Ball appear/withdraw effect. */
   appear = 1;
+  /** Height fraction the appear scale pivots on (sprites scale about their center). */
+  appearPivot = 0.5;
   visible = true;
+  /**
+   * Sprite-style offset in GBA pixels (x right, y down), like OAM x2/y2:
+   * used for the intro slide, the action-menu bounce and shakes.
+   */
+  screenOffset: [number, number] = [0, 0];
   /** Seconds of remaining blink (GBA hit blink). */
   private blinkTime = 0;
   private time = 0;
@@ -104,8 +112,28 @@ export class Battler3D {
     this.blinkTime = seconds;
   }
 
-  setFlash(amount: number): void {
-    this.inst.toon.uniforms.flash.value = amount;
+  /**
+   * Blend the battler's palette toward a color (amount 0..1 = coefficient/16),
+   * like BlendPalette on its sprite palette: intro shadow, Poké Ball flash,
+   * glows. Applied by the pixel pipeline after palette snapping.
+   */
+  setTint(color: RGB, amount: number): void {
+    this.stage.pipeline.setBlend(SLOT_PIXEL_ID[this.slot] - 1, color, amount);
+  }
+
+  /** screenOffset converted to a translation in the slot's local frame. */
+  private screenOffsetLocal(): THREE.Vector3 {
+    const cam = this.stage.homeCamera;
+    const slot = this.stage.slots[this.slot];
+    const world = slot.getWorldPosition(new THREE.Vector3());
+    const upp = this.stage.unitsPerPixel(world);
+    // Camera right is horizontal (no roll), so a sideways move stays on the
+    // ground; a vertical world move projects shortened by the camera pitch.
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
+    const pitch = THREE.MathUtils.degToRad(this.stage.spec.pitch);
+    const v = right.multiplyScalar(this.screenOffset[0] * upp);
+    v.y -= (this.screenOffset[1] * upp) / Math.max(0.2, Math.cos(pitch));
+    return v.applyQuaternion(slot.quaternion.clone().invert());
   }
 
   update(dt: number): void {
@@ -126,6 +154,8 @@ export class Battler3D {
     root.rotation.set((r.pitch ?? 0) * DEG, yaw + (r.yaw ?? 0) * DEG, (r.roll ?? 0) * DEG, 'YXZ');
     const off = new THREE.Vector3(r.x ?? 0, r.y ?? 0, r.z ?? 0).multiplyScalar(H).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
     root.position.set(cal.dx, cal.lift, cal.dz + (pose.advance ?? 0) * this.approachDistance()).add(off);
+    if (this.appear !== 1) root.position.y += (1 - this.appear) * H * this.appearPivot;
+    if (this.screenOffset[0] || this.screenOffset[1]) root.position.add(this.screenOffsetLocal());
 
     // Expression.
     const ex = this.profile.expressions;
