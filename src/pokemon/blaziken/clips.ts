@@ -220,6 +220,66 @@ const physicalWeak: Clip = {
   events: [{ t: 0.5, name: 'impact' }],
 };
 
+/**
+ * Punches (Sky Uppercut, Fire Punch, Mega Punch): dash in low, coil with the
+ * fist at the hip, then drive up through the foe with the whole body — the
+ * feet leave the ground — and drop back into a crouch.
+ */
+const punch: Clip = {
+  name: 'punch',
+  duration: 1.6,
+  keys: [
+    key(0),
+    // Wind down: deep crouch, right fist chambered low, eyes on the foe.
+    key(0.14, pelvis(0, -0.07), bend(24, 6, -6, -14), ANGRY, flames(0.5),
+      { aim: { armR: { dir: [-0.45, -0.75, -0.48] }, forearmR: { dir: [-0.15, -0.35, 0.92] }, armL: { dir: [0.35, -0.6, 0.7] }, forearmL: { dir: [-0.2, 0.7, 0.68] } } }, FISTS),
+    // Dash in low along a shallow arc.
+    key(0.3, { advance: 0.7, root: { y: 0.04 } }, TUCK, bend(26, 6, -6, -14), ANGRY, flames(0.7),
+      { aim: { armR: { dir: [-0.45, -0.75, -0.48] }, forearmR: { dir: [-0.15, -0.35, 0.92] }, armL: { dir: [0.35, -0.6, 0.7] }, forearmL: { dir: [-0.2, 0.7, 0.68] } } }, FISTS),
+    // Plant under the foe, coiled.
+    key(0.42, { advance: 1 }, LAND, pelvis(0, -0.03), bend(26, 8, -6, -16), ANGRY, flames(0.8),
+      { aim: { armR: { dir: [-0.5, -0.8, -0.33] }, forearmR: { dir: [-0.15, -0.2, 0.97] }, armL: { dir: [0.35, -0.6, 0.7] }, forearmL: { dir: [-0.2, 0.7, 0.68] } } }, FISTS),
+    // The uppercut: everything extends upward, the fist leads, feet leave the ground.
+    snap(0.52, { advance: 1, plantFeet: 0, root: { y: 0.12 } }, pelvis(0, 0.02), bend(-14, -8, -6, -20), ANGRY, flames(1),
+      { aim: { armR: { dir: [-0.15, 0.93, 0.33] }, forearmR: { dir: [-0.08, 0.99, 0.1] }, armL: { dir: [0.45, -0.7, -0.55] }, forearmL: { dir: [0.2, -0.3, 0.93] },
+        thighR: { dir: [-0.3, -0.92, 0.2] }, shinR: { dir: [-0.2, -0.97, -0.1] }, thighL: { dir: [0.3, -0.85, -0.4] }, shinL: { dir: [0.15, -0.8, -0.58] } } }, FISTS),
+    // Apex: stretched tall, the fist high.
+    key(0.7, { advance: 1, plantFeet: 0, root: { y: 0.18 } }, pelvis(0, 0.02), bend(-16, -9, -6, -22), ANGRY, flames(1),
+      { aim: { armR: { dir: [-0.1, 0.97, 0.2] }, forearmR: { dir: [-0.05, 0.99, 0.05] }, armL: { dir: [0.45, -0.7, -0.55] }, forearmL: { dir: [0.2, -0.3, 0.93] },
+        thighR: { dir: [-0.3, -0.92, 0.2] }, shinR: { dir: [-0.2, -0.97, -0.1] }, thighL: { dir: [0.3, -0.85, -0.4] }, shinL: { dir: [0.15, -0.8, -0.58] } } }, FISTS),
+    // Drop back into a crouch.
+    fall(0.9, { advance: 1 }, LAND, pelvis(0, -0.03), bend(20, 4, 0, -8), GUARD, ANGRY, flames(0.6)),
+    key(1.05, { advance: 1 }, pelvis(0, -0.02), bend(12, 2, 0, -4), GUARD, ANGRY, flames(0.4)),
+    // Hop home.
+    key(1.2, { advance: 0.45, root: { y: 0.06 } }, HOP, bend(8, 0, 0, 0), GUARD, ANGRY, flames(0.3)),
+    key(1.34, { advance: 0 }, LAND, GUARD, ANGRY, flames(0.1)),
+    key(1.6, flames(0), OPEN_EYES),
+  ],
+  events: [{ t: 0.57, name: 'impact' }],
+};
+
+/** Tackles (Quick Attack, Take Down): a blur of a dash, shoulder first, and a bounce back. */
+const tackle: Clip = {
+  name: 'tackle',
+  duration: 1.15,
+  keys: [
+    key(0),
+    key(0.1, pelvis(0, -0.05), { bones: { spine: { x: 26, y: -14 }, head: { x: -12, y: 10 } } }, ANGRY,
+      { aim: { armR: { dir: [-0.4, -0.7, -0.6] }, forearmR: { dir: [-0.2, -0.4, 0.9] }, armL: { dir: [0.4, -0.7, -0.6] }, forearmL: { dir: [0.2, -0.4, 0.9] } } }),
+    // The dash: low and fast, the right shoulder leading, arms swept back.
+    key(0.2, { advance: 0.75, root: { y: 0.03 } }, TUCK, { bones: { spine: { x: 34, y: -22 }, head: { x: -16, y: 14 } } }, ANGRY,
+      { aim: { armR: { dir: [-0.35, -0.5, -0.8] }, forearmR: { dir: [-0.25, -0.3, -0.92] }, armL: { dir: [0.35, -0.5, -0.8] }, forearmL: { dir: [0.25, -0.3, -0.92] } } }),
+    snap(0.25, { advance: 1 }, LAND, { bones: { spine: { x: 30, y: -24 }, head: { x: -14, y: 14 } } }, ANGRY,
+      { aim: { armR: { dir: [-0.35, -0.5, -0.8] }, forearmR: { dir: [-0.25, -0.3, -0.92] }, armL: { dir: [0.35, -0.5, -0.8] }, forearmL: { dir: [0.25, -0.3, -0.92] } } }),
+    // Bounce off the foe.
+    key(0.4, { advance: 0.75, root: { y: 0.06 } }, HOP, { bones: { spine: { x: 6, y: -6 } } }, GUARD, ANGRY),
+    key(0.55, { advance: 0.4, root: { y: 0.04 } }, HOP, GUARD, ANGRY),
+    key(0.7, { advance: 0 }, LAND, GUARD, ANGRY),
+    key(1.15, OPEN_EYES),
+  ],
+  events: [{ t: 0.25, name: 'impact' }],
+};
+
 /** Weak contact kicks (Double Kick, Low Kick): leap in, two alternating snap kicks, hop back. */
 const physicalWeakKick: Clip = {
   name: 'physical_weak_kick',
@@ -417,7 +477,7 @@ const faint: Clip = {
 };
 
 export const BLAZIKEN_CLIPS: Record<string, Clip> = Object.fromEntries(
-  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
+  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
 );
 
 /** Eye atlas (pm0257_00_Eye1): 2 columns x 4 rows of 128x64 cells. */
