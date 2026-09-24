@@ -5,6 +5,7 @@ import type { SpeciesProfile } from './profile';
 type ProfileFactory = (palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }) => Promise<SpeciesProfile>;
 
 const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
+  sceptile: async () => (await import('./sceptile')).createProfile,
   blaziken: async () => (await import('./blaziken')).createProfile,
 };
 
