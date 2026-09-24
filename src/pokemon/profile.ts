@@ -29,7 +29,8 @@ export interface OutlinePolicy {
 
 export function paletteSlot(profile: SpeciesProfile, shiny = false): PaletteSlot {
   const o = profile.calibration.outline;
-  return { colors: shiny ? profile.shinyPalette : profile.palette, outerIndex: o.outer, innerIndex: o.inner, selective: o.selective };
+  // Shiny = same indices, other palette (the model and its fit stay the same).
+  return { colors: profile.palette, display: shiny ? profile.shinyPalette : undefined, outerIndex: o.outer, innerIndex: o.inner, selective: o.selective };
 }
 
 export interface Calibration {

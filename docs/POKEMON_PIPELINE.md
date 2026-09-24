@@ -34,9 +34,10 @@ The scaffold:
 
 1. Downloads the pre-rigged model from
    [Pokemon-3D-api/assets](https://github.com/Pokemon-3D-api/assets) by national dex
-   number, recording the sha256 in `SOURCE.json`. Some species have no shiny model;
-   the loader then falls back to the regular one, and the pixel pass still uses the
-   shiny GBA palette.
+   number, recording the sha256 in `SOURCE.json`. Only the regular mesh is needed:
+   shiny Pokémon use the same mesh and the pixel pass draws the shiny GBA palette at
+   the same indices, as in Gen 3. The upstream shiny meshes are separate exports whose
+   skeletons don't match.
 2. Reads the skeleton and guesses the semantic rig map from Game Freak's joint names.
    It strips `050 Head`-style prefixes and `Waist_63`-style suffixes, and handles
    `L`/`R` prefixes.

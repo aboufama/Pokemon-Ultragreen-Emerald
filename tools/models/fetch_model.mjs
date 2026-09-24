@@ -4,6 +4,10 @@
 //
 //   node tools/models/fetch_model.mjs --dex 257 --slug blaziken [--variants regular,shiny]
 //
+// Only the regular mesh is used in battle: shiny Pokémon recolor through the
+// shiny GBA palette (same indices), and the upstream shiny meshes are separate
+// exports with different skeletons.
+//
 // Output: public/assets/pokemon/<slug>/model.glb (+ model.<variant>.glb) and SOURCE.json.
 // The upstream repo prunes its history, so we record the sha256 of each file
 // instead of relying on a pinned commit URL.
@@ -37,7 +41,7 @@ if (!args.dex || !args.slug) {
   process.exit(1);
 }
 
-const variants = String(args.variants ?? 'regular,shiny').split(',');
+const variants = String(args.variants ?? 'regular').split(',');
 const outDir = join(ROOT, 'public/assets/pokemon', args.slug);
 await mkdir(outDir, { recursive: true });
 
