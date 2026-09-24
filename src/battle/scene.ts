@@ -129,6 +129,7 @@ export class BattleScene {
   private autoMove = 0;
   private lastTime = 0;
   private acc = 0;
+  private disposed = false;
 
   private constructor(
     readonly screen: GbaScreen,
@@ -194,7 +195,17 @@ export class BattleScene {
     else this.render();
   }
 
+  /** Stop the battle and free its screen, input and WebGL context. */
+  dispose(): void {
+    this.disposed = true;
+    this.input.dispose();
+    this.screen.dispose();
+    this.stage.renderer.dispose();
+    this.stage.renderer.forceContextLoss();
+  }
+
   private readonly loop = (now: number): void => {
+    if (this.disposed) return;
     if (!this.lastTime) this.lastTime = now;
     this.acc += Math.min(100, now - this.lastTime);
     this.lastTime = now;

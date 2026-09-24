@@ -9,12 +9,14 @@
 //   build/demo/assets/...   exactly the files a battle requests
 //
 // The asset list is recorded from a real battle on the dev server (npm run
-// dev), so it stays in sync with the code. Models are decoded from Draco and
-// embedded in the page as base64 (window.__EMBEDDED_MODELS__): the demo needs
-// no WebAssembly decoder, and hosts that don't serve .glb files still work.
+// dev), so it stays in sync with the code, plus what the in-page picker can
+// ask for: every species with a 3D profile (model and palette) and every
+// arena. Models are decoded from Draco and embedded in the page as base64
+// (window.__EMBEDDED_MODELS__): the demo needs no WebAssembly decoder, and
+// hosts that don't serve .glb files still work.
 
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -46,6 +48,15 @@ await page.waitForFunction(() => window.__ready === true, null, { timeout: 12000
 await page.evaluate(() => window.__battle.step(1500));
 await browser.close();
 if (!assets.size) throw new Error('no assets recorded: is the dev server running?');
+
+// Everything the picker can switch to.
+const registry = await readFile(join(ROOT, 'src/pokemon/registry.ts'), 'utf8');
+const species = [...registry.matchAll(/^\s+(\w+): async \(\) =>/gm)].map((m) => m[1]);
+for (const slug of species) {
+  assets.add(`assets/pokemon/${slug}/model.glb`);
+  assets.add(`assets/gba/pokemon/${slug}/palette.json`);
+}
+for (const f of await readdir(join(ROOT, 'public/assets/gba/battle_env'))) if (f.endsWith('.png')) assets.add(`assets/gba/battle_env/${f}`);
 
 // 3. Copy the files; decode models and keep them for embedding.
 await rm(OUT, { recursive: true, force: true });
