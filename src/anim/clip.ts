@@ -50,6 +50,8 @@ export interface Clip {
   loop?: boolean;
   keys: Keyframe[];
   events?: ClipEvent[];
+  /** Placeholder from the generic starter set (the gauntlet requires bespoke clips). */
+  generic?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +95,7 @@ function channelsOf(pose: Pose, add: (c: Channel) => void): void {
   // Per-leg plants default to the pose's plantFeet (see readChannel).
   if (pose.plantLeft !== undefined) add({ kind: 'scalar', name: 'plantLeft', axis: 0, bone: null, missing: NaN });
   if (pose.plantRight !== undefined) add({ kind: 'scalar', name: 'plantRight', axis: 0, bone: null, missing: NaN });
+  if (pose.plantFront !== undefined) add({ kind: 'scalar', name: 'plantFront', axis: 0, bone: null, missing: NaN });
   if (pose.scale !== undefined) add({ kind: 'scalar', name: 'scale', axis: 0, bone: null, missing: 1 });
 }
 
@@ -108,7 +111,7 @@ function readChannel(pose: Pose, c: Channel): number {
     case 'fx': v = pose.fx?.[c.name]; break;
     case 'scalar':
       v = (pose as Record<string, number | undefined>)[c.name];
-      if (v === undefined && (c.name === 'plantLeft' || c.name === 'plantRight')) v = pose.plantFeet;
+      if (v === undefined && (c.name === 'plantLeft' || c.name === 'plantRight' || c.name === 'plantFront')) v = pose.plantFeet;
       break;
   }
   return v ?? c.missing;

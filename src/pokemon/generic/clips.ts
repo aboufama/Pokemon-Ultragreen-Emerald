@@ -145,5 +145,5 @@ export function makeGenericClips(stance: Pose = {}): Record<string, Clip> {
       events: [{ t: 0.85, name: 'thud' }],
     },
   ];
-  return Object.fromEntries(clips.map((c) => [c.name, c]));
+  return Object.fromEntries(clips.map((c) => [c.name, { ...c, generic: true }]));
 }

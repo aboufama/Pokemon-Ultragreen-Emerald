@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Export a species' battle clips as looping GIFs from both sides, with the
-// in-game UI, for review (the move categories use a representative move so
-// the effects and the target's reaction show too).
+// in-game UI, for review. Every clip in the species' profile gets a job:
+// moments (idle, intro, hit, faint) play the clip, attack clips play a move
+// that uses them (a showcase move first), so effects and the target's
+// reaction show too.
 //
 //   node tools/shots/clip_gifs.mjs [--species blaziken] [--out build/clips] [--scale 2] [--only intro,faint]
 //                                  [--sides player,enemy] [--density 3]
@@ -11,6 +13,7 @@
 
 import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
+import { gameData, loadProfile, reviewJobs } from '../gauntlet/species.mjs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,20 +29,7 @@ function parseArgs(argv) {
   return args;
 }
 
-export const JOBS = [
-  { name: 'idle', clip: 'idle', seconds: 2.4 },
-  { name: 'intro', clip: 'intro' },
-  { name: 'physical_weak', move: 'SLASH' },
-  { name: 'physical_weak_kick', move: 'DOUBLE_KICK' },
-  { name: 'physical_strong', move: 'BLAZE_KICK' },
-  { name: 'special_weak', move: 'EMBER' },
-  { name: 'special_strong', move: 'FLAMETHROWER' },
-  { name: 'status_self', move: 'BULK_UP' },
-  { name: 'status_target', move: 'GROWL' },
-  { name: 'status_target_kick', move: 'SAND_ATTACK' },
-  { name: 'hit', clip: 'hit' },
-  { name: 'faint', clip: 'faint' },
-];
+
 
 const args = parseArgs(process.argv.slice(2));
 const species = args.species ?? 'blaziken';
@@ -47,6 +37,8 @@ const base = args.base ?? 'http://127.0.0.1:5173/';
 const out = resolve(args.out ?? join(ROOT, 'build/clips'));
 const scale = Number(args.scale ?? 2);
 const only = args.only ? String(args.only).split(',') : null;
+const data = await gameData();
+const JOBS = reviewJobs(data, await loadProfile(species), data.species[species].learnset.map((l) => l.move));
 const sides = args.sides ? String(args.sides).split(',') : ['player', 'enemy'];
 const density = args.density ? { density: String(args.density) } : {};
 const FPS = 30;

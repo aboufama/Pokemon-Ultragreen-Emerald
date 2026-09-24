@@ -54,7 +54,7 @@ export async function runRigLab(root: HTMLElement): Promise<unknown> {
   const grid = new THREE.GridHelper(2, 8, 0x777777, 0x555555);
   turnScene.add(grid);
 
-  const turnModel = await loadPokemonModel(slug);
+  const turnModel = await loadPokemonModel(slug, 'regular', { hiddenParts: profile.hiddenParts });
   applyToonMaterials(turnModel, { effectParts: profile.effectParts, grade: profile.calibration.grade });
   turnScene.add(turnModel.root);
   const turnRig = new Rig(turnModel, profile.rig);

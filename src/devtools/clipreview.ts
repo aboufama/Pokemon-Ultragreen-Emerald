@@ -5,7 +5,8 @@
 //   /?mode=clipreview&clip=intro&attacker=enemy
 //   &density=3 renders 3 output pixels per GBA pixel (finer pixels, for
 //   inspecting motion; the game uses 1)
-//   &mark=mouth marks the attacker's mouth (where breath effects start)
+//   &mark=mouth (or any emitter: cannons, flower, hands...) marks where the
+//   attacker's effects start
 //
 // window.__clip = { start(), step(frames), grab(): PNG data URL, done }
 
@@ -18,7 +19,7 @@ import { loadAllFonts } from '../gba/font';
 import { BattleStage } from '../render3d/stage';
 import { Battler3D } from '../battle3d/battler';
 import { VfxSystem, preloadSheets } from '../battle3d/vfx';
-import { clipFor, mouthPoint, performMove } from '../battle3d/director';
+import { clipFor, performMove, towardCamera } from '../battle3d/director';
 import { move as moveData } from '../data';
 
 declare global {
@@ -118,8 +119,10 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
     }
     screen.presentUi();
   };
-  if (params.get('mark') === 'mouth') {
-    void vfx.sprite('Particles', mouthPoint(attacker), { px: 6, fps: 0, life: 1e9, follow: () => mouthPoint(attacker) });
+  const mark = params.get('mark');
+  if (mark) {
+    const points = () => attacker.emitterPoints(mark).map((p) => towardCamera(attacker, p, 0.04));
+    points().forEach((p, i) => void vfx.sprite('Particles', p, { px: 6, fps: 0, life: 1e9, follow: () => points()[i] }));
   }
   // Settle into idle.
   for (let i = 0; i < 20; i++) update();

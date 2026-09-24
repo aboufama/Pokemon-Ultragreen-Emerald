@@ -16,9 +16,11 @@ export interface TypeFx {
   stream: string;
   /** Gathers at the attacker while charging. */
   charge: string;
+  /** Flows along a sustained beam (default: projectile). */
+  beam?: string;
 }
 
-const NORMAL: TypeFx = { impact: 'Impact', projectile: 'Orb', burst: 'Hit', stream: 'Orb', charge: 'Sparkle1' };
+const NORMAL: TypeFx = { impact: 'Impact', projectile: 'Orb', burst: 'Hit', stream: 'Orb', charge: 'Sparkle1', beam: 'Orb' };
 
 export const TYPE_FX: Record<string, TypeFx> = {
   TYPE_NORMAL: NORMAL,
@@ -27,15 +29,15 @@ export const TYPE_FX: Record<string, TypeFx> = {
   TYPE_POISON: { impact: 'Impact', extra: 'ToxicBubble', projectile: 'PoisonBubble', burst: 'ToxicBubble', stream: 'PoisonBubble', charge: 'PoisonBubble' },
   TYPE_GROUND: { impact: 'Impact', extra: 'FlyingDirt', projectile: 'MudUnk', burst: 'FlyingDirt', stream: 'MudUnk', charge: 'MudUnk' },
   TYPE_ROCK: { impact: 'Impact', extra: 'Rocks', projectile: 'Rocks', burst: 'Rocks', stream: 'Rocks', charge: 'Rocks' },
-  TYPE_BUG: { impact: 'Scratch', projectile: 'Needle', burst: 'Hit', stream: 'Needle', charge: 'GreenStar' },
+  TYPE_BUG: { impact: 'Scratch', projectile: 'Needle', burst: 'Hit', stream: 'Needle', charge: 'GreenStar', beam: 'BluegreenOrb' },
   TYPE_GHOST: { impact: 'Impact', extra: 'PurpleFlame', projectile: 'ShadowBall', burst: 'PurpleFlame', stream: 'PurpleFlame', charge: 'GhostlySpirit' },
   TYPE_STEEL: { impact: 'CrossImpact', projectile: 'MetalBall', burst: 'Hit', stream: 'MetalBall', charge: 'Sparkle1' },
-  TYPE_FIRE: { impact: 'Impact', extra: 'FirePlume', projectile: 'SmallEmber', burst: 'Fire', stream: 'Fire', charge: 'SmallEmber' },
-  TYPE_WATER: { impact: 'WaterImpact', extra: 'Bubble', projectile: 'WaterOrb', burst: 'WaterImpact', stream: 'Bubble', charge: 'SmallBubbles' },
-  TYPE_GRASS: { impact: 'Impact', extra: 'Leaf', projectile: 'Leaf', burst: 'Leaf', stream: 'Leaf', charge: 'Sprout' },
-  TYPE_ELECTRIC: { impact: 'Impact', extra: 'Spark2', projectile: 'ElectricOrbs', burst: 'Shock', stream: 'Electricity', charge: 'Spark2' },
-  TYPE_PSYCHIC: { impact: 'Impact', extra: 'Sparkle1', projectile: 'Orbs', burst: 'Sparkle1', stream: 'Orbs', charge: 'BlueStar' },
-  TYPE_ICE: { impact: 'Impact', extra: 'IceChunk', projectile: 'IceChunk', burst: 'IceChunk', stream: 'Snowball', charge: 'IceSpikes' },
+  TYPE_FIRE: { impact: 'Impact', extra: 'FirePlume', projectile: 'SmallEmber', burst: 'Fire', stream: 'Fire', charge: 'SmallEmber', beam: 'Fire' },
+  TYPE_WATER: { impact: 'WaterImpact', extra: 'Bubble', projectile: 'WaterOrb', burst: 'WaterImpact', stream: 'WaterColumn', charge: 'SmallBubbles', beam: 'Bubble' },
+  TYPE_GRASS: { impact: 'Impact', extra: 'Leaf', projectile: 'Leaf', burst: 'Leaf', stream: 'Leaf', charge: 'Sparkle1', beam: 'YellowBall' },
+  TYPE_ELECTRIC: { impact: 'Impact', extra: 'Spark2', projectile: 'ElectricOrbs', burst: 'Shock', stream: 'Electricity', charge: 'Spark2', beam: 'ElectricOrbs' },
+  TYPE_PSYCHIC: { impact: 'Impact', extra: 'Sparkle1', projectile: 'Orbs', burst: 'Sparkle1', stream: 'Orbs', charge: 'BlueStar', beam: 'BluegreenOrb' },
+  TYPE_ICE: { impact: 'Impact', extra: 'IceChunk', projectile: 'IceChunk', burst: 'IceChunk', stream: 'Snowball', charge: 'IceSpikes', beam: 'IceChunk' },
   TYPE_DRAGON: { impact: 'Impact', extra: 'BlueFlames', projectile: 'BlueFlames', burst: 'Explosion', stream: 'BlueFlames', charge: 'BlueStar' },
   TYPE_DARK: { impact: 'Impact', projectile: 'BlackBall', burst: 'Hit', stream: 'BlackBall', charge: 'GrayOrb' },
 };
@@ -59,5 +61,10 @@ export function statusSprite(moveName: string): { sheet: string; at: 'travel' | 
 /** Every sheet the recipes can use (preloaded before battles). */
 export const TYPE_SHEETS: string[] = [...new Set([
   ...Object.values(TYPE_FX).flatMap((f) => [f.impact, f.extra, f.projectile, f.burst, f.stream, f.charge]),
+  ...Object.values(TYPE_FX).map((f) => f.beam),
   'MudUnk', 'PoisonPowder', 'Leer', 'NoiseLine', 'ClawSlash', 'HumanoidFoot', 'FocusEnergy',
+  // Motif sheets (src/battle3d/director.ts).
+  'SharpTeeth', 'Cut', 'SlamHit', 'HornHit', 'PunchImpact', 'SpeedDust', 'DirtMound', 'FlyingDirt', 'Splash',
+  'WaterColumn', 'Roots', 'Vine', 'Lightning', 'SpinningFire', 'Explosion', 'WhiteFeather', 'Spore', 'Seed',
+  'Petal', 'YellowBall', 'Sunlight', 'MagentaHeart', 'MusicNotes', 'GoldRing', 'Protect', 'RainDrops', 'Hail',
 ].filter((s): s is string => !!s))];

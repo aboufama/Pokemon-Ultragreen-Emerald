@@ -68,6 +68,11 @@ export interface SpriteFxOptions {
   scaleTo?: number;
   /** Stick to a moving point (e.g. a mouth), read every frame. */
   follow?: () => THREE.Vector3;
+  /**
+   * Projectiles: turn the sprite along its flight on screen. The value is the
+   * direction the sprite art points, in radians (0 = right, PI/2 = up).
+   */
+  orient?: number;
 }
 
 /** Id-pass shader for billboards: alpha cutout from the sheet, flat id color. */
@@ -193,9 +198,15 @@ export class VfxSystem {
         };
         p.onDone = resolve;
       };
-      const p = this.spawnSync(name, from, { ...opts, loop: true, life: duration });
+      let rotation = opts.rotation;
+      if (opts.orient !== undefined) {
+        const a = from.clone().project(this.stage.camera);
+        const b = to.clone().project(this.stage.camera);
+        rotation = Math.atan2(b.y - a.y, (b.x - a.x) * 1.5) - opts.orient;
+      }
+      const p = this.spawnSync(name, from, { ...opts, rotation, loop: true, life: duration });
       if (p) attach(p);
-      else void this.sprite(name, from, { ...opts, loop: true, life: duration }).then(attach);
+      else void this.sprite(name, from, { ...opts, rotation, loop: true, life: duration }).then(attach);
     });
   }
 
