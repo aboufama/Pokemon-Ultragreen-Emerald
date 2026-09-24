@@ -27,7 +27,7 @@ export interface ToonHandles {
   effects: Map<string, THREE.Mesh[]>;
   materials: THREE.MeshToonMaterial[];
   gradient: THREE.DataTexture;
-  uniforms: { gain: { value: number }; saturation: { value: number }; flash: { value: number } };
+  uniforms: { gain: { value: number }; saturation: { value: number }; flash: { value: number }; shade: { value: number } };
   setGrade(grade: ColorGrade): void;
 }
 
@@ -55,7 +55,7 @@ export function applyToonMaterials(model: LoadedModel, opts: MaterialOptions = {
   const effects = new Map<string, THREE.Mesh[]>();
   const materials: THREE.MeshToonMaterial[] = [];
   const gradient = makeGradient(grade.bands);
-  const uniforms = { gain: { value: grade.gain }, saturation: { value: grade.saturation }, flash: { value: 0 } };
+  const uniforms = { gain: { value: grade.gain }, saturation: { value: grade.saturation }, flash: { value: 0 }, shade: { value: 1 } };
 
   model.scene.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -84,10 +84,12 @@ export function applyToonMaterials(model: LoadedModel, opts: MaterialOptions = {
       shader.uniforms.uGain = uniforms.gain;
       shader.uniforms.uSaturation = uniforms.saturation;
       shader.uniforms.uFlash = uniforms.flash;
+      shader.uniforms.uShade = uniforms.shade;
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uGain;\nuniform float uSaturation;\nuniform float uFlash;')
-        // White flash (Poke Ball send-out, hits) blends the lit color to white.
-        .replace('#include <opaque_fragment>', 'outgoingLight = mix(outgoingLight, vec3(1.0), uFlash);\n#include <opaque_fragment>')
+        .replace('#include <common>', '#include <common>\nuniform float uGain;\nuniform float uSaturation;\nuniform float uFlash;\nuniform float uShade;')
+        // Shade (standing in a cloud's shadow), then the white flash (Poke
+        // Ball send-out, hits) that blends the lit color to white.
+        .replace('#include <opaque_fragment>', 'outgoingLight *= uShade;\noutgoingLight = mix(outgoingLight, vec3(1.0), uFlash);\n#include <opaque_fragment>')
         .replace(
           '#include <map_fragment>',
           `#include <map_fragment>

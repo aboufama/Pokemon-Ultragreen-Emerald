@@ -222,6 +222,7 @@ export class BattleScene {
     this.input.poll();
     this.clock.tick();
     this.updateBounce();
+    this.stage.update(DT);
     this.vfx.update(DT);
     this.player.update(DT);
     this.enemy.update(DT);

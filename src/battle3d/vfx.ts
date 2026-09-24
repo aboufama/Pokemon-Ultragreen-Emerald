@@ -124,6 +124,7 @@ export class VfxSystem {
   private shakeTime = 0;
   private shakeAmp = 0;
   private readonly timers: { at: number; fn: () => void }[] = [];
+  private readonly tweens: { start: number; seconds: number; fn: (t: number) => void; done?: () => void }[] = [];
   private clock = 0;
 
   constructor(private readonly stage: BattleStage) {
@@ -138,6 +139,12 @@ export class VfxSystem {
 
   after(seconds: number, fn: () => void): void {
     this.timers.push({ at: this.clock + seconds, fn });
+  }
+
+  /** Call fn(t) every frame for `seconds`, t going 0 -> 1 (fades, flashes). */
+  tween(seconds: number, fn: (t: number) => void, done?: () => void): void {
+    this.tweens.push({ start: this.clock, seconds, fn, done });
+    fn(0);
   }
 
   /** Spawn an animated billboard. Synchronous once the sheet is loaded (see preloadSheets). */
@@ -252,6 +259,15 @@ export class VfxSystem {
         fn();
       }
     }
+    for (let i = this.tweens.length - 1; i >= 0; i--) {
+      const tw = this.tweens[i];
+      const t = Math.min(1, (this.clock - tw.start) / tw.seconds);
+      tw.fn(t);
+      if (t >= 1) {
+        this.tweens.splice(i, 1);
+        tw.done?.();
+      }
+    }
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       if (!this.updateParticle(p, dt)) {
@@ -278,6 +294,6 @@ export class VfxSystem {
   }
 
   get busy(): boolean {
-    return this.particles.length > 0 || this.timers.length > 0;
+    return this.particles.length > 0 || this.timers.length > 0 || this.tweens.length > 0;
   }
 }

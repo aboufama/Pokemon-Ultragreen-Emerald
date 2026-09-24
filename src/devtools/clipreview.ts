@@ -105,6 +105,7 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
   }
 
   const update = () => {
+    stage.update(DT);
     vfx.update(DT);
     player.update(DT);
     enemy.update(DT);

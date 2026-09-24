@@ -39,6 +39,7 @@ export async function runFilm(root: HTMLElement): Promise<unknown> {
   const defender = attacker === player ? enemy : player;
 
   const step = (dt: number) => {
+    stage.update(dt);
     vfx.update(dt);
     player.update(dt);
     enemy.update(dt);

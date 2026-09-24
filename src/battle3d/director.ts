@@ -15,7 +15,7 @@ import { toScreen } from '../render3d/stage';
 import type { Battler3D } from './battler';
 import type { VfxSystem } from './vfx';
 import { MOTIFS, type Motif, isStrong, motifOf } from './motifs';
-import { statusSprite, typeFx } from './type_fx';
+import { TYPE_COLOR, statusSprite, typeFx } from './type_fx';
 
 export type AnimCategory = 'physical_weak' | 'physical_strong' | 'special_weak' | 'special_strong' | 'status_self' | 'status_target';
 
@@ -114,11 +114,31 @@ export interface PerformHooks {
   onHit?: (index: number) => void;
 }
 
-function hitReaction(target: Battler3D, vfx: VfxSystem, strong: boolean): void {
+function hitReaction(target: Battler3D, vfx: VfxSystem, strong: boolean, move?: MoveData): void {
   target.blink(0.45);
   target.recoil(strong ? 1 : 0.6);
   void target.perform('hit');
   if (strong) vfx.shake(0.06, 0.3);
+  // The target's palette flashes toward the move's type color.
+  const color = move && TYPE_COLOR[move.type];
+  if (color) target.flashTint(color, strong ? 0.55 : 0.4, strong ? 0.4 : 0.28);
+}
+
+/** Motifs whose big versions fade the backdrop toward the type color. */
+const BACKDROP_FADES = new Set<Motif>(['breath', 'jet', 'beam', 'burst', 'erupt', 'wave', 'storm', 'bolt', 'mind', 'quake']);
+
+/**
+ * Fade the battle background toward a darkened type color while a big move
+ * plays, then back (Emerald fades BG palettes for Hyper Beam, Thunder...).
+ */
+function backdropFade(attacker: Battler3D, move: MoveData, vfx: VfxSystem, hold: Promise<unknown>): void {
+  const env = attacker.stage.environment;
+  const rgb = TYPE_COLOR[move.type] ?? [40, 40, 56];
+  if (!env) return;
+  const color = new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255).multiplyScalar(0.55);
+  const peak = 0.24;
+  vfx.tween(0.25, (t) => env.setTint(color, peak * t * t * (3 - 2 * t)));
+  void hold.then(() => vfx.tween(0.35, (t) => env.setTint(color, peak * (1 - t)), () => env.setTint(color, 0)));
 }
 
 const sleep = (vfx: VfxSystem, s: number) => new Promise<void>((resolve) => vfx.after(s, resolve));
@@ -236,6 +256,8 @@ function contactFx(move: MoveData, motif: Motif, target: Battler3D, vfx: VfxSyst
 /** The ground heaves under the foe: a long shake and dirt bursting along the ground. */
 function quakeFx(target: Battler3D, vfx: VfxSystem, strong: boolean): void {
   vfx.shake(strong ? 0.09 : 0.06, 0.8);
+  const ambience = target.stage.ambience;
+  if (ambience) for (let i = 0; i < 3; i++) vfx.after(i * 0.12, () => ambience.puff(bodyPoint(target, 0).add(new THREE.Vector3((i - 1) * target.height * 0.4, 0, 0)), 1.5, target.height));
   for (let i = 0; i < 6; i++) {
     vfx.after(i * 0.08, () => {
       const p = bodyPoint(target, 0.02);
@@ -255,14 +277,25 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
   let sustained: ReturnType<typeof spray> | null = null;
   const landed = () => {
     hooks.onHit?.(hits++);
-    hitReaction(target, vfx, strong);
+    hitReaction(target, vfx, strong, move);
+  };
+  // Big moves fade the backdrop from their first charge/release until the clip ends.
+  let resolveMove!: () => void;
+  const moveDone = new Promise<void>((r) => (resolveMove = r));
+  let faded = false;
+  const fadeBackdrop = () => {
+    if (faded || !strong || !BACKDROP_FADES.has(motif)) return;
+    faded = true;
+    backdropFade(attacker, move, vfx, moveDone);
   };
 
   attacker.onEvent = (name) => {
     if (name === 'impact') {
+      if (motif === 'quake') fadeBackdrop();
       contactFx(move, motif, target, vfx, hits);
       landed();
     } else if (name === 'release') {
+      fadeBackdrop();
       const r = releaseFx(attacker, target, move, motif, vfx);
       if ('stop' in r) {
         sustained = r;
@@ -273,6 +306,7 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
     } else if (name === 'releaseEnd') {
       sustained?.stop();
     } else if (name === 'charge') {
+      fadeBackdrop();
       chargeFx(attacker, move, motif, vfx);
     } else if (name === 'aura') {
       auraFx(attacker, motif, vfx);
@@ -285,6 +319,7 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
   await attacker.perform(clip);
   (sustained as ReturnType<typeof spray> | null)?.stop();
   await Promise.all(pending);
+  resolveMove();
   attacker.onEvent = null;
 }
 

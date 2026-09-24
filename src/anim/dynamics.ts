@@ -67,8 +67,11 @@ export class SpringChain {
     this.particles[n].anim.copy(this.tip).applyMatrix4(this.bones[n - 1].matrixWorld);
   }
 
-  /** Run after the pose and the battler's transform have been applied. */
-  update(dt: number): void {
+  /**
+   * Run after the pose and the battler's transform have been applied.
+   * `force` is an outside acceleration in world units/s² (wind).
+   */
+  update(dt: number, force?: THREE.Vector3): void {
     this.readAnimated();
     const ps = this.particles;
     if (!this.initialized) {
@@ -93,8 +96,9 @@ export class SpringChain {
         p.prev.copy(p.anim);
         continue;
       }
-      // Verlet with damping.
+      // Verlet with damping (and the outside force, stronger toward the tip).
       _a.subVectors(p.pos, p.prev).multiplyScalar(1 - damping);
+      if (force) _a.addScaledVector(force, dt * dt * (i / (ps.length - 1)));
       p.prev.copy(p.pos);
       p.pos.add(_a);
       // Pull toward the animated pose, and never drift too far from it.
