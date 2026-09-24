@@ -25,6 +25,9 @@ async function start(): Promise<void> {
   } else if (mode === 'calibrate') {
     const { runCalibrate } = await import('./devtools/calibrate');
     await runCalibrate(root);
+  } else if (mode === 'film') {
+    const { runFilm } = await import('./devtools/film');
+    await runFilm(root);
   } else if (mode === 'stage') {
     const { runStagePreview } = await import('./devtools/stage_preview');
     (window as unknown as { preview: unknown }).preview = await runStagePreview(root);
