@@ -516,7 +516,7 @@ async function emitFx(attacker: Battler3D, target: Battler3D, move: MoveData, mo
   }
   if (at === 'eyes' || motif === 'glare') {
     // Leer, Scary Face: a glint at the attacker's eyes.
-    void vfx.sprite(at === 'eyes' ? sprite : 'Leer', towardCamera(attacker, bonePoint(attacker, 'head'), 0.15), { px: 32, fps: 14 });
+    void vfx.sprite(at === 'eyes' ? sprite : 'Leer', towardCamera(attacker, attacker.emitterPoints('eyes')[0], 0.15), { px: 32, fps: 14 });
     await sleep(vfx, 0.5);
     return;
   }

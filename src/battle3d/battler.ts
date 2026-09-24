@@ -202,7 +202,9 @@ export class Battler3D {
         local = new THREE.Vector3(...spec.offset);
         // Offsets are authored for the left/center bone; mirror for right-side bones.
         if (/R$/.test(bone) && bones.some((b) => b === bone.slice(0, -1) + 'L')) local.x *= -1;
-      } else if (name === 'eyes' || name === 'body') {
+      } else if (name === 'eyes') {
+        local = (!spec && this.eyeCentre(node)) || new THREE.Vector3();
+      } else if (name === 'body') {
         local = new THREE.Vector3();
       } else {
         local = skinnedExtent(this.inst.model.scene, node, spec?.reach ?? 0.9) ?? new THREE.Vector3();
@@ -210,6 +212,40 @@ export class Battler3D {
       out.push({ node, local });
     }
     return out;
+  }
+
+  /**
+   * Centre of the eyes in a bone's frame: the vertices drawn with the eye
+   * atlas material (profile.expressions), so glints sit on the eyes rather
+   * than on the head bone's pivot (at mouth level on some models).
+   */
+  private eyeCentre(bone: THREE.Object3D): THREE.Vector3 | null {
+    const material = this.profile.expressions?.material;
+    if (!material) return null;
+    const sum = new THREE.Vector3();
+    const v = new THREE.Vector3();
+    let n = 0;
+    this.inst.model.scene.traverse((o) => {
+      const mesh = o as THREE.SkinnedMesh;
+      if (!mesh.isSkinnedMesh) return;
+      const k = mesh.skeleton.bones.indexOf(bone as THREE.Bone);
+      if (k < 0) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const eye = mats.findIndex((m) => m.name.includes(material));
+      if (eye < 0) return;
+      const toLocal = new THREE.Matrix4().multiplyMatrices(mesh.skeleton.boneInverses[k], mesh.bindMatrix);
+      const pos = mesh.geometry.getAttribute('position');
+      const index = mesh.geometry.getIndex();
+      // With several materials, only the eye material's group of triangles.
+      const groups = mats.length > 1 ? mesh.geometry.groups.filter((g) => g.materialIndex === eye) : [{ start: 0, count: index ? index.count : pos.count }];
+      for (const g of groups) {
+        for (let j = g.start; j < g.start + g.count; j++) {
+          sum.add(v.fromBufferAttribute(pos, index ? index.getX(j) : j).applyMatrix4(toLocal));
+          n++;
+        }
+      }
+    });
+    return n ? sum.divideScalar(n) : null;
   }
 
   private fallbackPoint(name: string): THREE.Vector3 {
