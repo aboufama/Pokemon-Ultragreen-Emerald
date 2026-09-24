@@ -208,6 +208,34 @@ def extract_trainers_and_balls(decomp: Path, out: Path) -> None:
         save(G.to_rgba(G.indexed(p), G.png_palette(p)), out / "balls" / p.name)
 
 
+def extract_battle_anim_sprites(decomp: Path, out: Path, meta: dict) -> None:
+    """Stock battle animation particles (fire, impact, claw slash, foot, ...).
+
+    Each gBattleAnimSpriteGfx_<Name> is paired with gBattleAnimSpritePal_<Name>
+    (embedded PNG palette or a .pal file) as in src/graphics.c.
+    """
+    src = C.read(decomp / "src/graphics.c")
+    gfx = dict(re.findall(r"gBattleAnimSpriteGfx_(\w+)\[\]\s*=\s*INC\w+\(\"([^\"]+)\"", src))
+    pals = dict(re.findall(r"gBattleAnimSpritePal_(\w+)\[\]\s*=\s*INC\w+\(\"([^\"]+)\"", src))
+    names = []
+    for name, path in sorted(gfx.items()):
+        png = decomp / path
+        if png.suffix != ".png" or not png.exists():
+            continue
+        pal_path = decomp / pals.get(name, path)
+        try:
+            pal = G.read_jasc_pal(pal_path) if pal_path.suffix == ".pal" else G.png_palette(pal_path)
+            idx = G.indexed(png)
+        except (ValueError, OSError):
+            continue
+        if idx.max() >= len(pal):
+            idx = idx & 0xF
+        save(G.to_indexed_png(idx, pal), out / "battle_anims" / f"{name}.png")
+        names.append(name)
+    meta["battleAnimSprites"] = names
+    print(f"battle anim sprites: {len(names)}")
+
+
 def main(decomp: Path, root: Path) -> None:
     out = root / "public/assets/gba"
     data_dir = root / "src/data/generated"
@@ -218,6 +246,7 @@ def main(decomp: Path, root: Path) -> None:
     extract_interface(decomp, out, meta)
     extract_fonts(decomp, out)
     extract_trainers_and_balls(decomp, out)
+    extract_battle_anim_sprites(decomp, out, meta)
     extract_pokemon(decomp, out, species)
     (data_dir / "gfx_meta.json").write_text(json.dumps(meta, separators=(",", ":")) + "\n")
     print(f"wrote {data_dir / 'gfx_meta.json'}")

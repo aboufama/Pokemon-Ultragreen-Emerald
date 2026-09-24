@@ -32,6 +32,8 @@ export interface Pose {
   bones?: Record<string, BoneRotation>;
   /** Point limbs along model-space directions (applied after `bones`, parents first). */
   aim?: Record<string, BoneAim>;
+  /** Extra rotations applied after aims (model-space axes, about the bone pivot). */
+  post?: Record<string, BoneRotation>;
   /** Pelvis translation (hips + spine roots together), in model units (height = 1). */
   pelvis?: { x?: number; y?: number; z?: number };
   /** Whole-model offset in the battler's local space (model units) and yaw (degrees). */
@@ -166,6 +168,7 @@ export class Rig {
       info.node.quaternion.copy(info.bindLocalQ).multiply(_q2);
     }
     if (pose.aim) this.applyAims(pose.aim);
+    if (pose.post) this.applyPost(pose.post);
     if (pose.pelvis) {
       // Pelvis nodes are roots of the glTF scene; the scene is scaled to unit
       // height, so convert model units to the scene's local units.
@@ -206,6 +209,22 @@ export class Rig {
       if (aim.twist) delta.premultiply(new THREE.Quaternion().setFromAxisAngle(tgt, aim.twist * DEG));
       const parentQ = this.modelQuat(node.parent!, new THREE.Quaternion());
       node.quaternion.copy(parentQ.invert().multiply(delta.multiply(worldQ)));
+      node.updateMatrixWorld(true);
+    }
+  }
+
+  /** Rotate bones about model-space axes through their pivots, on top of the current pose. */
+  private applyPost(post: Record<string, BoneRotation>): void {
+    const entries = Object.entries(post)
+      .map(([name, r]) => ({ info: this.info(name), r }))
+      .filter((e): e is { info: NodeInfo; r: BoneRotation } => !!e.info)
+      .sort((a, b) => this.depth(a.info.node) - this.depth(b.info.node));
+    for (const { info, r } of entries) {
+      const node = info.node;
+      const worldQ = this.modelQuat(node, new THREE.Quaternion());
+      const parentQ = this.modelQuat(node.parent!, new THREE.Quaternion());
+      const q = rotationQuat(r, new THREE.Quaternion());
+      node.quaternion.copy(parentQ.invert().multiply(q.multiply(worldQ)));
       node.updateMatrixWorld(true);
     }
   }
@@ -291,6 +310,10 @@ export function mirrorPose(p: Pose): Pose {
   for (const [k, r] of Object.entries(p.bones ?? {})) {
     bones[mirrorName(k)] = { x: r.x, y: r.y === undefined ? undefined : -r.y, z: r.z === undefined ? undefined : -r.z };
   }
+  const post: Record<string, BoneRotation> = {};
+  for (const [k, r] of Object.entries(p.post ?? {})) {
+    post[mirrorName(k)] = { x: r.x, y: r.y === undefined ? undefined : -r.y, z: r.z === undefined ? undefined : -r.z };
+  }
   const aim: Record<string, BoneAim> = {};
   for (const [k, a] of Object.entries(p.aim ?? {})) {
     aim[mirrorName(k)] = { dir: [-a.dir[0], a.dir[1], a.dir[2]], twist: a.twist === undefined ? undefined : -a.twist };
@@ -299,6 +322,7 @@ export function mirrorPose(p: Pose): Pose {
     ...p,
     bones,
     aim: p.aim ? aim : undefined,
+    post: p.post ? post : undefined,
     pelvis: p.pelvis ? { ...p.pelvis, x: p.pelvis.x === undefined ? undefined : -p.pelvis.x } : undefined,
     root: p.root ? { ...p.root, x: p.root.x === undefined ? undefined : -p.root.x, yaw: p.root.yaw === undefined ? undefined : -p.root.yaw, roll: p.root.roll === undefined ? undefined : -p.root.roll } : undefined,
   };
@@ -346,6 +370,17 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     _e.setFromQuaternion(_qa, 'YXZ');
     bones[n] = { x: _e.x / DEG, y: _e.y / DEG, z: _e.z / DEG };
   }
+  let post: Record<string, BoneRotation> | undefined;
+  if (a.post || b.post) {
+    post = {};
+    for (const n of new Set([...Object.keys(a.post ?? {}), ...Object.keys(b.post ?? {})])) {
+      rotationQuat(a.post?.[n] ?? {}, _qa);
+      rotationQuat(b.post?.[n] ?? {}, _qb);
+      _qa.slerp(_qb, t);
+      _e.setFromQuaternion(_qa, 'YXZ');
+      post[n] = { x: _e.x / DEG, y: _e.y / DEG, z: _e.z / DEG };
+    }
+  }
   const lerp = (x?: number, y?: number) => (x === undefined && y === undefined ? undefined : (x ?? 0) + ((y ?? 0) - (x ?? 0)) * t);
   const lerpObj = <T extends Record<string, number | undefined>>(x?: T, y?: T): T | undefined => {
     if (!x && !y) return undefined;
@@ -374,6 +409,7 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
   return {
     bones,
     aim,
+    post,
     pelvis: lerpObj(a.pelvis, b.pelvis),
     root: lerpObj(a.root, b.root),
     advance: lerp(a.advance, b.advance),

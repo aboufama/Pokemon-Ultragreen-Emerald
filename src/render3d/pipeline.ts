@@ -373,7 +373,12 @@ export class PixelPipeline {
       }
       swapped.push({ mesh, original: mesh.material });
       const orig = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-      if (orig && (orig as THREE.Material).transparent && id < MAX_PALETTES + 1) {
+      const custom = o.userData.idMaterial as THREE.ShaderMaterial | undefined;
+      if (custom) {
+        // Objects with a cutout (effect billboards) provide their own id shader.
+        if (custom.uniforms?.id) custom.uniforms.id.value = id;
+        mesh.material = custom;
+      } else if (orig && (orig as THREE.Material).transparent && id < MAX_PALETTES + 1) {
         // Translucent parts (e.g. flames) never claim Pokémon pixels.
         mesh.visible = false;
         (mesh.userData as { _wasVisible?: boolean })._wasVisible = true;

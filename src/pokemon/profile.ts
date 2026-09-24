@@ -6,6 +6,7 @@ import type { Clip } from '../anim/clip';
 import type { BattleStage, SlotName } from '../render3d/stage';
 import type { ColorGrade } from '../render3d/materials';
 import type { PaletteSlot } from '../render3d/pipeline';
+import type { FireOptions } from '../render3d/fire';
 
 export interface SlotCalibration {
   /** Extra yaw (degrees) on top of facing the opponent. */
@@ -44,6 +45,20 @@ export interface Calibration {
   colorFit?: { loss: number };
 }
 
+export interface ExpressionAtlas {
+  /** Material/texture name fragment of the eye mesh. */
+  material: string;
+  /** UV size of one cell. */
+  cell: [number, number];
+  cells: Record<string, [number, number]>;
+}
+
+export interface EffectBinding {
+  /** Effect mesh name fragments driven by this Pose.fx channel. */
+  parts: string[];
+  fire?: FireOptions;
+}
+
 export interface SpeciesProfile {
   slug: string;
   rig: RigProfile;
@@ -51,6 +66,11 @@ export interface SpeciesProfile {
   clips: Record<string, Clip>;
   /** Mesh/texture name fragments that are effects (hidden unless enabled). */
   effectParts: string[];
+  /** Pose.fx channel -> effect meshes. */
+  effects: Record<string, EffectBinding>;
+  expressions?: ExpressionAtlas;
+  /** Per-move clip overrides (MOVE_* -> clip name), e.g. kicks. */
+  moveClips: Record<string, string>;
   palette: RGB[];
   shinyPalette: RGB[];
   calibration: Calibration;
