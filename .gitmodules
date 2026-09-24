@@ -1,0 +1,3 @@
+[submodule "decomp/pokeemerald"]
+	path = decomp/pokeemerald
+	url = https://github.com/pret/pokeemerald
