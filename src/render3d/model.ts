@@ -16,12 +16,38 @@ function gltfLoader(): GLTFLoader {
     draco.setDecoderPath(`${import.meta.env.BASE_URL}libs/draco/`);
     loader = new GLTFLoader();
     loader.setDRACOLoader(draco);
+    // Decode embedded textures through <img> elements rather than
+    // fetch(blob:) + createImageBitmap: sandboxed hosts may block fetching
+    // blob: URLs, but allow blob: images.
+    loader.register((parser) => {
+      const images = new THREE.TextureLoader(parser.options.manager);
+      images.setCrossOrigin(parser.options.crossOrigin);
+      parser.textureLoader = images;
+      return { name: 'image_element_textures' };
+    });
   }
   return loader;
 }
 
-export function loadGltf(url: string): Promise<GLTF> {
-  return gltfLoader().loadAsync(url);
+declare global {
+  interface Window {
+    /** Models embedded in the page as base64 .glb, by asset path (standalone demo build). */
+    __EMBEDDED_MODELS__?: Record<string, string>;
+  }
+}
+
+function base64ToBuffer(b64: string): ArrayBuffer {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+/** Load a model asset (path under assets/), from the page if it was embedded. */
+export function loadGltf(path: string): Promise<GLTF> {
+  const embedded = window.__EMBEDDED_MODELS__?.[path];
+  if (embedded) return gltfLoader().parseAsync(base64ToBuffer(embedded), '');
+  return gltfLoader().loadAsync(asset(path));
 }
 
 export interface LoadedModel {
@@ -42,8 +68,8 @@ export async function loadPokemonModel(slug: string, variant: 'regular' | 'shiny
   // the palette, as in Gen 3). An upstream shiny export, if present, is only
   // for inspection; fall back to the regular mesh when there is none.
   const gltf = variant === 'shiny'
-    ? await loadGltf(asset(`pokemon/${slug}/model.shiny.glb`)).catch(() => loadGltf(asset(`pokemon/${slug}/model.glb`)))
-    : await loadGltf(asset(`pokemon/${slug}/model.glb`));
+    ? await loadGltf(`pokemon/${slug}/model.shiny.glb`).catch(() => loadGltf(`pokemon/${slug}/model.glb`))
+    : await loadGltf(`pokemon/${slug}/model.glb`);
   const scene = gltf.scene;
   const root = new THREE.Group();
   root.name = `${slug}-root`;

@@ -30,6 +30,12 @@ needed to regenerate them (`npm run extract`, which needs `pip install -r tools/
 | B | X, Esc |
 | D-pad | arrow keys |
 
+On touch screens, use the on-screen D-pad and A/B buttons (hide them with `?pad=0`).
+
+**Standalone demo:** `npm run demo` (with `npm run dev` running) builds `build/demo/`. That
+page has the app inlined, only the assets a battle loads, and the model embedded, so it
+can be hosted on any static host.
+
 **URL options:** `?autoplay=1` plays both sides.
 
 | option | meaning |
