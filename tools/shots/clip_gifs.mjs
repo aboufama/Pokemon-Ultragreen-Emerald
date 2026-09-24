@@ -4,6 +4,7 @@
 // the effects and the target's reaction show too).
 //
 //   node tools/shots/clip_gifs.mjs [--species blaziken] [--out build/clips] [--scale 2] [--only intro,faint]
+//                                  [--sides player,enemy] [--density 3]
 //
 // Writes <out>/<side>_<clip>.gif and <out>/manifest.json. Needs the dev server
 // (npm run dev) and Pillow (tools/requirements.txt).
@@ -34,7 +35,8 @@ export const JOBS = [
   { name: 'special_weak', move: 'EMBER' },
   { name: 'special_strong', move: 'FLAMETHROWER' },
   { name: 'status_self', move: 'BULK_UP' },
-  { name: 'status_target', move: 'SAND_ATTACK' },
+  { name: 'status_target', move: 'GROWL' },
+  { name: 'status_target_kick', move: 'SAND_ATTACK' },
   { name: 'hit', clip: 'hit' },
   { name: 'faint', clip: 'faint' },
 ];
@@ -45,6 +47,8 @@ const base = args.base ?? 'http://127.0.0.1:5173/';
 const out = resolve(args.out ?? join(ROOT, 'build/clips'));
 const scale = Number(args.scale ?? 2);
 const only = args.only ? String(args.only).split(',') : null;
+const sides = args.sides ? String(args.sides).split(',') : ['player', 'enemy'];
+const density = args.density ? { density: String(args.density) } : {};
 const FPS = 30;
 const LEAD = 0.35; // seconds of idle before the clip starts
 const TAIL = 0.6; // seconds after it ends (return to idle)
@@ -56,8 +60,8 @@ await mkdir(out, { recursive: true });
 
 const manifest = [];
 for (const job of JOBS.filter((j) => !only || only.includes(j.name))) {
-  for (const side of ['player', 'enemy']) {
-    const q = new URLSearchParams({ mode: 'clipreview', species, attacker: side, ...(job.move ? { move: job.move } : { clip: job.clip }) });
+  for (const side of sides) {
+    const q = new URLSearchParams({ mode: 'clipreview', species, attacker: side, ...density, ...(job.move ? { move: job.move } : { clip: job.clip }) });
     await page.goto(`${base}?${q}`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__ready === true && !!window.__clip, null, { timeout: 120000 });
     const dir = join(out, 'frames', `${side}_${job.name}`);

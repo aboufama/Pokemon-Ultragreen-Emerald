@@ -3,6 +3,9 @@
 //
 //   /?mode=clipreview&move=BLAZE_KICK&attacker=player[&species=blaziken&enemy=blaziken][&ui=0]
 //   /?mode=clipreview&clip=intro&attacker=enemy
+//   &density=3 renders 3 output pixels per GBA pixel (finer pixels, for
+//   inspecting motion; the game uses 1)
+//   &mark=mouth marks the attacker's mouth (where breath effects start)
 //
 // window.__clip = { start(), step(frames), grab(): PNG data URL, done }
 
@@ -15,7 +18,7 @@ import { loadAllFonts } from '../gba/font';
 import { BattleStage } from '../render3d/stage';
 import { Battler3D } from '../battle3d/battler';
 import { VfxSystem, preloadSheets } from '../battle3d/vfx';
-import { clipFor, performMove } from '../battle3d/director';
+import { clipFor, mouthPoint, performMove } from '../battle3d/director';
 import { move as moveData } from '../data';
 
 declare global {
@@ -50,13 +53,14 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
   const showUi = params.get('ui') !== '0';
   const moveName = params.get('move');
   const clipName = params.get('clip') ?? 'idle';
+  const density = Math.max(1, Math.round(Number(params.get('density') ?? 1)));
 
   root.style.cssText = 'position:fixed;inset:0;background:#15151c;';
   const holder = document.createElement('div');
   holder.style.cssText = 'position:absolute;left:0;top:0;width:720px;height:480px;';
   root.appendChild(holder);
   const screen = new GbaScreen(holder, 3);
-  const stage = new BattleStage(screen.canvas3d);
+  const stage = new BattleStage(screen.canvas3d, undefined, { density });
   await stage.setEnvironment(params.get('env') ?? 'grass');
   const vfx = new VfxSystem(stage);
   await preloadSheets();
@@ -114,6 +118,9 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
     }
     screen.presentUi();
   };
+  if (params.get('mark') === 'mouth') {
+    void vfx.sprite('Particles', mouthPoint(attacker), { px: 6, fps: 0, life: 1e9, follow: () => mouthPoint(attacker) });
+  }
   // Settle into idle.
   for (let i = 0; i < 20; i++) update();
   render();
@@ -131,7 +138,11 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
       };
       if (moveName) void performMove(attacker, defender, moveData(moveName), vfx).then(finish);
       else if (clipName === 'idle') finish();
-      else void attacker.play(clipName).then(finish);
+      else {
+        // A hit plays with the knock-back the move director adds in battle.
+        if (clipName === 'hit') attacker.recoil(1);
+        void attacker.play(clipName).then(finish);
+      }
     },
     async step(frames: number) {
       for (let i = 0; i < frames; i++) {
@@ -142,11 +153,12 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
     },
     grab() {
       const c = document.createElement('canvas');
-      c.width = 240;
-      c.height = 160;
+      c.width = 240 * density;
+      c.height = 160 * density;
       const ctx = c.getContext('2d')!;
-      ctx.drawImage(screen.canvas3d, 0, 0, 240, 160);
-      ctx.drawImage(screen.canvas2d, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(screen.canvas3d, 0, 0, c.width, c.height);
+      ctx.drawImage(screen.canvas2d, 0, 0, c.width, c.height);
       return c.toDataURL('image/png');
     },
   };

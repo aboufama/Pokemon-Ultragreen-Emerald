@@ -42,6 +42,9 @@ export interface Pose {
   advance?: number;
   /** Keep the feet planted with IK (0..1 weight). */
   plantFeet?: number;
+  /** Per-leg overrides of plantFeet (a kick lifts one foot, the other stays down). */
+  plantLeft?: number;
+  plantRight?: number;
   /** Eye expression cell name (species specific). */
   expression?: string;
   /** Effect intensities, e.g. { flames: 1 }. */
@@ -183,8 +186,11 @@ export class Rig {
         );
       }
     }
-    if (this.profile.legs && (pose.plantFeet ?? 0) > 0) {
-      this.plantFeet(pose.plantFeet ?? 1);
+    if (this.profile.legs) {
+      const both = pose.plantFeet ?? 0;
+      const left = pose.plantLeft ?? both;
+      const right = pose.plantRight ?? both;
+      if (left > 0 || right > 0) this.plantFeet(left, right);
     }
   }
 
@@ -230,9 +236,10 @@ export class Rig {
   }
 
   /** Two-bone IK: keep each foot at its bind (planted) position and orientation. */
-  private plantFeet(weight: number): void {
+  private plantFeet(left: number, right: number): void {
     const legs = this.profile.legs!;
-    for (const leg of [legs.left, legs.right]) {
+    for (const [leg, weight] of [[legs.left, left], [legs.right, right]] as const) {
+      if (weight <= 0) continue;
       const bind = this.footBind.get(leg.foot)!;
       const current = this.modelPos(this.node(leg.foot)!, new THREE.Vector3());
       // Keep the posed x/z (stance width, steps) but pin the foot to the ground.
@@ -320,6 +327,8 @@ export function mirrorPose(p: Pose): Pose {
   }
   return {
     ...p,
+    plantLeft: p.plantRight,
+    plantRight: p.plantLeft,
     bones,
     aim: p.aim ? aim : undefined,
     post: p.post ? post : undefined,
@@ -346,7 +355,7 @@ export function addPoses(...poses: Pose[]): Pose {
       out.root ??= {};
       for (const a of ['x', 'y', 'z', 'yaw', 'pitch', 'roll'] as const) out.root[a] = (out.root[a] ?? 0) + (p.root[a] ?? 0);
     }
-    for (const k of ['advance', 'plantFeet', 'expression', 'scale'] as const) {
+    for (const k of ['advance', 'plantFeet', 'plantLeft', 'plantRight', 'expression', 'scale'] as const) {
       if (p[k] !== undefined) (out as Record<string, unknown>)[k] = p[k];
     }
     if (p.fx) out.fx = { ...(out.fx ?? {}), ...p.fx };
@@ -382,6 +391,14 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     }
   }
   const lerp = (x?: number, y?: number) => (x === undefined && y === undefined ? undefined : (x ?? 0) + ((y ?? 0) - (x ?? 0)) * t);
+  // Root angles take the short way round (a clip can end a full spin at 360).
+  const lerpAngle = (x?: number, y?: number) => {
+    if (x === undefined && y === undefined) return undefined;
+    const a = x ?? 0;
+    const d = ((((y ?? 0) - a + 180) % 360) + 360) % 360 - 180;
+    return a + d * t;
+  };
+  const plant = (p: Pose, side: 'plantLeft' | 'plantRight') => p[side] ?? p.plantFeet;
   const lerpObj = <T extends Record<string, number | undefined>>(x?: T, y?: T): T | undefined => {
     if (!x && !y) return undefined;
     const keys = new Set([...Object.keys(x ?? {}), ...Object.keys(y ?? {})]);
@@ -411,9 +428,16 @@ export function lerpPose(a: Pose, b: Pose, t: number): Pose {
     aim,
     post,
     pelvis: lerpObj(a.pelvis, b.pelvis),
-    root: lerpObj(a.root, b.root),
+    root: a.root || b.root
+      ? {
+          x: lerp(a.root?.x, b.root?.x), y: lerp(a.root?.y, b.root?.y), z: lerp(a.root?.z, b.root?.z),
+          yaw: lerpAngle(a.root?.yaw, b.root?.yaw), pitch: lerpAngle(a.root?.pitch, b.root?.pitch), roll: lerpAngle(a.root?.roll, b.root?.roll),
+        }
+      : undefined,
     advance: lerp(a.advance, b.advance),
     plantFeet: lerp(a.plantFeet, b.plantFeet),
+    plantLeft: a.plantLeft !== undefined || b.plantLeft !== undefined ? lerp(plant(a, 'plantLeft'), plant(b, 'plantLeft')) : undefined,
+    plantRight: a.plantRight !== undefined || b.plantRight !== undefined ? lerp(plant(a, 'plantRight'), plant(b, 'plantRight')) : undefined,
     expression: t < 0.5 ? a.expression ?? b.expression : b.expression ?? a.expression,
     fx,
     scale: lerp(a.scale ?? 1, b.scale ?? 1),

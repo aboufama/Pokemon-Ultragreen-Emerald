@@ -7,6 +7,7 @@ import type { BattleStage, SlotName } from '../render3d/stage';
 import type { ColorGrade } from '../render3d/materials';
 import type { PaletteSlot } from '../render3d/pipeline';
 import type { FireOptions } from '../render3d/fire';
+import type { SpringChainSpec } from '../anim/dynamics';
 
 export interface SlotCalibration {
   /** Extra yaw (degrees) on top of facing the opponent, fitted to the stock sprite. */
@@ -75,6 +76,13 @@ export interface SpeciesProfile {
   /** Pose.fx channel -> effect meshes. */
   effects: Record<string, EffectBinding>;
   expressions?: ExpressionAtlas;
+  /** Loose parts simulated as springs on top of the animation (mane, tail, feathers). */
+  dynamics?: SpringChainSpec[];
+  /**
+   * Overlapping action: seconds each semantic bone lags the clip (default
+   * DEFAULT_OVERLAP in src/anim/animator.ts).
+   */
+  overlap?: Record<string, number>;
   /** Per-move clip overrides (MOVE_* -> clip name), e.g. kicks. */
   moveClips: Record<string, string>;
   palette: RGB[];
