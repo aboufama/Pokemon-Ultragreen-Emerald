@@ -79,6 +79,28 @@ export interface SpeciesBrief {
   powerSource: string;
 }
 
+/** src/pokemon/<slug>/moves.json: the body part each move uses (tools/gauntlet/classify_moves.mjs). */
+export interface MovePartsFile {
+  /** How the parts were decided (the classifier model). */
+  classifier: string;
+  /** The parts offered, with the description the classifier saw. */
+  parts: Record<string, string>;
+  moves: Record<string, {
+    part: string;
+    /** The classifier's probability for `part`. */
+    confidence?: number;
+    /** Runner-up part and its probability, when it was close. */
+    alt?: [string, number];
+    /** "hand" when a person or agent set the part (the classifier leaves it alone). */
+    by?: 'jev' | 'hand';
+  }>;
+}
+
+/** The per-move parts of a moves.json file. */
+export function movePartsOf(file: MovePartsFile): Record<string, string> {
+  return Object.fromEntries(Object.entries(file.moves).map(([move, c]) => [move, c.part]));
+}
+
 /** A named effect origin: one point per bone (twin cannons, both hands). */
 export interface EmitterSpec {
   bones: string[];
@@ -89,6 +111,8 @@ export interface EmitterSpec {
   offset?: [number, number, number];
   /** How far along the bone's skin extent the default point sits (0..1, default 0.9). */
   reach?: number;
+  /** What the part is, for the move classifier (e.g. "the leaves on its forearms"). */
+  about?: string;
 }
 
 export interface SpeciesProfile {
@@ -124,6 +148,13 @@ export interface SpeciesProfile {
   emitters?: Record<string, EmitterSpec>;
   /** Which emitter each motif's effect leaves from (default: MOTIFS[motif].emitter). */
   emitterFor?: Partial<Record<Motif, string>>;
+  /**
+   * The body part each move is performed with (MOVE_* -> part), from
+   * src/pokemon/<slug>/moves.json (tools/gauntlet/classify_moves.mjs). A part
+   * that names an emitter is where that move's effects leave the body, and
+   * `<motif>@<part>` clips (or motifClips keys) are tried before the motif's.
+   */
+  moveParts?: Record<string, string>;
   /** Mesh or node name fragments to hide (extra LODs, alternate meshes). */
   hiddenParts?: string[];
   /** Four moves that show the species off (demo defaults, clip review). */

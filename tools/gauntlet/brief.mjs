@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { importTs } from './tsimport.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -40,6 +40,21 @@ function parseArgs(argv) {
 
 const read = (f) => readFile(join(DECOMP, f), 'utf8').catch(() => '');
 
+/** In-game move descriptions (MOVE_* -> text) from the decomp. */
+async function moveDescriptions() {
+  const src = await readFile(join(DECOMP, '../text/move_descriptions.h'), 'utf8').catch(() => '');
+  const texts = {};
+  for (const m of src.matchAll(/static const u8 (\w+)\[\] = _\(([\s\S]*?)\);/g)) {
+    texts[m[1]] = [...m[2].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((q) => q[1].replace(/\\n/g, ' ')).join('').replace(/\s+/g, ' ').trim();
+  }
+  const out = {};
+  for (const m of src.matchAll(/\[(MOVE_\w+) - 1\] = (\w+),/g)) if (texts[m[2]]) out[m[1]] = texts[m[2]];
+  return out;
+}
+
+// Gen 3 decides physical or special by the move's type.
+const PHYSICAL_TYPES = new Set(['NORMAL', 'FIGHTING', 'FLYING', 'GROUND', 'ROCK', 'BUG', 'GHOST', 'POISON', 'STEEL']);
+
 /** Moves listed for a species in a C table ([SPECIES_X] = ... up to the next entry). */
 function tableMoves(src, speciesConst, pattern) {
   const start = src.indexOf(`[${speciesConst}]`);
@@ -53,7 +68,8 @@ export async function speciesBrief(slug) {
   const species = JSON.parse(await readFile(join(ROOT, 'src/data/generated/species.json'), 'utf8'))[slug];
   if (!species) throw new Error(`unknown species ${slug}`);
   const moves = JSON.parse(await readFile(join(ROOT, 'src/data/generated/moves.json'), 'utf8'));
-  const { motifOf, MOTIFS } = await importTs('src/battle3d/motifs.ts');
+  const { motifOf, namedMotif, MOTIFS } = await importTs('src/battle3d/motifs.ts');
+  const descriptions = await moveDescriptions();
   const { categorize } = await importTs('src/battle3d/director.ts');
 
   const camel = species.name.charAt(0) + species.name.slice(1).toLowerCase();
@@ -73,7 +89,14 @@ export async function speciesBrief(slug) {
   for (const m of [...levelUp, ...tm, ...tutor]) {
     const data = moves[m.move];
     if (!data) continue;
-    const e = seen.get(m.move) ?? { const: m.move, name: data.name, type: data.type.replace('TYPE_', ''), power: data.power, motif: motifOf(data), clip: categorize(data), sources: [] };
+    const type = data.type.replace('TYPE_', '');
+    const e = seen.get(m.move) ?? {
+      const: m.move, name: data.name, type, power: data.power,
+      split: data.power === 0 ? 'status' : PHYSICAL_TYPES.has(type) ? 'physical' : 'special',
+      contact: data.flags.includes('FLAG_MAKES_CONTACT'), target: data.target.replace('MOVE_TARGET_', '').toLowerCase(),
+      description: descriptions[m.move] ?? '',
+      motif: motifOf(data), motifByName: !!namedMotif(data), clip: categorize(data), sources: [],
+    };
     if (!e.sources.includes(m.source)) e.sources.push(m.source);
     seen.set(m.move, e);
   }
@@ -99,7 +122,7 @@ export async function speciesBrief(slug) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-if (args.slug) {
+if (args.slug && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const b = await speciesBrief(String(args.slug));
   if (args.json) {
     console.log(JSON.stringify(b, null, 2));

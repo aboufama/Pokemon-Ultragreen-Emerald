@@ -11,6 +11,10 @@
 //               and emitters such as cannons, flowers or tail flames)
 //   --textures <dir>  write every texture as PNG (find eye atlases for
 //               expressions and blinks, effect textures, alternate parts)
+//   --animations  list the model's own animations (name, length, which
+//               joints move most). The optimizer strips them from the copy
+//               in public/, so point --model at the upstream file (its URL
+//               is in SOURCE.json) when optimized.removedAnimations > 0.
 
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
@@ -135,6 +139,32 @@ if (args.textures) {
     if (ext !== 'png') spawnSync('python3', ['-c', `from PIL import Image; Image.open('${base}.${ext}').save('${base}.png')`]);
   }
   console.log(`textures written to ${dir}`);
+}
+if (args.animations) {
+  const anims = root.listAnimations();
+  console.log(`\n${anims.length} animation(s)${anims.length ? '' : ' (the copy in public/ has them stripped: pass --model <upstream file>)'}`);
+  const q0 = [0, 0, 0, 0], q = [0, 0, 0, 0];
+  for (const a of anims) {
+    let length = 0;
+    const moved = [];
+    for (const ch of a.listChannels()) {
+      const input = ch.getSampler().getInput();
+      length = Math.max(length, input.getMax([0])[0]);
+      if (ch.getTargetPath() !== 'rotation') continue;
+      // Largest turn away from the first key: which joints this animation really moves.
+      const out = ch.getSampler().getOutput();
+      out.getElement(0, q0);
+      let turn = 0;
+      for (let i = 1; i < out.getCount(); i++) {
+        out.getElement(i, q);
+        const dot = Math.min(1, Math.abs(q0[0] * q[0] + q0[1] * q[1] + q0[2] * q[2] + q0[3] * q[3]));
+        turn = Math.max(turn, (2 * Math.acos(dot) * 180) / Math.PI);
+      }
+      if (turn >= 5) moved.push([ch.getTargetNode()?.getName() ?? '?', turn]);
+    }
+    moved.sort((x, y) => y[1] - x[1]);
+    console.log(`  ${a.getName().padEnd(30)} ${length.toFixed(2)} s  moves ${moved.length} joints: ${moved.slice(0, 6).map(([n, d]) => `${n} ${d.toFixed(0)}°`).join(', ')}`);
+  }
 }
 console.log('guessed rig:', JSON.stringify(rig.bones));
 console.log(`legs IK: ${rig.legs ? 'yes' : 'no'}; unmapped joints: ${rig.unmapped.length}`);

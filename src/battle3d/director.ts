@@ -39,13 +39,19 @@ export function categorize(move: MoveData): AnimCategory {
   return `${fallback}_${strong ? 'strong' : 'weak'}`;
 }
 
-/** Clip for a move: per-move override, motif clip (strong first), category clip. */
+/**
+ * Clip for a move: per-move override, then the motif clip for the body part
+ * the species performs it with (`<motif>@<part>`, from moveParts), then the
+ * motif clip (strong variants first), then the category clip.
+ */
 export function clipFor(attacker: Battler3D, move: MoveData): string {
   const p = attacker.profile;
   const explicit = p.moveClips[move.const];
   if (explicit && p.clips[explicit]) return explicit;
   const motif = motifOf(move);
-  const keys = isStrong(move) ? [`${motif}_strong`, motif] : [motif];
+  const part = p.moveParts?.[move.const];
+  const bases = part ? [`${motif}@${part}`, motif] : [motif];
+  const keys = bases.flatMap((m) => (isStrong(move) ? [`${m}_strong`, m] : [m]));
   for (const k of keys) {
     const name = p.motifClips?.[k] ?? k;
     if (p.clips[name]) return name;
@@ -98,14 +104,20 @@ export function mouthPoint(b: Battler3D): THREE.Vector3 {
   return towardCamera(b, b.emitterPoints('mouth')[0], 0.04);
 }
 
-/** The emitter a motif's effect leaves from on this species. */
-export function emitterName(b: Battler3D, motif: Motif): string {
+/**
+ * The emitter a move's effect leaves from on this species: the body part it
+ * is performed with when that part emits (not the whole body), else the
+ * species' emitter for the motif, else the motif's default.
+ */
+export function emitterName(b: Battler3D, motif: Motif, move?: MoveData): string {
+  const part = move && b.profile.moveParts?.[move.const];
+  if (part && part !== 'body' && b.hasEmitter(part)) return part;
   return b.profile.emitterFor?.[motif] ?? MOTIFS[motif].emitter ?? 'mouth';
 }
 
-/** Effect origins for a motif, nudged in front of the body. */
-export function emitterPoints(b: Battler3D, motif: Motif): THREE.Vector3[] {
-  const name = emitterName(b, motif);
+/** Effect origins for a move's motif, nudged in front of the body. */
+export function emitterPoints(b: Battler3D, motif: Motif, move?: MoveData): THREE.Vector3[] {
+  const name = emitterName(b, motif, move);
   return b.emitterPoints(name).map((p) => towardCamera(b, p, name === 'mouth' ? 0.04 : 0.08));
 }
 
@@ -329,8 +341,8 @@ function chargeFx(attacker: Battler3D, move: MoveData, motif: Motif, vfx: VfxSys
   const sheet = motif === 'beam' && move.type === 'TYPE_GRASS' ? 'Sunlight' : fx.charge;
   for (let k = 0; k < 3; k++) {
     vfx.after(k * 0.14, () => {
-      for (let e = 0; e < emitterPoints(attacker, motif).length; e++) {
-        const follow = () => emitterPoints(attacker, motif)[e] ?? mouthPoint(attacker);
+      for (let e = 0; e < emitterPoints(attacker, motif, move).length; e++) {
+        const follow = () => emitterPoints(attacker, motif, move)[e] ?? mouthPoint(attacker);
         void vfx.sprite(sheet, follow(), { px: 14 + k * 4, fps: 12, life: 0.34, loop: true, follow });
       }
     });
@@ -344,7 +356,7 @@ function chargeFx(attacker: Battler3D, move: MoveData, motif: Motif, vfx: VfxSys
 function releaseFx(attacker: Battler3D, target: Battler3D, move: MoveData, motif: Motif, vfx: VfxSystem): ReturnType<typeof spray> | Promise<void> {
   const fx = typeFx(move.type);
   const strong = isStrong(move);
-  const from = () => emitterPoints(attacker, motif);
+  const from = () => emitterPoints(attacker, motif, move);
   const to = () => hitPoint(target);
   switch (motif) {
     case 'breath':
@@ -508,7 +520,7 @@ async function emitFx(attacker: Battler3D, target: Battler3D, move: MoveData, mo
     await sleep(vfx, 0.5);
     return;
   }
-  const from = emitterPoints(attacker, motif);
+  const from = emitterPoints(attacker, motif, move);
   if (motif === 'powder') {
     // Spores drift from the emitter (a flower, the mouth) and settle on the foe.
     const puffs: Promise<void>[] = [];

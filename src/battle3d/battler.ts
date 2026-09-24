@@ -18,6 +18,8 @@ import { GroundShadow } from '../render3d/shadow';
 import { slotYaw } from '../pokemon/profile';
 
 const DEG = Math.PI / 180;
+/** Effect origins every species has, by the rig bones they sit on. */
+const BUILTIN_EMITTERS: Record<string, string[]> = { mouth: ['head'], eyes: ['head'], hands: ['handR', 'handL'], feet: ['footR', 'footL'], body: ['chest'] };
 const ATTACK_CLIPS = /^(physical|special|status)/;
 
 export class Battler3D {
@@ -182,11 +184,15 @@ export class Battler3D {
     });
   }
 
+  /** Whether effects can leave from this part: a built-in emitter or one of the profile's. */
+  hasEmitter(name: string): boolean {
+    return name in BUILTIN_EMITTERS || !!this.profile.emitters?.[name];
+  }
+
   private resolveEmitter(name: string): { node: THREE.Object3D; local: THREE.Vector3 }[] {
     const rig = this.inst.rig;
     const spec = this.profile.emitters?.[name];
-    const builtin: Record<string, string[]> = { mouth: ['head'], eyes: ['head'], hands: ['handR', 'handL'], feet: ['footR', 'footL'], body: ['chest'] };
-    const bones = spec?.bones ?? builtin[name] ?? [];
+    const bones = spec?.bones ?? BUILTIN_EMITTERS[name] ?? [];
     const out: { node: THREE.Object3D; local: THREE.Vector3 }[] = [];
     for (const bone of bones) {
       const node = rig.node(bone);

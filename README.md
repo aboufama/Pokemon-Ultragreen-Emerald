@@ -97,7 +97,8 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `tools/shots/clip_gifs.mjs` | every clip of a species as looping GIFs from both sides (review) |
 | `tools/gauntlet/new_species.mjs` | scaffold a new species (see the pipeline doc) |
 | `tools/gauntlet/brief.mjs` | a species' Pokédex entry, stats and every move it can use with its motif |
-| `tools/gauntlet/skeleton.mjs` | a model's skeleton, what each bone moves, and its textures |
+| `tools/gauntlet/skeleton.mjs` | a model's skeleton, what each bone moves, its textures, and any animations it ships |
+| `tools/gauntlet/classify_moves.mjs` | which body part a species uses for each move, classified by [Jev](https://typesafe.ai) (needs `TYPESAFE_API_KEY`) |
 | `tools/gauntlet/check.mjs` | the gauntlet's quality gates for a species (`--render` adds battles) |
 | `tools/gauntlet/setup_worktree.mjs` | ready a git worktree for a gauntlet run beside other agents |
 | `tools/gauntlet/review_page.mjs` | one review page with every clip GIF, brief and review note of one or more species |
