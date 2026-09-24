@@ -68,8 +68,10 @@ export function hitPoint(b: Battler3D, fraction = 0.55): THREE.Vector3 {
   return towardCamera(b, p, 0.35);
 }
 
-/** Where breath/beam effects leave the attacker: in front of its head. */
-function mouthPoint(b: Battler3D): THREE.Vector3 {
+/** Where breath/beam effects leave the attacker: its mouth (or in front of its head). */
+export function mouthPoint(b: Battler3D): THREE.Vector3 {
+  const mouth = b.mouthPosition();
+  if (mouth) return towardCamera(b, mouth, 0.04);
   const head = bonePoint(b, 'head');
   head.y -= 0.03 * b.height;
   return towardCamera(b, head, 0.12);
@@ -82,6 +84,7 @@ export interface PerformHooks {
 
 function hitReaction(target: Battler3D, vfx: VfxSystem, strong: boolean): void {
   target.blink(0.45);
+  target.recoil(strong ? 1 : 0.6);
   void target.perform('hit');
   if (strong) vfx.shake(0.06, 0.3);
 }
@@ -122,9 +125,10 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
         hitReaction(target, vfx, category === 'special_strong');
       }));
     } else if (name === 'charge') {
-      const at = towardCamera(attacker, bonePoint(attacker, attacker.inst.rig.node('handR') ? 'handR' : 'head'), 0.1);
+      // Power gathering at the mouth while the attacker draws breath.
       const sheet = typeFx(move.type).charge;
-      for (let i = 0; i < 3; i++) vfx.after(i * 0.15, () => void vfx.sprite(sheet, at, { px: 24, fps: 12, life: 0.4, loop: true }));
+      const follow = () => mouthPoint(attacker);
+      for (let i = 0; i < 3; i++) vfx.after(i * 0.14, () => void vfx.sprite(sheet, follow(), { px: 14 + i * 4, fps: 12, life: 0.34, loop: true, follow }));
     } else if (name === 'aura') {
       auraFx(attacker, vfx);
     } else if (name === 'emit') {
@@ -148,14 +152,17 @@ async function releaseFx(attacker: Battler3D, target: Battler3D, move: MoveData,
     void vfx.sprite(fx.burst, to, { px: 32, fps: 16, life: 0.45, loop: true });
     return;
   }
-  // Flamethrower, Surf, Thunderbolt...: a stream of sprites for ~0.8s.
+  // Flamethrower, Surf, Thunderbolt...: a stream of sprites for ~0.8s, each
+  // leaving the mouth where it is at that moment (the stream follows the
+  // head) and swelling as it travels.
   const stream: Promise<void>[] = [];
-  const count = 12;
+  const count = 14;
   for (let i = 0; i < count; i++) {
     stream.push(new Promise((resolve) => {
-      vfx.after(i * 0.065, () => {
+      vfx.after(i * 0.056, () => {
         const wobble = new THREE.Vector3(0, Math.sin(i * 1.7) * 0.06, Math.cos(i * 1.3) * 0.06);
-        void vfx.projectile(fx.stream, from, to.clone().add(wobble), 0.32, { px: 20 + (i % 3) * 4, fps: 20, arc: 0.05 }).then(resolve);
+        const start = mouthPoint(attacker);
+        void vfx.projectile(fx.stream, start, to.clone().add(wobble), 0.3, { px: 22 + (i % 3) * 4, fps: 20, arc: 0.04, scaleFrom: 0.45, scaleTo: 1.1 }).then(resolve);
       });
     }));
   }
@@ -177,9 +184,22 @@ function auraFx(attacker: Battler3D, vfx: VfxSystem): void {
 }
 
 async function emitFx(attacker: Battler3D, target: Battler3D, move: MoveData, vfx: VfxSystem): Promise<void> {
-  const from = mouthPoint(attacker);
   const to = hitPoint(target, 0.6);
   const { sheet: sprite, at } = statusSprite(move.name);
+  if (at === 'feet') {
+    // Sand-Attack, Mud-Slap: clumps kicked up from the foot, arcing at the foe.
+    const foot = attacker.inst.rig.node('footR') ? 'footR' : 'hips';
+    const clumps: Promise<void>[] = [];
+    for (let i = 0; i < 5; i++) {
+      clumps.push(new Promise((resolve) => vfx.after(i * 0.05, () => {
+        const from = towardCamera(attacker, bonePoint(attacker, foot), 0.1);
+        void vfx.projectile(sprite, from, to.clone().add(new THREE.Vector3(0, (i - 2) * 0.04, 0)), 0.42, { px: 12 + (i % 3) * 4, fps: 12, arc: attacker.height * (0.35 + i * 0.04) }).then(resolve);
+      })));
+    }
+    await Promise.all(clumps);
+    return;
+  }
+  const from = mouthPoint(attacker);
   if (at === 'eyes') {
     // Leer, Scary Face: a glint at the attacker's eyes.
     void vfx.sprite(sprite, towardCamera(attacker, bonePoint(attacker, 'head'), 0.15), { px: 32, fps: 14 });

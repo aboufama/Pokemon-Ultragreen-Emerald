@@ -66,6 +66,8 @@ export interface SpriteFxOptions {
   fade?: boolean;
   scaleFrom?: number;
   scaleTo?: number;
+  /** Stick to a moving point (e.g. a mouth), read every frame. */
+  follow?: () => THREE.Vector3;
 }
 
 /** Id-pass shader for billboards: alpha cutout from the sheet, flat id color. */
@@ -167,6 +169,7 @@ export class VfxSystem {
       scaleFrom: opts.scaleFrom ?? 1,
       scaleTo: opts.scaleTo ?? 1,
       fade: opts.fade ?? false,
+      path: opts.follow ? () => opts.follow!() : undefined,
     };
     this.particles.push(p);
     this.updateParticle(p, 0);

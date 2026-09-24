@@ -75,7 +75,7 @@ can be hosted on any static host.
 | Pixel-exact 2D layer (text box, menus, healthboxes, trainer, ball) drawn into a software framebuffer | `src/gba/`, `src/battle/ui/` |
 | 3D stage: camera calibrated so both battlers land where the stock sprites are drawn; the backdrop is projected from that camera onto a ground plane, so the resting view is identical to Emerald | `src/render3d/stage.ts`, `environment.ts`, `src/data/battle_camera.json` |
 | Viewport pixel pass: object IDs, majority downsampling, snap to the species' stock palette, outline policy from the sprites, palette blends (fades, glows), RGB555 | `src/render3d/pipeline.ts` |
-| Rig and animation: semantic bone map, model-space rotations, aim constraints, foot IK, keyframed clips with events, crossfades and breathing | `src/anim/`, `src/pokemon/` |
+| Rig and animation: semantic bone map, model-space rotations, aim constraints, foot IK, keyframed clips on smooth curves with events and crossfades, overlapping action, springs for loose parts (mane, tail, feathers), and a life layer (breathing, weight shifts, blinks, sprung turns and hit recoil) | `src/anim/`, `src/pokemon/`, `src/battle3d/battler.ts` |
 | Moves: animation category from move data, per-type effects from the stock battle-animation sprites, rendered in 3D through the pixel pass | `src/battle3d/` |
 | Battle engine, scene and frame clock | `src/battle/` |
 

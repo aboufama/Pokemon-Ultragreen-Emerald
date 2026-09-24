@@ -153,13 +153,50 @@ One clip per category, plus `idle` (loop), `intro` (sent out / appears), `hit` a
 - **Channels:**
   - `advance` 0..1 travels toward the target; contact moves reach 1 at `impact`.
   - `root` moves and turns the whole body, in units of its height (jumps, spins).
+    A spin can end at `yaw: 360`: blends back to idle take the short way round.
   - `root.y = -1.1` at the end of `faint` sinks it below the ground, which hides it.
+  - `plantFeet` pins both feet to the ground with IK; `plantLeft` / `plantRight`
+    override one leg, so a kick lifts one foot while the other stays planted.
   - `scale` pulses the whole model; `fx.<channel>` drives effect meshes.
 - **Starting point:** `makeGenericClips` (`src/pokemon/generic/clips.ts`). Replace
   clips one at a time with bespoke ones, using `compose(STANCE, delta)` keys as in
   `src/pokemon/blaziken/clips.ts`.
 - **Effects are automatic.** Move effects come from the move's type
   (`src/battle3d/type_fx.ts`). Clips only decide *when* things happen.
+
+### Making it move like a creature
+
+The engine adds a lot on its own, so clips only need the big poses:
+
+- **Smooth curves.** Keys without an `ease` are joined by monotone cubic curves.
+  Motion flows through in-between keys and only slows where a channel turns
+  around. To shape an arc, add a breakdown key rather than an ease. Use `'out'`
+  (a fast start and a soft stop) for snaps and strikes, and `'in'` for falls.
+- **Overlapping action.** The animator reads the head, arms, hands and loose parts
+  a few frames behind the hips (`DEFAULT_OVERLAP` in `src/anim/animator.ts`; a
+  profile can override it with `overlap`). An action therefore ripples outward
+  from the body, and an event that depends on the head or a hand belongs about
+  0.05–0.08 s after its key. Legs are not delayed, so feet land on time.
+- **Springs.** List loose parts (manes, tails, ears, feathers) in the profile's
+  `dynamics`, e.g. `{ bones: ['tail'], damping: 0.2, elasticity: 0.1, maxDrift: 0.45 }`.
+  They lag behind the body, swing past and settle. Single-bone parts work: the
+  chain's far end is measured from the skin weights.
+- **Life layer.** Breathing, a slow weight shift, an idle bounce and a drifting
+  gaze are always on. Eyes blink when the expression atlas has `closed` (and
+  ideally `half`) cells. The battler turns toward its target with a slight
+  overshoot, and a hit knocks it back on a spring (`Battler3D.recoil`).
+- **Breath attacks come from the mouth.** `charge`, `release` and mouth `emit`
+  effects start at the jaw's tip (measured from the skin), so special clips lead
+  with the head and open the jaw at `release`. Keep the arms braced so the
+  silhouette reads.
+
+Checklist for every clip:
+
+- an anticipation before the action (crouch, wind-up, drawn breath);
+- a follow-through after it (the limb carries on past the hit, then settles);
+- leaps along an arc (`root.y`), with `plantFeet: 0` in the air and a pelvis dip
+  on landing, never a slide;
+- holds that keep moving a little (moving holds).
 
 Review every clip as a filmstrip from **both** sides. The player side is seen from
 behind and cropped by the text box, so check that the motion reads there too:
@@ -180,8 +217,9 @@ node tools/shots/clip_gifs.mjs --species <slug> --out build/clips/<slug>
 ```
 
 This writes one GIF per clip and side, plus a `manifest.json` with each clip's
-duration and events. The GIFs are 30 fps with exact colors. `/?mode=clipreview`
-plays a single clip the same way in the browser.
+duration and events. The GIFs are 30 fps with exact colors. `--density 3` renders
+finer pixels to inspect the motion itself. `/?mode=clipreview` plays a single
+clip the same way in the browser (`&mark=mouth` marks where breath effects start).
 
 ## 7. Battle check
 

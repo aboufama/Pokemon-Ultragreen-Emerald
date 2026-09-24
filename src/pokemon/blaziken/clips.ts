@@ -1,24 +1,56 @@
 // Blaziken's battle animation set, one clip per attack category (+ idle, intro,
-// hit, faint and a kick variant). Keys are STANCE + deltas (see compose()).
+// hit, faint and kick variants). Keys are STANCE + deltas (see compose()).
 //
 // Channels used here:
 //   advance  0..1   how far toward the target a contact move has travelled
 //   root     model-unit offset/rotation of the whole body (jumps, spins, sink)
+//   plantFeet / plantLeft / plantRight   foot IK weights (0 = the leg is free)
 //   fx.flames 0..1  wrist flames (the stock sprite shows none at rest)
 //   expression      eye atlas cell
 // Events: impact (contact lands), release (projectile/beam starts),
-// releaseEnd, cry, aura, emit, thud.
+// releaseEnd, charge, cry, aura, emit, thud.
+//
+// How the clips are built (the 12 principles, applied to game clips):
+//   - every action has an anticipation (wind-up, crouch, drawn breath) and a
+//     follow-through (the limb carries on past the hit, then settles);
+//   - keys are extremes and breakdowns; without an explicit ease they are
+//     joined by smooth curves, so motion flows and only eases where a
+//     channel turns around. 'out' marks snaps (fast start, soft stop);
+//   - travel is a leap along an arc with the legs tucked, landing into a
+//     knee bend, never a slide;
+//   - holds keep moving a little (moving holds);
+//   - breath attacks come from the mouth: the head leads, the arms stay
+//     braced at the sides so the silhouette reads the action.
+// The animator adds the rest: overlapping action (head, arms and hands trail
+// the body by a few frames, so events that depend on them are placed a
+// little after their key), breathing, blinks, and springs on the mane, tail
+// and feathers (see src/anim/animator.ts, src/battle3d/battler.ts).
 
-import type { Clip, Ease, Keyframe } from '../../anim/clip';
+import type { Clip, Keyframe } from '../../anim/clip';
 import { compose } from '../../anim/animator';
 import type { Pose } from '../../anim/rig';
 import { STANCE } from './poses';
 
-const key = (t: number, delta: Pose = {}, ease: Ease = 'inOut'): Keyframe => ({ t, pose: compose(STANCE, delta), ease });
+/** A key: STANCE plus deltas (bone rotations and offsets add up, aims replace). */
+const key = (t: number, ...deltas: Pose[]): Keyframe => ({ t, pose: compose(STANCE, ...deltas) });
+/** A snap into this key: fast start, soft stop. */
+const snap = (t: number, ...deltas: Pose[]): Keyframe => ({ ...key(t, ...deltas), ease: 'out' });
+/** Accelerating into this key (falls, sinking). */
+const fall = (t: number, ...deltas: Pose[]): Keyframe => ({ ...key(t, ...deltas), ease: 'in' });
 
 // Reusable deltas -----------------------------------------------------------
 
 const ANGRY: Pose = { expression: 'angry' };
+const SHUT: Pose = { expression: 'closed' };
+const HURT: Pose = { expression: 'hurt' };
+const OPEN_EYES: Pose = { expression: 'open' };
+const jaw = (deg: number): Pose => ({ bones: { jaw: { x: deg } } });
+const flames = (v: number): Pose => ({ fx: { flames: v } });
+const pelvis = (x: number, y: number, z = 0): Pose => ({ pelvis: { x, y, z } });
+/** Spine chain pitch (x) from hips to head, with optional head turn/tilt. */
+const bend = (spine: number, chest: number, neck: number, head: number, headY = 0, headZ = 0): Pose => ({
+  bones: { spine: { x: spine }, chest: { x: chest }, neck: { x: neck }, head: { x: head, y: headY, z: headZ } },
+});
 
 const GUARD: Pose = {
   aim: {
@@ -38,16 +70,6 @@ const ARMS_SPREAD_UP: Pose = {
   },
 };
 
-const THRUST_FORWARD: Pose = {
-  aim: {
-    armR: { dir: [-0.22, 0.05, 0.97] },
-    forearmR: { dir: [-0.05, 0.1, 0.99] },
-    armL: { dir: [0.22, 0.05, 0.97] },
-    forearmL: { dir: [0.05, 0.1, 0.99] },
-  },
-  bones: { handR: { z: 25 }, handL: { z: -25 } },
-};
-
 const LIMP_ARMS: Pose = {
   aim: {
     armR: { dir: [-0.3, -0.95, 0.1] },
@@ -57,7 +79,86 @@ const LIMP_ARMS: Pose = {
   },
 };
 
-const JAW_OPEN: Pose = { bones: { jaw: { x: 24 } } };
+/** Both fists chambered at the hips, elbows back (the stance's left arm, mirrored). */
+const CHAMBER: Pose = {
+  aim: {
+    armR: { dir: [-0.5, -0.66, -0.56] },
+    forearmR: { dir: [-0.18, -0.2, 0.96] },
+    armL: { dir: [0.5, -0.66, -0.56] },
+    forearmL: { dir: [0.18, -0.2, 0.96] },
+  },
+};
+
+/** Drawing breath: elbows pulled back and up, chest open. */
+const ELBOWS_BACK: Pose = {
+  aim: {
+    armR: { dir: [-0.55, -0.42, -0.72] },
+    forearmR: { dir: [-0.22, 0.08, 0.97] },
+    armL: { dir: [0.55, -0.42, -0.72] },
+    forearmL: { dir: [0.22, 0.08, 0.97] },
+  },
+};
+
+/** Braced for a blast: arms low at the sides, fists by the thighs. */
+const BRACED: Pose = {
+  aim: {
+    armR: { dir: [-0.42, -0.82, -0.38] },
+    forearmR: { dir: [-0.22, -0.5, 0.84] },
+    armL: { dir: [0.42, -0.82, -0.38] },
+    forearmL: { dir: [0.22, -0.5, 0.84] },
+  },
+};
+
+/** Arms crossed low in front (gathering power). */
+const CROSSED: Pose = {
+  aim: {
+    armR: { dir: [-0.2, -0.75, 0.63] },
+    forearmR: { dir: [0.75, -0.1, 0.65] },
+    armL: { dir: [0.2, -0.75, 0.63] },
+    forearmL: { dir: [-0.75, -0.05, 0.66] },
+  },
+};
+
+/** Double-biceps flex. */
+const FLEX: Pose = {
+  aim: {
+    armR: { dir: [-0.95, 0.25, 0.1] },
+    forearmR: { dir: [-0.15, 0.97, 0.15] },
+    armL: { dir: [0.95, 0.25, 0.1] },
+    forearmL: { dir: [0.15, 0.97, 0.15] },
+  },
+};
+
+/** Claws curled into fists. */
+const FISTS: Pose = {
+  bones: {
+    fingerA1R: { z: 34 }, fingerB1R: { z: 34 }, fingerC1R: { z: 34 },
+    fingerA2R: { z: 30 }, fingerB2R: { z: 30 }, fingerC2R: { z: 30 },
+    fingerA1L: { z: -40 }, fingerB1L: { z: -40 }, fingerC1L: { z: -40 },
+    fingerA2L: { z: -34 }, fingerB2L: { z: -34 }, fingerC2L: { z: -34 },
+  },
+};
+
+/** Airborne, travelling forward: leading knee up, trailing leg back. */
+const TUCK: Pose = {
+  plantFeet: 0,
+  aim: {
+    thighR: { dir: [-0.25, -0.38, 0.89] }, shinR: { dir: [-0.12, -0.96, -0.25] },
+    thighL: { dir: [0.28, -0.78, -0.56] }, shinL: { dir: [0.12, -0.42, -0.9] },
+  },
+};
+
+/** Airborne, hopping back: both knees drawn up a little. */
+const HOP: Pose = {
+  plantFeet: 0,
+  aim: {
+    thighR: { dir: [-0.3, -0.72, 0.62] }, shinR: { dir: [-0.15, -0.93, -0.33] },
+    thighL: { dir: [0.33, -0.8, 0.5] }, shinL: { dir: [0.18, -0.92, -0.35] },
+  },
+};
+
+/** Landing: knees absorb the weight. */
+const LAND: Pose = { plantFeet: 1, pelvis: { y: -0.045 }, bones: { spine: { x: 8 }, head: { x: -6 } } };
 
 // Clips -----------------------------------------------------------------------
 
@@ -67,271 +168,256 @@ const idle: Clip = {
   loop: true,
   keys: [
     key(0),
-    key(1.2, { pelvis: { y: -0.006 }, bones: { spine: { x: 1.5 } }, post: { armR: { x: 3 }, armL: { x: -2 } } }),
+    key(1.2, pelvis(0, -0.006), { bones: { spine: { x: 1.5 } }, post: { armR: { x: 3 }, armL: { x: -2 } } }),
     key(2.4),
   ],
 };
 
-/** Sent out: crouch, then a battle cry with flames flaring (cf. BACK_ANIM_SHAKE_GLOW_RED). */
+/** Sent out: bursts out of a crouch into a battle cry, wrist flames flaring (cf. BACK_ANIM_SHAKE_GLOW_RED). */
 const intro: Clip = {
   name: 'intro',
-  duration: 1.5,
+  duration: 1.65,
   keys: [
-    key(0, { pelvis: { y: -0.04 }, bones: { spine: { x: 14 }, head: { x: 16 } }, expression: 'closed', ...GUARD }),
-    key(0.38, { pelvis: { y: 0.01 }, bones: { spine: { x: -14 }, chest: { x: -6 }, head: { x: -24 } }, ...ARMS_SPREAD_UP, ...JAW_OPEN, ...ANGRY, fx: { flames: 1 } }, 'outBack'),
-    key(0.55, { pelvis: { y: 0.01 }, bones: { spine: { x: -12 }, chest: { x: -6 }, head: { x: -22, z: 4 } }, ...ARMS_SPREAD_UP, ...JAW_OPEN, ...ANGRY, fx: { flames: 1 } }),
-    key(0.72, { pelvis: { y: 0.01 }, bones: { spine: { x: -12 }, chest: { x: -6 }, head: { x: -22, z: -4 } }, ...ARMS_SPREAD_UP, ...JAW_OPEN, ...ANGRY, fx: { flames: 1 } }),
-    key(0.9, { pelvis: { y: 0.01 }, bones: { spine: { x: -12 }, chest: { x: -6 }, head: { x: -20 } }, ...ARMS_SPREAD_UP, ...ANGRY, fx: { flames: 0.8 } }),
-    key(1.5, { fx: { flames: 0 } }),
+    key(0, pelvis(0, -0.05), bend(16, 4, 0, 18), CROSSED, FISTS, SHUT),
+    key(0.2, pelvis(0, -0.075), bend(22, 6, 2, 22), CROSSED, FISTS, SHUT),
+    snap(0.42, pelvis(0, 0.016), bend(-14, -8, -6, -22), ARMS_SPREAD_UP, jaw(34), ANGRY, flames(1)),
+    key(0.62, pelvis(0, 0.012), bend(-13, -8, -6, -20, 0, 4), ARMS_SPREAD_UP, jaw(30), ANGRY, flames(1)),
+    key(0.8, pelvis(0, 0.014), bend(-14, -8, -6, -21, 0, -4), ARMS_SPREAD_UP, jaw(32), ANGRY, flames(1)),
+    key(0.98, pelvis(0, 0.01), bend(-11, -6, -4, -16), ARMS_SPREAD_UP, jaw(8), ANGRY, flames(0.8)),
+    key(1.2, pelvis(0, -0.012), bend(6, 2, 0, 0), GUARD, ANGRY, flames(0.4)),
+    key(1.65, flames(0), OPEN_EYES),
   ],
-  events: [{ t: 0.38, name: 'cry' }],
+  events: [{ t: 0.48, name: 'cry' }],
 };
 
-/** Weak contact move (Scratch, Quick Attack, Peck...): dash in, claw slash, hop back. */
+/** Weak contact move (Scratch, Slash, Quick Attack...): leap in, claw slash, hop back. */
 const physicalWeak: Clip = {
   name: 'physical_weak',
-  duration: 1.25,
+  duration: 1.3,
   keys: [
     key(0),
-    key(0.16, {
-      pelvis: { y: -0.025 },
-      bones: { spine: { x: 10, y: 14 }, head: { x: -6 } },
-      aim: { armR: { dir: [-0.55, 0.25, -0.8] }, forearmR: { dir: [-0.2, 0.9, 0.35] } },
-      ...ANGRY,
-    }, 'out'),
-    key(0.36, {
-      advance: 1,
-      plantFeet: 0.7,
-      bones: { spine: { x: 16, y: 18 }, head: { x: -8 } },
-      aim: { armR: { dir: [-0.55, 0.3, -0.78] }, forearmR: { dir: [-0.2, 0.92, 0.3] } },
-      ...ANGRY,
-    }, 'in'),
-    key(0.44, {
-      advance: 1,
-      bones: { spine: { x: 20, y: -26 }, chest: { y: -10 }, head: { x: -8, y: 10 } },
-      aim: { armR: { dir: [0.35, -0.35, 0.87] }, forearmR: { dir: [0.55, -0.55, 0.62] } },
-      ...ANGRY,
-    }, 'out'),
-    key(0.62, {
-      advance: 1,
-      bones: { spine: { x: 18, y: -24 }, chest: { y: -8 }, head: { x: -8, y: 10 } },
-      aim: { armR: { dir: [0.4, -0.45, 0.8] }, forearmR: { dir: [0.6, -0.6, 0.52] } },
-      ...ANGRY,
-    }),
-    key(0.9, { advance: 0, root: { y: 0.06 }, plantFeet: 0.3, ...ANGRY }, 'inOut'),
-    key(1.25, { expression: 'open' }),
+    // Wind up: crouch, right shoulder back, claw cocked behind the head.
+    key(0.13, pelvis(0, -0.035), { bones: { spine: { x: 14, y: -16 }, head: { x: -8, y: 10 } } }, ANGRY,
+      { aim: { armR: { dir: [-0.5, 0.55, -0.67] }, forearmR: { dir: [-0.15, 0.95, 0.25] }, armL: { dir: [0.35, -0.6, 0.7] }, forearmL: { dir: [-0.2, 0.7, 0.68] } } }),
+    // Leap along an arc, legs tucked.
+    key(0.27, { advance: 0.55, root: { y: 0.075 } }, TUCK, { bones: { spine: { x: 10, y: -18 }, head: { x: -8, y: 12 } } }, ANGRY,
+      { aim: { armR: { dir: [-0.5, 0.6, -0.62] }, forearmR: { dir: [-0.1, 0.96, 0.25] }, armL: { dir: [0.35, -0.6, 0.7] }, forearmL: { dir: [-0.2, 0.7, 0.68] } } }),
+    // Land in front of the foe, knees taking the weight.
+    key(0.38, { advance: 1 }, LAND, { bones: { spine: { x: 16, y: -18 }, head: { x: -8, y: 12 } } }, ANGRY,
+      { aim: { armR: { dir: [-0.5, 0.55, -0.67] }, forearmR: { dir: [-0.15, 0.95, 0.25] }, armL: { dir: [0.35, -0.6, 0.7] }, forearmL: { dir: [-0.2, 0.7, 0.68] } } }),
+    // Slash down and across: the torso unwinds, the claw leads.
+    snap(0.46, { advance: 1 }, pelvis(0.01, -0.035), { bones: { spine: { x: 20, y: 22, z: -6 }, chest: { y: 8 }, head: { x: -6, y: -8 } } }, ANGRY,
+      { aim: { armR: { dir: [0.35, -0.4, 0.85] }, forearmR: { dir: [0.6, -0.55, 0.58] }, armL: { dir: [0.5, -0.62, -0.6] }, forearmL: { dir: [0.2, -0.2, 0.96] } } }),
+    // Follow-through: the claw carries on down and to the side, then hangs there.
+    key(0.64, { advance: 1 }, pelvis(0.012, -0.03), { bones: { spine: { x: 21, y: 26, z: -7 }, chest: { y: 9 }, head: { x: -6, y: -9 } } }, ANGRY,
+      { aim: { armR: { dir: [0.5, -0.62, 0.6] }, forearmR: { dir: [0.62, -0.72, 0.3] }, armL: { dir: [0.5, -0.62, -0.6] }, forearmL: { dir: [0.2, -0.2, 0.96] } } }),
+    key(0.8, { advance: 1 }, pelvis(0, -0.035), { bones: { spine: { x: 14, y: 8 } } }, GUARD, ANGRY),
+    // Hop back home.
+    key(0.96, { advance: 0.45, root: { y: 0.06 } }, HOP, { bones: { spine: { x: 8 } } }, GUARD, ANGRY),
+    key(1.08, { advance: 0 }, LAND, GUARD, ANGRY),
+    key(1.3, OPEN_EYES),
   ],
-  events: [{ t: 0.44, name: 'impact' }],
+  events: [{ t: 0.5, name: 'impact' }],
 };
 
-/** Strong contact move (Blaze Kick, Sky Uppercut...): crouch, leap, flaming roundhouse kick. */
-const physicalStrong: Clip = {
-  name: 'physical_strong',
-  duration: 2.0,
-  keys: [
-    key(0),
-    key(0.32, { pelvis: { y: -0.09 }, bones: { spine: { x: 26 }, head: { x: -14 } }, ...GUARD, ...ANGRY, fx: { flames: 0.6 } }, 'out'),
-    key(0.56, {
-      advance: 0.65,
-      plantFeet: 0,
-      root: { y: 0.16, yaw: -20 },
-      bones: { spine: { x: 10 }, head: { x: -10 } },
-      aim: {
-        thighR: { dir: [-0.2, -0.2, 0.96] }, shinR: { dir: [-0.15, -0.9, 0.4] },
-        thighL: { dir: [0.25, -0.35, 0.9] }, shinL: { dir: [0.1, -0.85, -0.5] },
-      },
-      ...GUARD,
-      ...ANGRY,
-      fx: { flames: 1 },
-    }, 'out'),
-    key(0.78, {
-      advance: 1,
-      plantFeet: 0,
-      root: { y: 0.1, yaw: 45 },
-      bones: { spine: { x: -22, y: -10 }, head: { x: 6, y: -16 } },
-      aim: {
-        thighR: { dir: [-0.25, 0.35, 0.9] }, shinR: { dir: [-0.2, 0.4, 0.9] },
-        thighL: { dir: [0.35, -0.8, 0.3] }, shinL: { dir: [0.15, -0.6, -0.8] },
-        armR: { dir: [-0.9, 0.1, -0.35] }, forearmR: { dir: [-0.8, 0.4, -0.3] },
-        armL: { dir: [0.9, 0.2, 0.3] }, forearmL: { dir: [0.7, 0.6, 0.35] },
-      },
-      ...ANGRY,
-      fx: { flames: 1 },
-    }, 'out'),
-    key(1.02, {
-      advance: 1,
-      plantFeet: 0,
-      root: { y: 0.05, yaw: 95 },
-      bones: { spine: { x: -12 }, head: { y: -30 } },
-      aim: {
-        thighR: { dir: [-0.5, -0.4, 0.75] }, shinR: { dir: [-0.35, -0.9, 0.2] },
-        armR: { dir: [-0.9, 0.0, -0.4] }, armL: { dir: [0.9, 0.1, 0.35] },
-      },
-      ...ANGRY,
-      fx: { flames: 1 },
-    }, 'inOut'),
-    key(1.28, { advance: 1, plantFeet: 1, pelvis: { y: -0.07 }, root: { yaw: 0 }, bones: { spine: { x: 24 } }, ...GUARD, ...ANGRY, fx: { flames: 0.7 } }, 'in'),
-    key(1.62, { advance: 0, plantFeet: 0.3, root: { y: 0.08 }, ...ANGRY, fx: { flames: 0.3 } }, 'inOut'),
-    key(2.0, { fx: { flames: 0 }, expression: 'open' }),
-  ],
-  events: [{ t: 0.8, name: 'impact' }],
-};
-
-/** Kick variant for weak contact kicks (Double Kick): two alternating snap kicks. */
+/** Weak contact kicks (Double Kick, Low Kick): leap in, two alternating snap kicks, hop back. */
 const physicalWeakKick: Clip = {
   name: 'physical_weak_kick',
-  duration: 1.45,
-  keys: [
-    key(0),
-    key(0.2, { pelvis: { y: -0.03 }, bones: { spine: { x: 18 } }, ...GUARD, ...ANGRY }, 'out'),
-    key(0.38, { advance: 1, plantFeet: 0.8, bones: { spine: { x: 12 } }, ...GUARD, ...ANGRY }, 'in'),
-    key(0.46, {
-      advance: 1,
-      plantFeet: 0,
-      bones: { spine: { x: -12 } },
-      aim: { thighR: { dir: [-0.15, 0.15, 0.98] }, shinR: { dir: [-0.1, 0.2, 0.97] } },
-      ...GUARD,
-      ...ANGRY,
-    }, 'out'),
-    key(0.6, { advance: 1, plantFeet: 1, bones: { spine: { x: 10 } }, ...GUARD, ...ANGRY }),
-    key(0.7, {
-      advance: 1,
-      plantFeet: 0,
-      root: { yaw: -15 },
-      bones: { spine: { x: -14 } },
-      aim: { thighL: { dir: [0.15, 0.2, 0.97] }, shinL: { dir: [0.1, 0.25, 0.96] } },
-      ...GUARD,
-      ...ANGRY,
-    }, 'out'),
-    key(0.86, { advance: 1, plantFeet: 1, bones: { spine: { x: 10 } }, ...GUARD, ...ANGRY }),
-    key(1.12, { advance: 0, plantFeet: 0.3, root: { y: 0.06 }, ...ANGRY }),
-    key(1.45, { expression: 'open' }),
-  ],
-  events: [{ t: 0.46, name: 'impact' }, { t: 0.7, name: 'impact' }],
-};
-
-/** Weak ranged move (Ember): inhale, then flick a fireball forward. */
-const specialWeak: Clip = {
-  name: 'special_weak',
-  duration: 1.15,
-  keys: [
-    key(0),
-    key(0.22, { bones: { spine: { x: -10 }, chest: { x: -6 }, head: { x: -16 } }, ...GUARD, ...ANGRY, fx: { flames: 0.8 } }, 'out'),
-    key(0.42, { bones: { spine: { x: 26 }, head: { x: 8 } }, ...THRUST_FORWARD, ...JAW_OPEN, ...ANGRY, fx: { flames: 1 } }, 'outBack'),
-    key(0.7, { bones: { spine: { x: 22 }, head: { x: 6 } }, ...THRUST_FORWARD, ...ANGRY, fx: { flames: 0.6 } }),
-    key(1.15, { fx: { flames: 0 }, expression: 'open' }),
-  ],
-  events: [{ t: 0.44, name: 'release' }],
-};
-
-/** Strong ranged move (Flamethrower, Overheat): charge the wrist flames, blast a stream. */
-const specialStrong: Clip = {
-  name: 'special_strong',
-  duration: 2.2,
-  keys: [
-    key(0),
-    key(0.55, {
-      pelvis: { y: -0.05 },
-      bones: { spine: { x: -6 }, chest: { x: -4 }, head: { x: -8 } },
-      aim: {
-        armR: { dir: [-0.6, -0.65, -0.45] }, forearmR: { dir: [0.4, 0.2, 0.9] },
-        armL: { dir: [0.6, -0.65, -0.45] }, forearmL: { dir: [-0.4, 0.2, 0.9] },
-      },
-      expression: 'closed',
-      fx: { flames: 1 },
-    }, 'in'),
-    key(0.62, {
-      pelvis: { y: -0.052 },
-      bones: { spine: { x: -6 }, chest: { x: -4 }, head: { x: -8, z: 3 } },
-      aim: {
-        armR: { dir: [-0.6, -0.65, -0.45] }, forearmR: { dir: [0.4, 0.2, 0.9] },
-        armL: { dir: [0.6, -0.65, -0.45] }, forearmL: { dir: [-0.4, 0.2, 0.9] },
-      },
-      expression: 'closed',
-      fx: { flames: 1 },
-    }),
-    key(0.8, { pelvis: { y: -0.03, z: 0.02 }, bones: { spine: { x: 30 }, chest: { x: 8 }, head: { x: 4 } }, ...THRUST_FORWARD, ...JAW_OPEN, ...ANGRY, fx: { flames: 1 } }, 'outBack'),
-    key(1.2, { pelvis: { y: -0.028, z: 0.015 }, bones: { spine: { x: 28 }, chest: { x: 8 }, head: { x: 6, z: -2 } }, ...THRUST_FORWARD, ...JAW_OPEN, ...ANGRY, fx: { flames: 1 } }),
-    key(1.55, { pelvis: { y: -0.03, z: 0.02 }, bones: { spine: { x: 29 }, chest: { x: 8 }, head: { x: 5, z: 2 } }, ...THRUST_FORWARD, ...JAW_OPEN, ...ANGRY, fx: { flames: 1 } }),
-    key(2.2, { fx: { flames: 0 }, expression: 'open' }),
-  ],
-  events: [{ t: 0.1, name: 'charge' }, { t: 0.8, name: 'release' }, { t: 1.6, name: 'releaseEnd' }],
-};
-
-/** Self-targeting status move (Bulk Up, Focus Energy): gather, then flex with a flame aura. */
-const statusSelf: Clip = {
-  name: 'status_self',
-  duration: 1.6,
-  keys: [
-    key(0),
-    key(0.35, { pelvis: { y: -0.05 }, bones: { spine: { x: 22 }, head: { x: 22 } }, ...LIMP_ARMS, expression: 'closed' }, 'out'),
-    key(0.72, {
-      pelvis: { y: 0.008 },
-      bones: { spine: { x: -10 }, chest: { x: -8 }, head: { x: -16 } },
-      aim: {
-        armR: { dir: [-0.95, 0.25, 0.1] }, forearmR: { dir: [-0.15, 0.97, 0.15] },
-        armL: { dir: [0.95, 0.25, 0.1] }, forearmL: { dir: [0.15, 0.97, 0.15] },
-      },
-      ...ANGRY,
-      fx: { flames: 1 },
-    }, 'outBack'),
-    key(1.05, {
-      pelvis: { y: 0.008 },
-      bones: { spine: { x: -11 }, chest: { x: -8 }, head: { x: -16, z: 3 } },
-      aim: {
-        armR: { dir: [-0.95, 0.28, 0.1] }, forearmR: { dir: [-0.12, 0.98, 0.12] },
-        armL: { dir: [0.95, 0.28, 0.1] }, forearmL: { dir: [0.12, 0.98, 0.12] },
-      },
-      ...ANGRY,
-      fx: { flames: 1 },
-    }),
-    key(1.6, { fx: { flames: 0 }, expression: 'open' }),
-  ],
-  events: [{ t: 0.72, name: 'aura' }],
-};
-
-/** Status move aimed at the foe (Growl, Leer, Sand-Attack): lean in and roar. */
-const statusTarget: Clip = {
-  name: 'status_target',
-  duration: 1.35,
-  keys: [
-    key(0),
-    key(0.3, { pelvis: { y: -0.02, z: 0.02 }, bones: { spine: { x: 26 }, head: { x: -18 } }, ...ARMS_SPREAD_UP, ...JAW_OPEN, ...ANGRY }, 'out'),
-    key(0.55, { pelvis: { y: -0.02, z: 0.02 }, bones: { spine: { x: 26 }, head: { x: -16, y: 8 } }, ...ARMS_SPREAD_UP, ...JAW_OPEN, ...ANGRY }),
-    key(0.8, { pelvis: { y: -0.02, z: 0.02 }, bones: { spine: { x: 26 }, head: { x: -16, y: -8 } }, ...ARMS_SPREAD_UP, ...JAW_OPEN, ...ANGRY }),
-    key(1.35, { expression: 'open' }),
-  ],
-  events: [{ t: 0.32, name: 'emit' }],
-};
-
-/** Taking a hit: snap back, wince, recover. */
-const hit: Clip = {
-  name: 'hit',
-  duration: 0.6,
-  keys: [
-    key(0),
-    key(0.07, { pelvis: { z: -0.03 }, root: { z: -0.05 }, bones: { spine: { x: -16 }, head: { x: -20 } }, aim: { armR: { dir: [-0.8, -0.1, -0.6] }, armL: { dir: [0.8, -0.1, -0.6] } }, expression: 'hurt' }, 'out'),
-    key(0.28, { pelvis: { z: -0.02 }, root: { z: -0.04 }, bones: { spine: { x: -8 }, head: { x: -10 } }, expression: 'hurt' }),
-    key(0.6, { expression: 'open' }),
-  ],
-};
-
-/** Fainting: stagger, knees buckle, collapse and sink into the ground. */
-const faint: Clip = {
-  name: 'faint',
   duration: 1.7,
   keys: [
     key(0),
-    key(0.3, { root: { z: -0.04 }, bones: { spine: { x: -12 }, head: { x: -22 } }, expression: 'hurt' }, 'out'),
-    key(0.85, { pelvis: { y: -0.2 }, root: { z: -0.02 }, bones: { spine: { x: 36 }, head: { x: 34 } }, ...LIMP_ARMS, expression: 'closed' }, 'in'),
-    key(1.15, { pelvis: { y: -0.27 }, root: { z: -0.02 }, bones: { spine: { x: 44 }, head: { x: 40 } }, ...LIMP_ARMS, expression: 'closed' }),
-    key(1.7, { pelvis: { y: -0.27 }, root: { y: -1.1, z: -0.02 }, bones: { spine: { x: 44 }, head: { x: 40 } }, ...LIMP_ARMS, expression: 'closed' }, 'in'),
+    key(0.14, pelvis(0, -0.04), { bones: { spine: { x: 22 } } }, GUARD, ANGRY),
+    key(0.28, { advance: 0.55, root: { y: 0.07 } }, TUCK, { bones: { spine: { x: 12 } } }, GUARD, ANGRY),
+    key(0.4, { advance: 1 }, LAND, GUARD, ANGRY),
+    // Right snap kick: the standing leg stays planted, the body leans back.
+    key(0.46, { advance: 1, plantLeft: 1, plantRight: 0.4 }, pelvis(0.012, -0.03), { bones: { spine: { x: 2 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.22, -0.5, 0.84] }, shinR: { dir: [-0.12, -0.95, 0.1] } } }),
+    snap(0.53, { advance: 1, plantLeft: 1, plantRight: 0 }, pelvis(0.015, -0.02), { bones: { spine: { x: -12 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.15, 0.12, 0.98] }, shinR: { dir: [-0.1, 0.18, 0.98] } } }),
+    key(0.63, { advance: 1, plantLeft: 1, plantRight: 0 }, pelvis(0.012, -0.025), { bones: { spine: { x: 0 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.22, -0.45, 0.86] }, shinR: { dir: [-0.12, -0.95, 0.15] } } }),
+    key(0.72, { advance: 1 }, pelvis(0, -0.04), { bones: { spine: { x: 12 } } }, GUARD, ANGRY),
+    // Left kick: hips turn into it.
+    snap(0.82, { advance: 1, plantLeft: 0, plantRight: 1, root: { yaw: -22 } }, pelvis(-0.015, -0.02), { bones: { spine: { x: -12 } } }, GUARD, ANGRY,
+      { aim: { thighL: { dir: [0.15, 0.15, 0.98] }, shinL: { dir: [0.1, 0.22, 0.97] } } }),
+    key(0.93, { advance: 1, plantLeft: 0, plantRight: 1, root: { yaw: -14 } }, pelvis(-0.012, -0.025), { bones: { spine: { x: 0 } } }, GUARD, ANGRY,
+      { aim: { thighL: { dir: [0.25, -0.5, 0.83] }, shinL: { dir: [0.12, -0.95, 0.1] } } }),
+    key(1.03, { advance: 1 }, LAND, GUARD, ANGRY),
+    key(1.2, { advance: 0.45, root: { y: 0.06 } }, HOP, { bones: { spine: { x: 8 } } }, GUARD, ANGRY),
+    key(1.33, { advance: 0 }, LAND, GUARD, ANGRY),
+    key(1.7, OPEN_EYES),
   ],
-  events: [{ t: 0.85, name: 'thud' }],
+  events: [{ t: 0.54, name: 'impact' }, { t: 0.83, name: 'impact' }],
+};
+
+/** Strong contact move (Blaze Kick, Sky Uppercut...): deep crouch, leap, spinning flame kick, land. */
+const physicalStrong: Clip = {
+  name: 'physical_strong',
+  duration: 2.1,
+  keys: [
+    key(0),
+    // Coil: deep crouch, turned away from the foe.
+    key(0.3, pelvis(0, -0.1), { root: { yaw: -25 } }, { bones: { spine: { x: 26 }, head: { x: -14, y: 18 } } }, GUARD, ANGRY, flames(0.6)),
+    // Spring up and in.
+    key(0.5, { advance: 0.5, root: { y: 0.2, yaw: -8 } }, TUCK, { bones: { spine: { x: 6 }, head: { x: -8, y: 10 } } }, GUARD, ANGRY, flames(1)),
+    // Chamber the kick at the top of the arc, already turning.
+    key(0.64, { advance: 0.85, plantFeet: 0, root: { y: 0.23, yaw: 55 } }, { bones: { spine: { x: -6, z: -8 }, head: { y: -40 } } }, ANGRY, flames(1),
+      { aim: { thighR: { dir: [-0.8, 0.1, 0.6] }, shinR: { dir: [0.1, -0.6, 0.8] }, thighL: { dir: [0.3, -0.85, -0.42] }, shinL: { dir: [0.1, -0.5, -0.86] },
+        armR: { dir: [-0.2, -0.3, 0.93] }, forearmR: { dir: [0.4, 0.5, 0.77] }, armL: { dir: [0.9, 0.1, 0.4] }, forearmL: { dir: [0.6, 0.6, 0.5] } } }),
+    // The kick lands side-on, leg fully extended at the foe.
+    snap(0.76, { advance: 1, plantFeet: 0, root: { y: 0.17, yaw: 100 } }, { bones: { spine: { x: -8, z: -18 }, head: { x: 4, y: -70 } } }, ANGRY, flames(1),
+      { aim: { thighR: { dir: [-0.97, 0.22, 0.1] }, shinR: { dir: [-0.97, 0.24, 0.05] }, thighL: { dir: [0.35, -0.85, -0.38] }, shinL: { dir: [0.15, -0.6, -0.78] },
+        armR: { dir: [-0.3, -0.5, -0.8] }, forearmR: { dir: [0.3, -0.2, -0.93] }, armL: { dir: [0.95, 0.2, 0.2] }, forearmL: { dir: [0.75, 0.6, 0.25] } } }),
+    // Follow-through: the spin carries on round.
+    key(0.94, { advance: 1, plantFeet: 0, root: { y: 0.1, yaw: 230 } }, TUCK, { bones: { spine: { x: 6, z: -6 }, head: { y: -30 } } }, GUARD, ANGRY, flames(1)),
+    // Land facing the foe again, deep in the knees.
+    key(1.12, { advance: 1, root: { yaw: 360 } }, LAND, pelvis(0, -0.06), { bones: { spine: { x: 22 } } }, GUARD, ANGRY, flames(0.8)),
+    key(1.34, { advance: 1, root: { yaw: 360 } }, pelvis(0, -0.03), { bones: { spine: { x: 10 } } }, GUARD, ANGRY, flames(0.6)),
+    // Hop back.
+    key(1.52, { advance: 0.45, root: { y: 0.07, yaw: 360 } }, HOP, { bones: { spine: { x: 8 } } }, GUARD, ANGRY, flames(0.4)),
+    key(1.68, { advance: 0, root: { yaw: 360 } }, LAND, GUARD, ANGRY, flames(0.2)),
+    key(2.1, { root: { yaw: 360 } }, flames(0), OPEN_EYES),
+  ],
+  events: [{ t: 0.78, name: 'impact' }],
+};
+
+/** Weak ranged move (Ember): a quick breath, then the head snaps forward and spits fire. */
+const specialWeak: Clip = {
+  name: 'special_weak',
+  duration: 1.2,
+  keys: [
+    key(0),
+    // Draw breath: chest up, head tipped back, elbows back.
+    key(0.24, pelvis(0, 0.012), bend(-8, -8, -8, -14), ELBOWS_BACK, FISTS, ANGRY, flames(0.5)),
+    // Spit: the head drives forward at the foe, beak wide; the body leans in.
+    snap(0.34, pelvis(0, -0.016, 0.03), bend(15, 9, -4, -8), CHAMBER, FISTS, jaw(34), ANGRY, flames(0.9)),
+    // Recoil: the head bobs back up as the beak closes.
+    key(0.5, pelvis(0, -0.01, 0.015), bend(9, 4, -3, -11), CHAMBER, FISTS, jaw(18), ANGRY, flames(0.7)),
+    key(0.7, pelvis(0, -0.004), bend(3, 1, 0, -2), CHAMBER, FISTS, jaw(3), ANGRY, flames(0.3)),
+    key(1.2, OPEN_EYES),
+  ],
+  events: [{ t: 0.4, name: 'release' }],
+};
+
+/** Strong ranged move (Flamethrower, Overheat): a deep breath, then a sustained stream from the beak. */
+const specialStrong: Clip = {
+  name: 'special_strong',
+  duration: 2.3,
+  keys: [
+    key(0),
+    // Settle before drawing breath.
+    key(0.14, pelvis(0, -0.02), bend(4, 0, 0, 6), FISTS),
+    // Deep breath: rise, chest out, beak to the sky, elbows back; embers gather at the beak.
+    key(0.52, pelvis(0, 0.018), bend(-12, -10, -10, -16), ELBOWS_BACK, FISTS, SHUT, flames(0.6)),
+    // Hold at the top, still swelling.
+    key(0.66, pelvis(0, 0.022), bend(-13, -11, -11, -18, 0, 2), ELBOWS_BACK, FISTS, SHUT, flames(0.8)),
+    // Blast: the head drives forward and down at the foe, beak wide; the body braces low.
+    snap(0.78, pelvis(0, -0.038, 0.032), bend(14, 9, -4, -8), BRACED, FISTS, jaw(36), ANGRY, flames(1)),
+    // Sustain: pushing into the stream, the head sweeping a little.
+    key(1.0, pelvis(0, -0.033, 0.024), bend(12, 8, -4, -6, 5), BRACED, FISTS, jaw(34), ANGRY, flames(1)),
+    key(1.22, pelvis(0, -0.037, 0.03), bend(13, 9, -4, -8, -4, -2), BRACED, FISTS, jaw(36), ANGRY, flames(1)),
+    key(1.44, pelvis(0, -0.033, 0.024), bend(12, 8, -4, -6, 3, 1), BRACED, FISTS, jaw(34), ANGRY, flames(1)),
+    key(1.62, pelvis(0, -0.035, 0.027), bend(12, 8, -4, -7), BRACED, FISTS, jaw(33), ANGRY, flames(0.9)),
+    // Beak shuts, the head comes up and shakes off the heat.
+    key(1.8, pelvis(0, -0.015), bend(4, 2, 0, -6, 7), CHAMBER, FISTS, jaw(4), ANGRY, flames(0.5)),
+    key(1.94, pelvis(0, -0.008), bend(2, 1, 0, -3, -6), CHAMBER, ANGRY, flames(0.3)),
+    key(2.3, OPEN_EYES),
+  ],
+  events: [{ t: 0.1, name: 'charge' }, { t: 0.84, name: 'release' }, { t: 1.66, name: 'releaseEnd' }],
+};
+
+/** Self-targeting status move (Bulk Up, Focus Energy): gather, then flex hard with a flame aura. */
+const statusSelf: Clip = {
+  name: 'status_self',
+  duration: 1.7,
+  keys: [
+    key(0),
+    // Gather: curl in, arms crossed, eyes shut.
+    key(0.3, pelvis(0, -0.05), bend(22, 6, 4, 16), CROSSED, FISTS, SHUT),
+    key(0.42, pelvis(0, -0.056), bend(24, 7, 4, 18, 0, 1), CROSSED, FISTS, SHUT),
+    // Flex: chest out, arms up, straining (moving hold with a tremor).
+    snap(0.56, pelvis(0, -0.02), bend(-10, -8, -4, -12), FLEX, FISTS, ANGRY, flames(1)),
+    key(0.68, pelvis(0, -0.024), bend(-11, -8, -4, -13, 0, 1.5), FLEX, FISTS, ANGRY, flames(1)),
+    key(0.8, pelvis(0, -0.02), bend(-10, -9, -4, -12, 0, -1.5), FLEX, FISTS, ANGRY, flames(1)),
+    key(0.92, pelvis(0, -0.024), bend(-11, -8, -4, -13, 0, 1.5), FLEX, FISTS, ANGRY, flames(1)),
+    key(1.04, pelvis(0, -0.021), bend(-10, -9, -4, -12, 0, -1), FLEX, FISTS, ANGRY, flames(1)),
+    // Relax: exhale, arms drop.
+    key(1.28, pelvis(0, -0.02), bend(6, 2, 0, -2), CHAMBER, ANGRY, flames(0.4)),
+    key(1.7, flames(0), OPEN_EYES),
+  ],
+  events: [{ t: 0.62, name: 'aura' }],
+};
+
+/** Status move aimed at the foe (Growl, Leer, Screech): rear up, then lunge the head forward and roar. */
+const statusTarget: Clip = {
+  name: 'status_target',
+  duration: 1.4,
+  keys: [
+    key(0),
+    key(0.2, pelvis(0, 0.01), bend(-8, -6, -6, -12), ELBOWS_BACK, FISTS, ANGRY),
+    snap(0.3, pelvis(0, -0.02, 0.025), bend(14, 8, 2, -6), ELBOWS_BACK, FISTS, jaw(32), ANGRY),
+    key(0.5, pelvis(0, -0.02, 0.025), bend(14, 8, 2, -6, 7, 3), ELBOWS_BACK, FISTS, jaw(34), ANGRY),
+    key(0.7, pelvis(0, -0.02, 0.022), bend(13, 8, 2, -6, -7, -3), ELBOWS_BACK, FISTS, jaw(32), ANGRY),
+    key(0.88, pelvis(0, -0.01, 0.01), bend(6, 2, 0, -3), CHAMBER, jaw(8), ANGRY),
+    key(1.4, OPEN_EYES),
+  ],
+  events: [{ t: 0.36, name: 'emit' }],
+};
+
+/** Sand-Attack: scoop the ground with the right foot and kick the sand at the foe. */
+const statusTargetKick: Clip = {
+  name: 'status_target_kick',
+  duration: 1.35,
+  keys: [
+    key(0),
+    // Weight onto the back leg, the front foot draws back along the ground.
+    key(0.22, { plantLeft: 1, plantRight: 0.6 }, pelvis(0.02, -0.04, -0.01), { bones: { spine: { x: 22, y: -8 }, head: { x: -10, y: 8 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.3, -0.92, -0.25] }, shinR: { dir: [-0.15, -0.8, -0.58] } } }),
+    // Kick: the foot sweeps forward and up, flinging sand.
+    snap(0.34, { plantLeft: 1, plantRight: 0 }, pelvis(0.015, -0.03, 0.01), { bones: { spine: { x: 6, y: 6 }, head: { x: -10, y: 2 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.22, -0.3, 0.93] }, shinR: { dir: [-0.12, -0.05, 0.99] } } }),
+    key(0.5, { plantLeft: 1, plantRight: 0 }, pelvis(0.012, -0.03, 0.008), { bones: { spine: { x: 8, y: 4 }, head: { x: -10 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.25, -0.45, 0.86] }, shinR: { dir: [-0.12, -0.55, 0.83] } } }),
+    key(0.7, pelvis(0, -0.04), { bones: { spine: { x: 14 } } }, GUARD, ANGRY),
+    key(1.35, OPEN_EYES),
+  ],
+  events: [{ t: 0.3, name: 'emit' }],
+};
+
+/** Taking a hit: snap back and wince (the battler adds a sprung recoil), then shake it off. */
+const hit: Clip = {
+  name: 'hit',
+  duration: 0.62,
+  keys: [
+    key(0),
+    snap(0.05, bend(-14, -6, -4, -18), HURT,
+      { aim: { armR: { dir: [-0.75, -0.3, 0.58] }, forearmR: { dir: [-0.3, 0.2, 0.93] }, armL: { dir: [0.75, -0.45, -0.48] }, forearmL: { dir: [0.4, 0.1, 0.9] } } }),
+    key(0.2, bend(-6, -2, -2, -8), HURT),
+    key(0.36, bend(4, 1, 0, 4), HURT),
+    key(0.62, OPEN_EYES),
+  ],
+};
+
+/** Fainting: reels, sways forward, knees buckle, slumps, then sinks into the ground. */
+const faint: Clip = {
+  name: 'faint',
+  duration: 1.8,
+  keys: [
+    key(0),
+    snap(0.12, { root: { z: -0.04 } }, bend(-14, -6, -4, -24), HURT,
+      { aim: { armR: { dir: [-0.8, -0.3, 0.5] }, armL: { dir: [0.8, -0.35, -0.48] } } }),
+    key(0.4, pelvis(0, -0.04), { root: { z: -0.02 } }, bend(10, 4, 4, 16), LIMP_ARMS, SHUT),
+    key(0.72, pelvis(0, -0.2), { root: { z: -0.02 } }, bend(30, 8, 6, 26), LIMP_ARMS, SHUT),
+    fall(0.9, pelvis(0, -0.275), { root: { z: -0.02 } }, bend(42, 10, 6, 32), LIMP_ARMS, SHUT),
+    key(1.0, pelvis(0, -0.255), { root: { z: -0.02 } }, bend(40, 10, 6, 30), LIMP_ARMS, SHUT),
+    key(1.12, pelvis(0, -0.27), { root: { z: -0.02 } }, bend(42, 10, 6, 32), LIMP_ARMS, SHUT),
+    fall(1.8, pelvis(0, -0.27), { root: { y: -1.1, z: -0.02 } }, bend(42, 10, 6, 32), LIMP_ARMS, SHUT),
+  ],
+  events: [{ t: 0.9, name: 'thud' }],
 };
 
 export const BLAZIKEN_CLIPS: Record<string, Clip> = Object.fromEntries(
-  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, specialWeak, specialStrong, statusSelf, statusTarget, hit, faint].map((c) => [c.name, c]),
+  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
 );
 
 /** Eye atlas (pm0257_00_Eye1): 2 columns x 4 rows of 128x64 cells. */

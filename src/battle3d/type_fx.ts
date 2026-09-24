@@ -44,9 +44,13 @@ export function typeFx(type: string): TypeFx {
   return TYPE_FX[type] ?? NORMAL;
 }
 
-/** Status moves aimed at the foe: what travels (or appears) by move name. */
-export function statusSprite(moveName: string): { sheet: string; at: 'travel' | 'eyes' } {
-  if (/SAND|MUD/.test(moveName)) return { sheet: 'MudUnk', at: 'travel' };
+/**
+ * Status moves aimed at the foe: what travels (or appears) by move name, and
+ * where it starts: the mouth ('travel'), kicked up from the feet, or a glint
+ * at the eyes.
+ */
+export function statusSprite(moveName: string): { sheet: string; at: 'travel' | 'feet' | 'eyes' } {
+  if (/SAND|MUD/.test(moveName)) return { sheet: 'MudUnk', at: 'feet' };
   if (/POWDER|SPORE/.test(moveName)) return { sheet: 'PoisonPowder', at: 'travel' };
   if (/LEER|SCARY|GLARE|MEAN LOOK/.test(moveName)) return { sheet: 'Leer', at: 'eyes' };
   return { sheet: 'NoiseLine', at: 'travel' };
