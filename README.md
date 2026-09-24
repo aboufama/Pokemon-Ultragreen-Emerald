@@ -7,9 +7,11 @@ look comes from a pixelation pass over the 3D viewport, not from baked assets.
 The interface, text, timings and battle rules come from the decomp and are
 checked against captures of the real game.
 
-This first milestone is the battle screen, with **Blaziken** as the reference
-species. The pipeline that brings every other Pokémon to the same standard is in
-[docs/POKEMON_PIPELINE.md](docs/POKEMON_PIPELINE.md).
+This first milestone is the battle screen with the three Hoenn starters in their
+final forms: **Blaziken** (the reference species), **Sceptile** and **Swampert**.
+Blaziken was built by hand; Sceptile and Swampert were brought to the same bar by
+fresh agents following the gauntlet ([docs/POKEMON_PIPELINE.md](docs/POKEMON_PIPELINE.md),
+`.claude/skills/pokemon-gauntlet`), which is how every other Pokémon gets added.
 
 ## Run it
 
@@ -110,8 +112,12 @@ the stock sprites) and its toon color grade (palette histograms). See
 
 ## Status
 
-- Species with 3D profiles: Blaziken. Other species are added through the gauntlet
-  (`.claude/skills/pokemon-gauntlet`).
+- Species with 3D profiles: Blaziken, Sceptile, Swampert. Other species are added
+  through the gauntlet (`.claude/skills/pokemon-gauntlet`, agent
+  `.claude/agents/pokemon-gauntlet.md`).
+- Moves by body part (`tools/gauntlet/classify_moves.mjs`) need a TypeSafe API key
+  (`TYPESAFE_API_KEY`) and network access to `api.typesafe.ai`; until a species is
+  classified, its effects leave the emitter set per motif.
 - Not in this milestone:
   - the overworld;
   - trainer battles and double battles;

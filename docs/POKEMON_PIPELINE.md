@@ -1,7 +1,8 @@
 # Species pipeline (the gauntlet playbook)
 
-Blaziken is the finished reference species. Every other Pokémon goes through the
-same steps so that it looks like its stock Emerald sprites (size, angle, colors,
+Blaziken is the finished reference species; Sceptile and Swampert went through
+the gauntlet as fresh agents (one worktree each, in parallel). Every other
+Pokémon goes through the same steps so that it looks like its stock Emerald sprites (size, angle, colors,
 outline) and has an animation for every attack category and for the move motifs
 it uses. This page is the reference for the tools; the step-by-step process an
 agent (or you) follows lives in the repo skills:
