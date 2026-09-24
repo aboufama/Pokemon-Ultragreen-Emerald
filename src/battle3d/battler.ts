@@ -20,7 +20,8 @@ import { slotYaw } from '../pokemon/profile';
 const DEG = Math.PI / 180;
 /** Effect origins every species has, by the rig bones they sit on. */
 const BUILTIN_EMITTERS: Record<string, string[]> = { mouth: ['head'], eyes: ['head'], hands: ['handR', 'handL'], feet: ['footR', 'footL'], body: ['chest'] };
-const ATTACK_CLIPS = /^(physical|special|status)/;
+/** Clips that are not moves: every other clip faces the target while it plays. */
+const MOMENT_CLIPS = new Set(['idle', 'intro', 'hit', 'faint']);
 
 export class Battler3D {
   readonly animator: Animator;
@@ -328,7 +329,8 @@ export class Battler3D {
     this.time += dt;
     const pose = this.animator.update(dt);
     this.pose = pose;
-    const attacking = ATTACK_CLIPS.test(this.animator.currentClip ?? '');
+    const clip = this.animator.currentClip;
+    const attacking = !!clip && !MOMENT_CLIPS.has(clip);
     this.facing = this.facingSpring.update(dt, attacking ? 1 : 0);
     const recoil = this.recoilSpring.update(dt, 0);
 

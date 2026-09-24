@@ -63,8 +63,8 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     // Clips by move motif (src/battle3d/motifs.ts). The category clips are
     // Sceptile's own versions of its showcase moves; this maps the motifs
     // they perform, plus motifs whose moves read right on a shared clip.
-    // Motif clips keep a category prefix so the battler turns to face the
-    // foe while they play (src/battle3d/battler.ts ATTACK_CLIPS).
+    // Motif clips are named after the category they stand in for
+    // (physical_strong_punch...).
     // Where two motifs share a clip, the level-up one is listed last
     // (tools/gauntlet/check.mjs records one motif per clip).
     motifClips: {

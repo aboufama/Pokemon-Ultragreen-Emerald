@@ -14,6 +14,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import { speciesBrief } from './brief.mjs';
 import { readGlbJson } from './rigmap.mjs';
 import { CATEGORY_CLIPS, MOMENT_CLIPS, ROOT, clipOf, gameData, loadProfile, reviewJobs } from './species.mjs';
 
@@ -198,13 +199,24 @@ for (const m of showcase) {
   const clip = clipOf(data, profile, m);
   gate(`showcase ${m.replace('MOVE_', '')} -> ${clip}`, !!clips[clip] && !clips[clip].generic, `${data.motifOf(data.moves[m])} motif`);
 }
-const levelMotifs = new Map();
-for (const m of learnable) {
-  const motif = data.motifOf(data.moves[m]);
-  levelMotifs.set(motif, (levelMotifs.get(motif) ?? 0) + 1);
+// Every move it can learn (level-up, TM/HM, tutor) whose motif no clip
+// depicts plays a category clip made for another action: list them. A
+// category clip that does depict a motif says so in motifClips.
+const uncovered = { level: {}, other: {} };
+for (const m of (await speciesBrief(slug)).moves) {
+  const move = data.moves[m.const];
+  const motif = data.motifOf(move);
+  if (motif === 'other' || profile.moveClips[m.const]) continue;
+  const part = profile.moveParts?.[m.const];
+  const bases = part ? [`${motif}@${part}`, motif] : [motif];
+  const keys = bases.flatMap((b) => (data.isStrong(move) ? [`${b}_strong`, b] : [b]));
+  if (keys.some((k) => clips[profile.motifClips?.[k] ?? k])) continue;
+  const bucket = m.sources.some((src) => src.startsWith('L')) ? uncovered.level : uncovered.other;
+  (bucket[motif] ??= []).push(m.name);
 }
-const fallback = [...levelMotifs.entries()].filter(([motif]) => !['other'].includes(motif) && !motifClipNames.has(motif) && ![...motifClipNames.values()].includes(motif)).map(([m, n]) => `${m}(${n})`);
-if (fallback.length) warn('level-up motifs on category clips', fallback.join(', '));
+const list = (b) => Object.entries(b).map(([motif, names]) => `${motif}: ${names.join(', ')}`).join('; ');
+if (Object.keys(uncovered.level).length) warn('level-up moves whose motif has no clip', list(uncovered.level));
+if (Object.keys(uncovered.other).length) warn('TM/tutor moves whose motif has no clip', list(uncovered.other));
 
 // 11. Review log.
 const reviewPath = join(ROOT, 'src/pokemon', slug, 'REVIEW.md');
