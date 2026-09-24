@@ -179,6 +179,17 @@ for (const chain of profile.dynamics ?? []) {
 }
 if (!(profile.dynamics ?? []).length) warn('no spring chains', 'loose parts (tail, ears, fins, leaves, wings) should sway: add profile.dynamics');
 
+// Moves by body part (tools/gauntlet/classify_moves.mjs): every part must be
+// one the file offered; a missing file only warns (Jev needs an API key).
+const partsPath = join(ROOT, 'src/pokemon', slug, 'moves.json');
+if (existsSync(partsPath)) {
+  const file = JSON.parse(await readFile(partsPath, 'utf8'));
+  const bad = Object.entries(file.moves).filter(([, e]) => !(e.part in file.parts)).map(([m, e]) => `${m}: ${e.part}`);
+  gate(`moves by body part (${Object.keys(file.moves).length} moves)`, bad.length === 0, bad.length ? `parts not offered: ${bad.join(', ')}` : file.classifier);
+} else {
+  warn('moves by body part', 'no moves.json: run tools/gauntlet/classify_moves.mjs (Jev), or keep emitterFor per motif');
+}
+
 // 10. Moves: showcase and motif coverage.
 const learnable = new Set(species.learnset.map((l) => l.move));
 const showcase = (profile.showcaseMoves ?? []).map((m) => (m.startsWith('MOVE_') ? m : `MOVE_${m}`));

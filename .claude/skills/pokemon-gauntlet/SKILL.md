@@ -77,6 +77,14 @@ node tools/gauntlet/skeleton.mjs --slug <slug> --weights --textures build/tex/<s
                                 # hierarchy, bone lengths, what each bone moves, textures as PNG
 ```
 
+Check whether the upstream file shipped animations: `SOURCE.json` records
+`optimized.removedAnimations`. When it is above zero, list them from the
+upstream file (the `url` in `SOURCE.json`, downloaded to `build/upstream/`):
+`node tools/gauntlet/skeleton.mjs --model build/upstream/<slug>.glb --animations`.
+Official exports carry a whole battle set (`battlewait01_loop`, `attack01`,
+`rangeattack01`, `charge01`, `damage01`, `down01`, `roar01`...). Those are
+worth reusing: see step 7. Most models ship none.
+
 Watch for: extra LOD meshes (dropped automatically when named `lod1..`; else
 list them in `hiddenParts`), alternate meshes (two cannon meshes, open/closed
 parts: view both in the rig lab, hide the wrong one), effect meshes (flames:
@@ -143,10 +151,36 @@ from the foe to cover a wide back sprite, pass `--init yawLimit=60`.
   `hurt`), declare it like Blaziken's (`material`, `cell` size in UV, `cells`) —
   blinks then come for free. Models with eyelid bones instead can blink by
   keyframing them in the clips.
-- `emitters`: e.g. `cannons: { bones: ['cannonL', 'cannonR'] }`, `flower: {
-  bones: ['flower'] }` (default point: the far end of the mesh each bone moves;
-  `offset`/`reach` adjust it). Verify every emitter:
+- `emitters`: e.g. `cannons: { bones: ['cannonL', 'cannonR'], about: 'the
+  cannons on its shell' }`, `flower: { bones: ['flower'], about: 'the flower
+  on its back' }` (default point: the far end of the mesh each bone moves;
+  `offset`/`reach` adjust it; `about` is what the move classifier reads).
+  Verify every emitter:
   `/?mode=clipreview&species=<slug>&clip=idle&mark=<emitter>&density=3`.
+
+### Moves by body part (Jev)
+
+Which part performs each move is the species' call: Hydro Pump leaves
+Blastoise's cannons but a Feraligatr's jaws; Razor Leaf flies from Sceptile's
+arm leaves. Don't reason through its sixty-odd moves one by one. Classify them
+with Jev (TypeSafe AI's fast "system one" classifier: a typed question in,
+calibrated probabilities out) once the brief and emitters are written, since
+Jev reads both:
+
+```sh
+node tools/gauntlet/classify_moves.mjs --slug <slug>        # --dry shows a request
+```
+
+One question per move: which part — mouth, head, eyes, hands, feet, tail (if
+the rig has one), body (the whole body at once), or one of your emitters. It
+writes `src/pokemon/<slug>/moves.json`. The battle then takes that move's
+effects from the emitter its part names, and plays a `<motif>@<part>` clip
+(or `motifClips` key) before the motif clip. The printout groups the moves by
+motif@part (step 7 uses the groups), lists the moves under 0.6 confidence for
+you to decide (set `"part"` and `"by": "hand"`; reruns keep them), and gives
+Jev's motif for moves the motif table doesn't name. It needs
+`TYPESAFE_API_KEY` in the environment and network access to
+`api.typesafe.ai`. Without them, set `emitterFor` per motif by hand.
 
 ## 7. Clips
 
@@ -157,6 +191,24 @@ motif clips you chose in step 1 (named after the motif, e.g. `bite`, `jet`,
 `jet_strong`, or mapped in `motifClips`). Replace every generic placeholder.
 Each clip carries the events its effects need. Keep `clips.ts` organised like
 Blaziken's: helpers, reusable deltas, then one commented clip per action.
+
+Reuse before you author, but never at the expense of quality:
+
+- **Animations the model shipped** (step 2): an official `attack01` or
+  `damage01` is better than one you would write. Reuse the ones that read
+  from both battle views and fit the category, keyed on your stance. There is
+  no importer yet, so say in your report that the species has them.
+- **Clips of finished species with the same body plan**: Blaziken's clips are
+  STANCE plus deltas. Rebuild an action on your STANCE, re-time it for your
+  species' weight, and make the parts it uses its own (Sceptile slashes with
+  its arm leaves, not claws).
+- **One clip for several moves** (`motifClips`, `moveClips`) when the motion
+  genuinely reads right for all of them.
+- **Enough distinct clips**: every category clip bespoke to the species, plus
+  motif clips for the showcase moves and for every motif@part group of three
+  or more moves whose motion differs from the category clip. When moves that
+  look different share a clip, the battle reads as repetitive, and that
+  costs quality.
 
 ## 8. Review — the part that makes the quality
 

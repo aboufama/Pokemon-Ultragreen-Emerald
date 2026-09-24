@@ -25,6 +25,10 @@ Rules:
 - Stay inside `src/pokemon/<slug>/`, `public/assets/pokemon/<slug>/` and the
   registry line. If a shared tool or engine file blocks you, make the smallest
   fix, and list it in your report.
+- Save compute where it costs no quality: classify moves by body part with
+  Jev (`tools/gauntlet/classify_moves.mjs`) instead of reasoning through each
+  move, and reuse animations the model shipped or finished species' clips
+  where they genuinely fit (the skill's step 7 says when).
 - Look at every contact sheet you render. The gates only check structure; the
   quality comes from your review. Don't tick a REVIEW.md box you haven't seen.
 - Finish with `node tools/gauntlet/check.mjs --slug <slug> --render` passing and

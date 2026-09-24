@@ -2,6 +2,7 @@
 // (bundled from TypeScript), resolve which clip each move plays, and pick
 // representative moves for reviewing every clip.
 
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +13,14 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export async function loadProfile(slug) {
   const mod = await importTs(`src/pokemon/${slug}/index.ts`);
   const palette = JSON.parse(await readFile(join(ROOT, 'public/assets/gba/pokemon', slug, 'palette.json'), 'utf8'));
-  return mod.createProfile(palette);
+  const profile = await mod.createProfile(palette);
+  // Same as the registry: the body part per move from moves.json.
+  const partsPath = join(ROOT, 'src/pokemon', slug, 'moves.json');
+  if (existsSync(partsPath)) {
+    const file = JSON.parse(await readFile(partsPath, 'utf8'));
+    profile.moveParts = { ...Object.fromEntries(Object.entries(file.moves).map(([m, c]) => [m, c.part])), ...profile.moveParts };
+  }
+  return profile;
 }
 
 export async function gameData() {

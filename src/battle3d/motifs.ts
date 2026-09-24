@@ -146,6 +146,11 @@ export function isStrong(move: MoveData): boolean {
   return move.power >= STRONG_POWER || move.power === 1;
 }
 
+/** The motif a move's name maps to, if the table lists it (else motifOf infers one). */
+export function namedMotif(move: MoveData): Motif | undefined {
+  return BY_NAME[move.name];
+}
+
 /** The motif of a move (see MOTIFS). */
 export function motifOf(move: MoveData): Motif {
   const named = BY_NAME[move.name];
