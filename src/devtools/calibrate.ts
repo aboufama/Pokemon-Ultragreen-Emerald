@@ -208,9 +208,10 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
     const cal: Calibration = {
       ...profile.calibration,
       height: p.height,
+      // Fit the plain yaw: art adjustments (yawAdjust) are not part of the fit.
       slots: {
-        enemy: { ...profile.calibration.slots.enemy, yaw: p.enemyYaw },
-        player: { ...profile.calibration.slots.player, yaw: p.playerYaw },
+        enemy: { ...profile.calibration.slots.enemy, yaw: p.enemyYaw, yawAdjust: 0 },
+        player: { ...profile.calibration.slots.player, yaw: p.playerYaw, yawAdjust: 0 },
       },
     };
     for (const slot of ['player', 'enemy'] as SlotName[]) applyCalibration(models[slot].root, cal, slot);
@@ -287,9 +288,10 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
       calibration: {
         height: +cal.height.toFixed(4),
         outline: outlineFromSprites(),
+        // Spread the stored slots so hand-set fields (yawAdjust) survive.
         slots: {
-          enemy: { ...cal.slots.enemy, yaw: +cal.slots.enemy.yaw.toFixed(2) },
-          player: { ...cal.slots.player, yaw: +cal.slots.player.yaw.toFixed(2) },
+          enemy: { ...profile.calibration.slots.enemy, yaw: +cal.slots.enemy.yaw.toFixed(2) },
+          player: { ...profile.calibration.slots.player, yaw: +cal.slots.player.yaw.toFixed(2) },
         },
         fit: cal.fit,
       },

@@ -10,6 +10,7 @@ import { FX_PIXEL_ID } from './vfx';
 import type { BattleStage, SlotName } from '../render3d/stage';
 import type { RGB } from '../gba/bitmap';
 import { SLOT_PIXEL_ID, instantiatePokemon, type PokemonInstance } from '../pokemon/instantiate';
+import { slotYaw } from '../pokemon/profile';
 
 const DEG = Math.PI / 180;
 const ATTACK_CLIPS = /^(physical|special|status)/;
@@ -148,7 +149,7 @@ export class Battler3D {
     const cal = this.profile.calibration.slots[this.slot];
     const H = this.height;
     const r = pose.root ?? {};
-    const yaw = cal.yaw * DEG * (1 - this.facing);
+    const yaw = slotYaw(cal) * DEG * (1 - this.facing);
     const root = this.inst.root;
     root.scale.setScalar(H * (pose.scale ?? 1) * this.appear);
     root.rotation.set((r.pitch ?? 0) * DEG, yaw + (r.yaw ?? 0) * DEG, (r.roll ?? 0) * DEG, 'YXZ');
