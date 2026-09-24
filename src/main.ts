@@ -16,6 +16,18 @@ async function start(): Promise<void> {
     root.style.overflow = 'auto';
     document.body.style.overflow = 'auto';
     await runUiFit(root);
+  } else if (mode === 'bonedump') {
+    const { runBoneDump } = await import('./devtools/bonedump');
+    await runBoneDump();
+  } else if (mode === 'riglab') {
+    const { runRigLab } = await import('./devtools/riglab');
+    await runRigLab(root);
+  } else if (mode === 'calibrate') {
+    const { runCalibrate } = await import('./devtools/calibrate');
+    await runCalibrate(root);
+  } else if (mode === 'stage') {
+    const { runStagePreview } = await import('./devtools/stage_preview');
+    (window as unknown as { preview: unknown }).preview = await runStagePreview(root);
   } else {
     root.textContent = `unknown mode ${mode}`;
   }
