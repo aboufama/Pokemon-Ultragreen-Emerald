@@ -38,6 +38,12 @@ export const DEFAULT_PIXEL_SETTINGS: PixelSettings = {
 
 export interface PaletteSlot {
   colors: RGB[]; // up to 16, index 0 = transparent (ignored)
+  /**
+   * Colors to output per index (default: `colors`). Shiny Pokémon in Gen 3
+   * use the same sprite indices with another palette, so pixels are matched
+   * against the regular palette and drawn with the shiny one.
+   */
+  display?: RGB[];
   /** Silhouette outline color (Gen 3 sprites: mostly black). */
   outerIndex: number;
   /** Inner crease lines (depth edges inside the silhouette). */
@@ -90,6 +96,7 @@ const compositeFrag = /* glsl */ `
   uniform bool paletteSnap;
   uniform bool rgb555;
   uniform vec3 palettes[${MAX_PALETTES * 16}];
+  uniform vec3 display[${MAX_PALETTES * 16}];
   uniform int paletteSize[${MAX_PALETTES}];
   uniform int outerIndex[${MAX_PALETTES}];
   uniform int innerIndex[${MAX_PALETTES}];
@@ -208,11 +215,11 @@ const compositeFrag = /* glsl */ `
         if (outer) {
           bool lit = dot(sc, vec3(0.299, 0.587, 0.114)) > 0.62;
           int oi = (selective[slot] && lit) ? darkOf[slot * 16 + si] : outerIndex[slot];
-          c = palettes[slot * 16 + oi];
+          c = display[slot * 16 + oi];
         } else if (inner) {
-          c = palettes[slot * 16 + innerIndex[slot]];
+          c = display[slot * 16 + innerIndex[slot]];
         } else {
-          c = sc;
+          c = display[slot * 16 + si];
         }
       }
       // Blending the palette on the GBA recolors every pixel of the sprite,
@@ -249,6 +256,7 @@ export class PixelPipeline {
     this.outWidth = 240 * this.settings.density;
     this.outHeight = 160 * this.settings.density;
     const palettes = Array.from({ length: MAX_PALETTES * 16 }, () => new THREE.Vector3());
+    const display = Array.from({ length: MAX_PALETTES * 16 }, () => new THREE.Vector3());
     this.composite = new THREE.ShaderMaterial({
       uniforms: {
         tColor: { value: null },
@@ -261,6 +269,7 @@ export class PixelPipeline {
         paletteSnap: { value: true },
         rgb555: { value: true },
         palettes: { value: palettes },
+        display: { value: display },
         paletteSize: { value: new Array(MAX_PALETTES).fill(0) },
         outerIndex: { value: new Array(MAX_PALETTES).fill(0) },
         innerIndex: { value: new Array(MAX_PALETTES).fill(0) },
@@ -320,7 +329,9 @@ export class PixelPipeline {
     const u = this.composite.uniforms;
     for (let i = 0; i < 16; i++) {
       const c = palette.colors[i] ?? [0, 0, 0];
+      const d = palette.display?.[i] ?? c;
       (u.palettes.value as THREE.Vector3[])[slot * 16 + i].set(c[0] / 255, c[1] / 255, c[2] / 255);
+      (u.display.value as THREE.Vector3[])[slot * 16 + i].set(d[0] / 255, d[1] / 255, d[2] / 255);
     }
     u.paletteSize.value[slot] = Math.min(16, palette.colors.length);
     u.outerIndex.value[slot] = palette.outerIndex;

@@ -38,8 +38,9 @@ export interface LoadedModel {
 }
 
 export async function loadPokemonModel(slug: string, variant: 'regular' | 'shiny' = 'regular'): Promise<LoadedModel> {
-  // Not every species has an upstream shiny model: fall back to the regular
-  // one (the pixel pass still snaps it to the shiny GBA palette).
+  // Battles use the regular mesh for shiny Pokémon too (they recolor through
+  // the palette, as in Gen 3). An upstream shiny export, if present, is only
+  // for inspection; fall back to the regular mesh when there is none.
   const gltf = variant === 'shiny'
     ? await loadGltf(asset(`pokemon/${slug}/model.shiny.glb`)).catch(() => loadGltf(asset(`pokemon/${slug}/model.glb`)))
     : await loadGltf(asset(`pokemon/${slug}/model.glb`));
