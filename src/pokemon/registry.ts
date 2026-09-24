@@ -5,8 +5,9 @@ import { type MovePartsFile, type SpeciesProfile, movePartsOf } from './profile'
 type ProfileFactory = (palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }) => Promise<SpeciesProfile>;
 
 const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
-  swampert: async () => (await import('./swampert')).createProfile,
+  sceptile: async () => (await import('./sceptile')).createProfile,
   blaziken: async () => (await import('./blaziken')).createProfile,
+  swampert: async () => (await import('./swampert')).createProfile,
 };
 
 /** The body part each move uses, for species classified with tools/gauntlet/classify_moves.mjs. */
