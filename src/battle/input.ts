@@ -30,9 +30,19 @@ export class Input {
     });
   }
 
-  /** Programmatic press (touch UI, autoplay, tests). */
+  /** Programmatic press (autoplay, tests). */
   press(b: Button): void {
     this.queue.push(b);
+  }
+
+  /** On-screen button pressed: a new press, held until release(). */
+  hold(b: Button): void {
+    if (!this.held.has(b)) this.queue.push(b);
+    this.held.add(b);
+  }
+
+  release(b: Button): void {
+    this.held.delete(b);
   }
 
   /** Called once per frame by the scene. */

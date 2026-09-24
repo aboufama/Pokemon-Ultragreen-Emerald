@@ -11,13 +11,17 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "extract": "python3 tools/extract/extract_all.py",
-    "shots": "node tools/shots/shoot.mjs"
+    "shots": "node tools/shots/shoot.mjs",
+    "demo": "node tools/demo/build_demo.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.0",
+    "@gltf-transform/extensions": "^4.5.0",
     "@types/three": "^0.186.0",
+    "draco3dgltf": "^1.5.7",
     "playwright": "1.56.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"

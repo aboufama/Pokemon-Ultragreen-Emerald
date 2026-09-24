@@ -6,8 +6,10 @@
 //     &shiny=1 &enemyShiny=1 &env=grass &seed=123
 //     &autoplay=1 &text=slow|mid|fast &intro=0 &loop=0 &manual=1 &scale=3
 //     &playerExp=0.9 (progress toward the next level, to see a level-up)
+//     &pad=0 (hide the on-screen buttons)
 
 import { BattleScene, type BattleSceneOptions, type TextSpeed } from './scene';
+import { createTouchPad } from './touch_pad';
 
 /** Default movesets: one move per animation category, so every clip is reachable. */
 const PLAYER_MOVES = ['BLAZE_KICK', 'FLAMETHROWER', 'DOUBLE_KICK', 'BULK_UP'];
@@ -41,15 +43,21 @@ export async function runBattle(root: HTMLElement): Promise<BattleScene> {
     scale: num('scale'),
   };
 
-  root.style.cssText = 'position:fixed;inset:0;background:#101018;overflow:hidden;';
+  // Screen on top, on-screen buttons below, keyboard legend on desktop.
+  root.style.cssText = 'position:fixed;inset:0;background:#101018;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;'
+    + 'padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);';
   const stageBox = document.createElement('div');
-  stageBox.style.cssText = 'position:absolute;left:0;right:0;top:0;bottom:28px;';
+  stageBox.style.cssText = 'position:relative;flex:1;min-height:0;';
+  let scene: BattleScene | null = null;
+  const pad = createTouchPad(() => scene?.input);
+  if (params.get('pad') === '0') pad.hidden = true;
   const hint = document.createElement('div');
-  hint.style.cssText = 'position:absolute;left:0;right:0;bottom:6px;text-align:center;color:#8a8aa0;font:12px/16px system-ui,sans-serif;';
-  hint.textContent = 'A: Z / Enter / Space / tap  ·  B: X / Esc  ·  D-pad: arrow keys  ·  ?autoplay=1 plays by itself';
-  root.append(stageBox, hint);
+  hint.style.cssText = 'text-align:center;color:#8a8aa0;font:12px/16px system-ui,sans-serif;padding:0 12px 10px;';
+  hint.textContent = 'Keyboard: A = Z / Enter / Space  ·  B = X / Esc  ·  arrow keys move';
+  if (matchMedia('(pointer: coarse)').matches) hint.hidden = true;
+  root.append(stageBox, pad, hint);
 
-  const scene = await BattleScene.create(stageBox, opts);
+  scene = await BattleScene.create(stageBox, opts);
   window.__battle = {
     scene,
     step: (frames, renderEvery) => scene.stepFrames(frames, renderEvery),

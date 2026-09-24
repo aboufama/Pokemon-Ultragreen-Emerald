@@ -28,7 +28,11 @@ export class GbaScreen {
     this.ctx2d = this.canvas2d.getContext('2d')!;
     this.imageData = this.ctx2d.createImageData(240, 160);
     const resize = () => {
-      const s = fixedScale ?? Math.max(1, Math.floor(Math.min(parent.clientWidth / 240, parent.clientHeight / 160)));
+      // Largest scale where every GBA pixel covers a whole number of device
+      // pixels (integer CSS scales on desktop, e.g. 4/3 on a 3x phone).
+      const dpr = window.devicePixelRatio || 1;
+      const fit = Math.min(parent.clientWidth / 240, parent.clientHeight / 160);
+      const s = fixedScale ?? Math.max(1 / dpr, Math.floor(fit * dpr) / dpr);
       this.scale = s;
       this.element.style.width = `${240 * s}px`;
       this.element.style.height = `${160 * s}px`;
