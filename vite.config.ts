@@ -3,7 +3,8 @@ import { resolve } from 'node:path';
 
 export default defineConfig({
   base: './',
-  server: { host: '127.0.0.1', port: 5173 },
+  // Agent worktrees (.claude/worktrees) are separate checkouts: don't watch them.
+  server: { host: '127.0.0.1', port: 5173, watch: { ignored: ['**/.claude/worktrees/**'] } },
   build: {
     target: 'es2022',
     rollupOptions: {

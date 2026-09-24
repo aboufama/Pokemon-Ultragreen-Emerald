@@ -42,6 +42,17 @@ export const TYPE_FX: Record<string, TypeFx> = {
   TYPE_DARK: { impact: 'Impact', projectile: 'BlackBall', burst: 'Hit', stream: 'BlackBall', charge: 'GrayOrb' },
 };
 
+/**
+ * A type's color, for palette flashes on the target and backdrop fades (as
+ * Emerald's move animations blend sprite and background palettes).
+ */
+export const TYPE_COLOR: Record<string, [number, number, number]> = {
+  TYPE_FIRE: [248, 104, 32], TYPE_WATER: [64, 136, 248], TYPE_GRASS: [104, 208, 64], TYPE_ELECTRIC: [248, 224, 48],
+  TYPE_ICE: [160, 224, 248], TYPE_PSYCHIC: [248, 96, 176], TYPE_GHOST: [112, 88, 152], TYPE_DRAGON: [112, 64, 232],
+  TYPE_DARK: [48, 40, 48], TYPE_STEEL: [184, 184, 208], TYPE_POISON: [168, 72, 168], TYPE_GROUND: [216, 184, 104],
+  TYPE_ROCK: [184, 160, 72], TYPE_BUG: [168, 184, 32], TYPE_FLYING: [168, 144, 240], TYPE_FIGHTING: [200, 56, 40],
+};
+
 export function typeFx(type: string): TypeFx {
   return TYPE_FX[type] ?? NORMAL;
 }

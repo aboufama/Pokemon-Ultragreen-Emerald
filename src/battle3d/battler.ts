@@ -14,6 +14,7 @@ import { FX_PIXEL_ID } from './vfx';
 import type { BattleStage, SlotName } from '../render3d/stage';
 import type { RGB } from '../gba/bitmap';
 import { SLOT_PIXEL_ID, instantiatePokemon, type PokemonInstance } from '../pokemon/instantiate';
+import { GroundShadow } from '../render3d/shadow';
 import { slotYaw } from '../pokemon/profile';
 
 const DEG = Math.PI / 180;
@@ -51,6 +52,15 @@ export class Battler3D {
   private mouth: { tip: THREE.Vector3; bind: THREE.Matrix4 } | null = null;
   /** Emitter points (bone + local offset), resolved once. */
   private readonly emitterCache = new Map<string, { node: THREE.Object3D; local: THREE.Vector3 }[]>();
+  private readonly shadow: GroundShadow;
+  /** Shadow radii in model heights (from the stance's footprint). */
+  private footprint = { x: 0.3, z: 0.2 };
+  /** Height above the ground last frame (world units), for landing dust. */
+  private lastLift = 0;
+  private liftSpeed = 0;
+  private shade = 1;
+  /** A palette flash on hits (type color), fading out. */
+  private flash: { color: RGB; amount: number; left: number; total: number } | null = null;
   private eyeMap: THREE.Texture | null = null;
   pose: Pose = {};
   onEvent: ((name: string) => void) | null = null;
@@ -63,6 +73,10 @@ export class Battler3D {
     this.setupExpressions();
     this.setupDynamics();
     this.setupMouth();
+    const px = stage.pipeline.settings;
+    this.shadow = new GroundShadow(px.density * px.supersample);
+    stage.slots[slot].add(this.shadow.mesh);
+    this.measureFootprint();
     void this.animator.play('idle');
   }
 
@@ -108,6 +122,21 @@ export class Battler3D {
         break;
       }
     }
+  }
+
+  /** Shadow size from where the feet stand in the stance (plus a margin). */
+  private measureFootprint(): void {
+    const rig = this.inst.rig;
+    const feet = ['footL', 'footR', 'handL', 'handR', 'toeL', 'toeR']
+      .filter((b) => b.startsWith('foot') || b.startsWith('toe') || rig.profile.frontLegs)
+      .map((b) => rig.node(b))
+      .filter((n): n is THREE.Object3D => !!n)
+      .map((n) => rig.modelPos(n, new THREE.Vector3()));
+    if (feet.length < 2) return;
+    const xs = feet.map((p) => p.x), zs = feet.map((p) => p.z);
+    const halfX = (Math.max(...xs) - Math.min(...xs)) / 2;
+    const halfZ = (Math.max(...zs) - Math.min(...zs)) / 2;
+    this.footprint = { x: Math.min(0.5, halfX + 0.14), z: Math.min(0.45, Math.max(0.1, halfZ + 0.1)) };
   }
 
   private setupMouth(): void {
@@ -218,6 +247,11 @@ export class Battler3D {
     this.blinkTime = seconds;
   }
 
+  /** A palette flash toward a color (a hit from a typed move), fading over `seconds`. */
+  flashTint(color: RGB, amount: number, seconds = 0.3): void {
+    this.flash = { color, amount, left: seconds, total: seconds };
+  }
+
   /** Knock the battler back (1 = a strong hit); it springs back and settles. */
   recoil(strength: number): void {
     // Velocity for a peak of about `strength` (2*pi*f, less what damping eats).
@@ -271,12 +305,50 @@ export class Battler3D {
     if (this.screenOffset[0] || this.screenOffset[1]) root.position.add(this.screenOffsetLocal());
 
     // Loose parts follow the body through world space (start from rest when
-    // the battler (re)appears).
+    // the battler (re)appears) and sway in the arena's wind.
     root.updateMatrixWorld(true);
     const settled = this.visible && this.appear >= 1;
+    const ambience = this.stage.ambience;
+    const wind = ambience ? ambience.wind.clone().multiplyScalar(H * 9) : undefined;
     for (const chain of this.chains) {
-      if (settled) chain.update(dt);
+      if (settled) chain.update(dt, wind);
       else chain.reset();
+    }
+
+    // Shadow on the ground: follows the feet, shrinks and fades in the air,
+    // gone when sunk (fainted) or not sent out.
+    const lift = root.position.y - cal.lift;
+    const up = Math.max(0, lift / H);
+    const sunk = Math.min(1, Math.max(0, 1 + (lift / H) * 4));
+    const shadowScale = (this.appear / (1 + up * 1.6)) * H;
+    this.shadow.update(root.position.x, root.position.z, root.rotation.y, this.footprint.x * shadowScale, this.footprint.z * shadowScale, this.visible ? sunk * Math.max(0, 1 - up * 1.4) : 0);
+
+    // Landing: dust kicked up at the feet when coming down fast.
+    if (dt > 0) this.liftSpeed = (lift - this.lastLift) / dt;
+    if (this.visible && this.appear >= 1 && this.lastLift > 0.025 * H && lift <= 0.01 * H && this.liftSpeed < -0.3 * H && ambience) {
+      const at = new THREE.Vector3(root.position.x, 0, root.position.z).applyMatrix4(this.stage.slots[this.slot].matrixWorld);
+      ambience.puff(at, Math.min(1.5, -this.liftSpeed / (1.5 * H)), H);
+    }
+    this.lastLift = lift;
+
+    // Standing in a cloud's shadow dims the body a little.
+    const env = this.stage.environment;
+    if (env) {
+      const at = new THREE.Vector3().setFromMatrixPosition(root.matrixWorld);
+      const target = 1 - 0.14 * env.cloudShadeAt(at);
+      this.shade += (target - this.shade) * Math.min(1, dt * 3);
+      this.inst.toon.uniforms.shade.value = this.shade;
+    }
+
+    // Hit flash (type color), like Emerald's palette blends on the target.
+    if (this.flash) {
+      this.flash.left -= dt;
+      const k = Math.max(0, this.flash.left / this.flash.total);
+      this.setTint(this.flash.color, this.flash.amount * k * k);
+      if (this.flash.left <= 0) {
+        this.setTint(this.flash.color, 0);
+        this.flash = null;
+      }
     }
 
     // Expression, with blinks while the eyes are simply open.

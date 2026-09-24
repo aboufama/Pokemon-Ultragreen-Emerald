@@ -9,3 +9,4 @@ __pycache__/
 .DS_Store
 public/libs/
 build/
+.claude/worktrees/

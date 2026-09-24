@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import cameraJson from '../data/battle_camera.json';
 import { BattleEnvironment } from './environment';
+import { AMBIENCE, Ambience } from './ambience';
 import { PixelPipeline, type PixelSettings } from './pipeline';
 
 export type SlotName = 'player' | 'enemy';
@@ -59,6 +60,10 @@ export class BattleStage {
   readonly pipeline: PixelPipeline;
   readonly slots: Record<SlotName, THREE.Group>;
   environment: BattleEnvironment | null = null;
+  /** Wind, motes and dust of the current environment (see ambience.ts). */
+  ambience: Ambience | null = null;
+  private time = 0;
+  private readonly windDrift = new THREE.Vector2();
   readonly keyLight: THREE.DirectionalLight;
   readonly ambient: THREE.HemisphereLight;
 
@@ -111,6 +116,27 @@ export class BattleStage {
     env.setProjectionCamera(this.homeCamera);
     this.environment = env;
     this.scene.add(env.group);
+    // Ambience: centered between the two slots, filling the arena.
+    if (this.ambience) this.scene.remove(this.ambience.group);
+    const style = AMBIENCE[name] ?? AMBIENCE.grass;
+    const a = this.slots.player.position, b = this.slots.enemy.position;
+    const center = a.clone().add(b).multiplyScalar(0.5);
+    const s = this.pipeline.settings;
+    this.ambience = new Ambience(style, this.homeCamera, center, a.distanceTo(b) * 0.75, s.density * s.supersample);
+    this.scene.add(this.ambience.group);
+    env.setGroundEffects(style);
+    env.setArena(center, a.distanceTo(b) * 0.75);
+  }
+
+  /** Advance the arena's ambience (wind, motes, dust, ground effects). */
+  update(dt: number): void {
+    this.time += dt;
+    if (!this.ambience || !this.environment) return;
+    this.ambience.update(dt);
+    // Cloud shadows drift with the wind (in noise space).
+    this.windDrift.x -= this.ambience.wind.x * dt * 0.11;
+    this.windDrift.y -= this.ambience.wind.z * dt * 0.11;
+    this.environment.tick(this.time, this.ambience.gust, this.windDrift);
   }
 
   /** World units per GBA pixel at a point, seen from the resting camera. */
