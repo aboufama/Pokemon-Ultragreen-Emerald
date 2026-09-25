@@ -233,10 +233,16 @@ node tools/shots/clip_gifs.mjs --species <slug> --out build/clips/<slug>
 ## 9. Gates and handoff
 
 ```sh
-node tools/gauntlet/check.mjs --slug <slug>            # static gates
+node tools/gauntlet/check.mjs --slug <slug>            # static gates (+ clip lint warnings)
 node tools/gauntlet/check.mjs --slug <slug> --render   # + battles both ways, every clip plays
+node tools/gauntlet/motion.mjs --species <slug>,blaziken   # fluidity next to the reference
 npx tsc --noEmit
 ```
+
+`motion.mjs` measures the clips as the battle plays them. Blaziken's numbers
+are the bar: pops only on strikes and landings, no dead holds, and no turn in
+the first 0.3 s of a move made from home (a pivot on the spot before a move
+reads as mechanical; the battler turns only while a contact move travels).
 
 All gates pass; fix warnings where they point at real gaps (a motif its moves
 use a lot still on a category clip, no springs). Commit

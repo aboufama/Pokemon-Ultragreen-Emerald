@@ -44,6 +44,29 @@ and ends on the stance. GIFs are exported by the orchestrator.
 - [x] `status_target_glare` (glare, charm): Leer, Flash, Mimic, Swagger, Attract — leans in with the head low and forward and stares the foe down with narrowed eyes (the glint at its eyes; hearts for Attract), a cocky head tilt, eases back
 - Also mapped: strike → `physical_weak`, slam and tail → `physical_strong`, spit → `special_weak`, beam → `special_strong`, buff → `status_self`, roar → `status_target`. Kick, grapple, orb, sound and powder (one TM/tutor move each) play their category clips.
 
+## Fluidity pass (after comparing with Blaziken)
+
+Measured with `tools/gauntlet/motion.mjs` against Blaziken and re-reviewed on
+contact sheets from both sides:
+
+- The battler no longer pivots toward the foe before every move (the engine
+  turn now rides a contact move's leap and unwinds on the hop home). FACE,
+  which turned the head and chest in the very first key, now grows over the
+  anticipation (`face(0.6–0.8)` → FACE) in every move made from home.
+- `physical_weak`: a longer wind-up (0.16 s), smaller torso twists (±26–32°,
+  were ±44–50°), the head easing back to its sideways look on the hop home.
+- `physical_weak_tackle`, `physical_strong_punch`: longer anticipation; the
+  punch strikes over 5 frames (was under 4) with a smaller hip turn.
+- `special_weak`: the pecks grow in (each a little further) instead of three
+  identical snaps; `status_target`: the lunge slowed to Blaziken's speed.
+- `status_self` (Agility): each hop peaks halfway across, so the body flows
+  through the air and only stops where it lands (7 one-frame pops → 0).
+- `physical_strong_quake`: falls from the top of the leap (the fall used to
+  start mid-descent from a standstill); the knees keep sinking after
+  touchdown, then it rises without a hitch.
+- `status_self_shield`, `status_target_glare`: the holds move (a slow sink and
+  sway) instead of trembling in place.
+
 ## Showcase moves in battle
 
 - [x] a full battle with sceptile as ours and as the opponent (autoplay, both

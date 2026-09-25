@@ -28,9 +28,15 @@ is the finished reference set, and its header explains the channels.
   wings) lag, overshoot and settle on their own. Don't keyframe secondary
   motion that a spring gives you; do keyframe the *pose* of the part at rest.
 - **Life layer.** Breathing, weight shifts, an idle bounce, gaze drift and
-  blinks run on top of every clip; the battler turns toward its target with a
-  slight overshoot and gets knocked back on a spring when hit (you animate the
-  flinch pose, not the knock-back).
+  blinks run on top of every clip; the battler gets knocked back on a spring
+  when hit (you animate the flinch pose, not the knock-back).
+- **Facing follows travel.** The body turns toward the target only while a
+  contact move carries it there (`advance`), and turns back on the hop home.
+  Never pivot the whole body on planted feet before a move (`root.yaw` with
+  the feet down reads as a mechanical turn on the spot): if the species' stance
+  looks away from the foe, turn the head and chest over the anticipation
+  (Sceptile's `face(f)` grows from 0.5–0.7 at the first key to full FACE at the
+  action) or twist the spine.
 
 ## Pose authoring
 
@@ -142,7 +148,15 @@ that acts. Contact moves must have `advance: 1` at `impact`.
 2. `node tools/shots/move_sheet.mjs --species <slug> --moves <MOVE> --attacker enemy --density 3 --every 4 --frames 24 --out build/sheets/<slug>-<clip>.png`
    (and `--attacker player`). Look at every frame. `--clips intro,hit` for moments.
 3. Fix what reads wrong (see below), repeat. Then check at `--density 1`.
-4. Record the verdict in `src/pokemon/<slug>/REVIEW.md`.
+4. Measure it next to the reference:
+   `node tools/gauntlet/cliplint.mjs --species <slug>` (static: slides, pivots
+   on planted feet, aims missing from some keys, torso swings over 500°/s,
+   limb hitches after an eased key) and
+   `node tools/gauntlet/motion.mjs --species <slug>,blaziken --clips <clip>`
+   (on the animated joints: stop-starts, one-frame pops, dead holds, turning
+   in the first 0.3 s). Aim for Blaziken's numbers: pops only on strikes and
+   landings, no dead holds, no early turn in clips made from home.
+5. Record the verdict in `src/pokemon/<slug>/REVIEW.md`.
 
 ## Failure modes and fixes
 
@@ -154,5 +168,8 @@ that acts. Contact moves must have `advance: 1` at `impact`.
 | flailing arms | arms not acting: brace them (`CHAMBER`/`BRACED`), let the acting part lead |
 | effect from the wrong place | emitter / `emitterFor`; verify with `/?mode=clipreview&mark=<emitter>` |
 | pop at a key | an aimed bone missing from some keys; an ease after a snap; a big pose change in < 3 frames |
+| turns on the spot before the move | `root.yaw` on planted feet, or FACE at full strength in the first key: grade the turn over the anticipation (`face(0.6)` → FACE) or twist the spine; the body turns only while travelling |
+| stutters mid-motion | a key that stops a channel halfway (a `fall()` that starts mid-descent instead of at the apex; a hop whose apex sits near the landing): fall from the top; put a hop's apex halfway across |
+| strike snaps harder than Blaziken's | under 5 frames, or a torso swing over ~50°: land, then a 0.08 s snap; cock the arm further back as it lands so the strike starts from a turnaround |
 | unreadable from our side | the back view hides it: exaggerate the silhouette, move the action above y≈92 px |
 | limbs through the body | aim directions crossing the torso: check the turntable in the rig lab |

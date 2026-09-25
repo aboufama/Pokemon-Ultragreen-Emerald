@@ -299,8 +299,8 @@ const peck: Clip = {
     key(0.12, pelvis(0, -0.03), bend(-4, -6, -14, -20), GUARD, ANGRY),
     // Leap in along an arc, head still drawn back.
     key(0.26, { advance: 0.6, root: { y: 0.07 } }, TUCK, bend(4, -4, -14, -20), GUARD, ANGRY),
-    // Land in front of the foe and coil: the head goes further back.
-    key(0.36, { advance: 1 }, LAND, bend(0, -8, -18, -24), GUARD, ANGRY),
+    // Land in front of the foe and coil: the head goes further back, the arms sweep back for balance.
+    key(0.36, { advance: 1 }, LAND, bend(0, -8, -18, -24), ARMS_BACK, ANGRY),
     // The jab: spine, neck and head all pitch forward, the beak leads.
     snap(0.44, { advance: 1 }, pelvis(0, -0.04), bend(22, 12, 18, 18), ARMS_BACK, ANGRY),
     // Rebound: the head springs back up off the hit.

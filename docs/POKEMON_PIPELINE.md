@@ -198,8 +198,10 @@ The engine adds a lot on its own, so clips only need the big poses:
   chain's far end is measured from the skin weights.
 - **Life layer.** Breathing, a slow weight shift, an idle bounce and a drifting
   gaze are always on. Eyes blink when the expression atlas has `closed` (and
-  ideally `half`) cells. The battler turns toward its target with a slight
-  overshoot, and a hit knocks it back on a spring (`Battler3D.recoil`).
+  ideally `half`) cells. The battler turns toward its target only while a
+  contact move carries it there (the turn rides `advance` and unwinds on the
+  hop home); moves made from home keep the calibrated yaw, like the stock
+  sprites. A hit knocks it back on a spring (`Battler3D.recoil`).
 - **Breath attacks come from the mouth.** `charge`, `release` and mouth `emit`
   effects start at the jaw's tip (measured from the skin), so special clips lead
   with the head and open the jaw at `release`. Keep the arms braced so the
