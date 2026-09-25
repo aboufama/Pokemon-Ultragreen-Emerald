@@ -146,7 +146,8 @@ for (const slug of slugs) {
 
 const CSS = await readFile(new URL('./review_page.css', import.meta.url), 'utf8');
 const pageTitle = args.title ?? (slugs.length === 1 ? `${title(data.species[slugs[0]].name)} Clip Review` : 'Starter Clip Review');
-const html = `<title>${esc(pageTitle)}</title>
+const html = `<meta charset="utf-8">
+<title>${esc(pageTitle)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;600&display=swap">
