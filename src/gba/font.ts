@@ -87,6 +87,7 @@ let keypadLoad: Promise<void> | null = null;
 /** Load the button icon sheet (loadAllFonts does it too). */
 export function loadKeypadIcons(): Promise<void> {
   keypadLoad ??= loadBitmap(asset('gba/menu/keypad_icons.png')).then((b) => void (keypadSheet = b));
+  keypadLoad.catch(() => (keypadLoad = null));
   return keypadLoad;
 }
 
@@ -123,6 +124,7 @@ export function loadFont(name: FontName): Promise<Font> {
     p = loadBitmap(asset(`gba/fonts/${spec.sheet}.png`)).then(
       (sheet) => new Font(name, sheet, fontWidths[spec.widths], spec.glyphHeight, spec.lineHeight),
     );
+    p.catch(() => fontCache.delete(name));
     fontCache.set(name, p);
   }
   return p;

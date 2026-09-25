@@ -34,6 +34,7 @@ export function loadMenuGfx(): Promise<MenuGfx> {
     ]);
     return { fonts, starterBg, pokeballs, circle, frame, menuInfo, arrow, scroll, downArrow, text: GFX_META.menuTextPalette };
   })();
+  cache.catch(() => (cache = null));
   return cache;
 }
 
@@ -43,6 +44,7 @@ export function loadFront(slug: string): Promise<Bitmap> {
   let p = fronts.get(slug);
   if (!p) {
     p = loadBitmap(asset(`gba/pokemon/${slug}/front.png`));
+    p.catch(() => fronts.delete(slug));
     fronts.set(slug, p);
   }
   return p;

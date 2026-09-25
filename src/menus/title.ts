@@ -31,6 +31,7 @@ function loadTitleGfx(): Promise<TitleGfx> {
     );
     return { rayquaza, marks, clouds, logo, shine, banner, pressStart };
   })();
+  gfx.catch(() => (gfx = null));
   return gfx;
 }
 

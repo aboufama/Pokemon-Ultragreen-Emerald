@@ -31,6 +31,8 @@ export function loadBitmap(url: string): Promise<Bitmap> {
       const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height, { colorSpace: 'srgb' });
       return { width: canvas.width, height: canvas.height, data };
     })();
+    // A failed load (a dropped connection) is tried again next time.
+    p.catch(() => bitmapCache.delete(url));
     bitmapCache.set(url, p);
   }
   return p;
