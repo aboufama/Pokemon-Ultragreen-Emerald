@@ -104,6 +104,9 @@ const compositeFrag = /* glsl */ `
   uniform bool selective[${MAX_PALETTES}];
   // Per-slot palette blend: rgb target, a = coefficient (GBA BlendPalette / 16).
   uniform vec4 blend[${MAX_PALETTES}];
+  // The arena's palette fades (a move's backdrop tint, the ball-open flash to white).
+  uniform vec4 envTint;
+  uniform vec4 envFlash;
   uniform float cameraNear;
   uniform float cameraFar;
   uniform float innerThreshold;
@@ -225,6 +228,9 @@ const compositeFrag = /* glsl */ `
       // Blending the palette on the GBA recolors every pixel of the sprite,
       // outline included, so it applies after snapping.
       c = mix(c, blend[slot].rgb, blend[slot].a);
+    } else if (id == 0) {
+      c = mix(c, envTint.rgb, envTint.a);
+      c = mix(c, envFlash.rgb, envFlash.a);
     }
     if (rgb555) c = toRgb555(c);
     gl_FragColor = vec4(c, 1.0);
@@ -276,6 +282,8 @@ export class PixelPipeline {
         darkOf: { value: new Array(MAX_PALETTES * 16).fill(0) },
         selective: { value: new Array(MAX_PALETTES).fill(false) },
         blend: { value: Array.from({ length: MAX_PALETTES }, () => new THREE.Vector4(0, 0, 0, 0)) },
+        envTint: { value: new THREE.Vector4(0, 0, 0, 0) },
+        envFlash: { value: new THREE.Vector4(1, 1, 1, 0) },
         cameraNear: { value: 0.1 },
         cameraFar: { value: 100 },
         innerThreshold: { value: 0.03 },
@@ -349,6 +357,24 @@ export class PixelPipeline {
     (this.composite.uniforms.blend.value as THREE.Vector4[])[slot].set(color[0] / 255, color[1] / 255, color[2] / 255, Math.max(0, Math.min(1, amount)));
   }
 
+  /**
+   * Blend the arena (environment pixels) toward a color, amount 0..1: `tint`
+   * for a move darkening or coloring the backdrop, `flash` for the fade to
+   * white when a Poké Ball opens. The flash applies over the tint.
+   */
+  setEnvironmentBlend(kind: 'tint' | 'flash', color: RGB, amount: number): void {
+    const u = this.composite.uniforms[kind === 'tint' ? 'envTint' : 'envFlash'];
+    (u.value as THREE.Vector4).set(color[0] / 255, color[1] / 255, color[2] / 255, Math.max(0, Math.min(1, amount)));
+  }
+
+  /**
+   * Horizontal bands of the screen shown shifted sideways by whole GBA pixels
+   * (a scanline effect, like BGxHOFS per row): the battle intro slides the
+   * top half in from the left and the bottom half from the right. Rows are
+   * GBA rows [y0, y1); dx > 0 shows what is to the right (content moves left).
+   */
+  bands: { y0: number; y1: number; dx: number }[] | null = null;
+
   private idMaterial(id: number): THREE.MeshBasicMaterial {
     let m = this.idMaterials.get(id);
     if (!m) {
@@ -415,7 +441,7 @@ export class PixelPipeline {
     r.setRenderTarget(this.idRT);
     r.setClearColor(0x000000, 1);
     r.clear();
-    r.render(scene, camera);
+    this.renderBands(this.idRT, camera, (cam) => r.render(scene, cam));
     for (const e of swapped) {
       e.mesh.material = e.original;
       if ((e.mesh.userData as { _wasVisible?: boolean })._wasVisible) {
@@ -424,6 +450,30 @@ export class PixelPipeline {
       }
     }
     scene.background = prevBackground;
+  }
+
+  private bandCamera = new THREE.PerspectiveCamera();
+
+  /** Draw into `rt` once, or once per band with its rows scissored and the view shifted. */
+  private renderBands(rt: THREE.WebGLRenderTarget, camera: THREE.PerspectiveCamera, draw: (cam: THREE.PerspectiveCamera) => void): void {
+    const bands = this.bands?.filter((b) => b.y1 > b.y0);
+    if (!bands?.length || bands.every((b) => b.dx === 0)) {
+      draw(camera);
+      return;
+    }
+    const k = rt.height / 160;
+    const cam = this.bandCamera;
+    for (const b of bands) {
+      cam.copy(camera);
+      cam.setViewOffset(240, 160, b.dx, 0, 240, 160);
+      cam.updateProjectionMatrix();
+      rt.scissor.set(0, Math.round(rt.height - b.y1 * k), rt.width, Math.round((b.y1 - b.y0) * k));
+      rt.scissorTest = true;
+      this.renderer.setRenderTarget(rt);
+      draw(cam);
+    }
+    rt.scissorTest = false;
+    this.renderer.setRenderTarget(rt);
   }
 
   /**
@@ -440,7 +490,7 @@ export class PixelPipeline {
     r.setRenderTarget(this.colorRT);
     r.setClearColor(0x000000, 1);
     r.clear();
-    r.render(scene, camera);
+    this.renderBands(this.colorRT, camera, (cam) => r.render(scene, cam));
 
     // 2. ids
     this.renderIds(scene, camera);

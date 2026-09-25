@@ -72,6 +72,48 @@ export class Font {
   }
 }
 
+/**
+ * Emerald's button icons in text ({A_BUTTON}, {START_BUTTON}, {DPAD_UPDOWN}...,
+ * charmap F8 xx): sKeypadIcons in text.c, as [tile offset in the 128 px wide
+ * sheet, width, height]. Their pixels use the text palette's colors.
+ */
+const KEYPAD_ICONS: [offset: number, width: number, height: number][] = [
+  [0x00, 8, 12], [0x01, 8, 12], [0x02, 16, 12], [0x04, 16, 12], [0x06, 24, 12], [0x09, 24, 12],
+  [0x0c, 8, 12], [0x0d, 8, 12], [0x0e, 8, 12], [0x0f, 8, 12], [0x20, 8, 12], [0x21, 8, 12], [0x22, 8, 12],
+];
+let keypadSheet: Bitmap | null = null;
+let keypadLoad: Promise<void> | null = null;
+
+/** Load the button icon sheet (loadAllFonts does it too). */
+export function loadKeypadIcons(): Promise<void> {
+  keypadLoad ??= loadBitmap(asset('gba/menu/keypad_icons.png')).then((b) => void (keypadSheet = b));
+  return keypadLoad;
+}
+
+function keypadWidth(id: number): number {
+  return KEYPAD_ICONS[id]?.[1] ?? 0;
+}
+
+function drawKeypadIcon(dst: Bitmap, id: number, x: number, y: number): void {
+  const icon = KEYPAD_ICONS[id];
+  if (!icon || !keypadSheet) return;
+  const [offset, w, h] = icon;
+  const sx = (offset % 16) * 8, sy = Math.floor(offset / 16) * 8;
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      const si = ((sy + py) * keypadSheet.width + sx + px) * 4;
+      if (!keypadSheet.data[si + 3]) continue;
+      const tx = x + px, ty = y + py;
+      if (tx < 0 || ty < 0 || tx >= dst.width || ty >= dst.height) continue;
+      const di = (ty * dst.width + tx) * 4;
+      dst.data[di] = keypadSheet.data[si];
+      dst.data[di + 1] = keypadSheet.data[si + 1];
+      dst.data[di + 2] = keypadSheet.data[si + 2];
+      dst.data[di + 3] = 255;
+    }
+  }
+}
+
 const fontCache = new Map<FontName, Promise<Font>>();
 
 export function loadFont(name: FontName): Promise<Font> {
@@ -88,7 +130,7 @@ export function loadFont(name: FontName): Promise<Font> {
 
 export async function loadAllFonts(): Promise<Record<FontName, Font>> {
   const names = Object.keys(SPECS) as FontName[];
-  const fonts = await Promise.all(names.map(loadFont));
+  const [fonts] = await Promise.all([Promise.all(names.map(loadFont)), loadKeypadIcons()]);
   return Object.fromEntries(names.map((n, i) => [n, fonts[i]])) as Record<FontName, Font>;
 }
 
@@ -102,6 +144,7 @@ export async function loadAllFonts(): Promise<Record<FontName, Font>> {
 
 export type TextToken =
   | { kind: 'glyph'; id: number }
+  | { kind: 'keypad'; id: number }
   | { kind: 'newline' }
   | { kind: 'paragraph' }
   | { kind: 'scroll' }
@@ -148,6 +191,7 @@ export function encodeText(text: string): TextToken[] {
       else if (cmd === 'SHADOW') out.push({ kind: 'color', which: 'shadow', index: colorIndex(args[0]) });
       else if (cmd in EXTRA_SYMBOLS) out.push({ kind: 'glyph', id: 0x100 + EXTRA_SYMBOLS[cmd] });
       else if (cmd in NAMED && NAMED[cmd][0] === 0xf9) out.push({ kind: 'glyph', id: 0x100 + NAMED[cmd][1] });
+      else if (cmd in NAMED && NAMED[cmd][0] === 0xf8) out.push({ kind: 'keypad', id: NAMED[cmd][1] });
       else if (cmd in NAMED && NAMED[cmd][0] < 0xf7) for (const id of NAMED[cmd]) out.push({ kind: 'glyph', id });
       else throw new Error(`unsupported text command {${cmd}}`);
     } else {
@@ -207,6 +251,13 @@ export function drawText(dst: Bitmap, tokens: TextToken[], x: number, y: number,
         drawn++;
         cx += font.glyphWidth(t.id) + (style.letterSpacing ?? 0);
       }
+    } else if (t.kind === 'keypad') {
+      total++;
+      if (drawn < maxGlyphs) {
+        drawKeypadIcon(dst, t.id, cx, cy);
+        drawn++;
+        cx += keypadWidth(t.id);
+      }
     } else if (t.kind === 'newline') {
       if (drawn < maxGlyphs) {
         cx = x;
@@ -240,6 +291,7 @@ export function measureText(tokens: TextToken[], font: Font, letterSpacing = 0):
   let w = 0, best = 0;
   for (const t of tokens) {
     if (t.kind === 'glyph') w += font.glyphWidth(t.id) + letterSpacing;
+    else if (t.kind === 'keypad') w += keypadWidth(t.id);
     else if (t.kind === 'newline') { best = Math.max(best, w); w = 0; }
     else if (t.kind === 'clearTo') w = t.x;
   }
