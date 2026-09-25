@@ -5,7 +5,7 @@
 // ground itself, with their shadows.
 
 import { MAT, type Rgb, type Sprite, band, bayer, fbm, hex, ramp, smoothstep } from './art';
-import { type ArenaContext, type ArenaDesign, at, blocksBattler, darker, fill, hills, scatter, stand } from './design';
+import { type ArenaContext, type ArenaDesign, addProp, at, darker, fill, hills, scatter, stand } from './design';
 import { bush, coral, kelp, lampPost, lightShaft, reeds, rock, rockWall, stalagmite, tallGrass, tree } from './sprites';
 
 // Hoenn's greens (general tileset): route grass, tall grass and tree leaves.
@@ -201,9 +201,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     if (onPath(p.x, p.z) < 0.3 || pondD(p.x, p.z) < 0.25 || puddleD(p.x, p.z) < 0.3) continue;
     const ppu = ctx.view.ppu(ctx.view.depth(p.x, 0, p.z));
     const w = ppu * ctx.rng.range(0.4, 0.62), h = ppu * ctx.rng.range(0.3, 0.4) * (o.tallGrassHeight ?? 1);
-    if (blocksBattler(ctx, p.x, p.z, w + 8, h + 8)) continue;
-    ctx.props.push({ sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: p.x, z: p.z, sway: Math.max(1, h * 0.12) });
-    i++;
+    if (addProp(ctx, { sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: p.x, z: p.z, sway: Math.max(1, h * 0.12) })) i++;
   }
   // Reeds along the pond's shore.
   if (o.pond) {
@@ -213,8 +211,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
       const x = p.x + Math.cos(a) * p.rx * 1.02, z = p.z + Math.sin(a) * p.rz * 1.02;
       const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
       const w = ppu * ctx.rng.range(0.25, 0.45), h = ppu * ctx.rng.range(0.45, 0.75);
-      if (blocksBattler(ctx, x, z, w + 6, h + 6)) continue;
-      ctx.props.push({ sprite: reeds(w, h, REED_STEM, REED_HEAD, TREE_OUTLINE, ctx.rng.int(1, 1e6)), x, z, sway: Math.max(1, h * 0.08) });
+      addProp(ctx, { sprite: reeds(w, h, REED_STEM, REED_HEAD, TREE_OUTLINE, ctx.rng.int(1, 1e6)), x, z, sway: Math.max(1, h * 0.08) });
     }
   }
 }
@@ -243,9 +240,7 @@ function place(ctx: ArenaContext, p: Placement): void {
     const c = p.clear ?? 0.9;
     if (Math.hypot(g.x - ctx.enemy.x, g.z - ctx.enemy.z) < c || Math.hypot(g.x - ctx.player.x, g.z - ctx.player.z) < c) continue;
     const made = p.make(g.ppu);
-    if (blocksBattler(ctx, g.x, g.z, made.sprite.w + 4, made.sprite.h + 4)) continue;
-    ctx.props.push({ sprite: made.sprite, x: g.x, z: g.z, sway: made.sway, sink: made.sink });
-    i++;
+    if (addProp(ctx, { sprite: made.sprite, x: g.x, z: g.z, sway: made.sway, sink: made.sink })) i++;
   }
 }
 
@@ -444,7 +439,7 @@ function seafloor(ctx: ArenaContext): void {
   for (let i = 0; i < 6; i++) {
     const x = ctx.rng.range(-9, 9), z = ctx.rng.range(12.8, 15.5);
     const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    ctx.props.push({ sprite: lightShaft(ppu * ctx.rng.range(0.5, 1), ppu * 5, hex('#5f82c4'), 0.55, i * 3.1), x, z });
+    addProp(ctx, { sprite: lightShaft(ppu * ctx.rng.range(0.5, 1), ppu * 5, hex('#5f82c4'), 0.55, i * 3.1), x, z });
   }
 }
 
@@ -602,8 +597,7 @@ function tower(ctx: ArenaContext): void {
   // Lamp posts at the court's far corners and along the sides.
   for (const [x, z] of [[court.x0 - 0.5, court.z1 + 0.4], [court.x1 + 0.5, court.z1 + 0.4], [court.x0 - 0.5, 7.2], [court.x1 + 0.5, 7.2]]) {
     const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    const s = lampPost(ppu * 0.38, ppu * 1.25, WALL, ramp('#d59c20', '#ffd573', '#ffffac'), WALL[0]);
-    if (!blocksBattler(ctx, x, z, s.w, s.h)) ctx.props.push({ sprite: s, x, z });
+    addProp(ctx, { sprite: lampPost(ppu * 0.38, ppu * 1.25, WALL, ramp('#d59c20', '#ffd573', '#ffffac'), WALL[0]), x, z });
   }
 }
 

@@ -104,13 +104,15 @@ export class BattleStage {
     this.keyLight.target.position.set(0, 0, 0);
   }
 
-  async setEnvironment(name: string): Promise<void> {
+  /** Set up an arena (`props: false` leaves out what stands in it, for tools measuring the Pokémon alone). */
+  async setEnvironment(name: string, opts: { props?: boolean } = {}): Promise<void> {
     const env = await BattleEnvironment.load({
       name,
       camera: this.homeCamera,
       pipeline: this.pipeline,
       player: this.slots.player.position,
       enemy: this.slots.enemy.position,
+      props: opts.props,
     });
     // Replace whatever is up now (another load may have finished meanwhile).
     if (this.environment) {

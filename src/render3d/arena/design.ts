@@ -6,7 +6,7 @@
 
 import { MAT, Paint, Rng, type Ramp, type Rgb, type Sprite, band, bayer, fbm, hash2, noise } from './art';
 import type { GroundLook } from './ground';
-import type { PropSpec } from './props';
+import { type PropSpec, propRect } from './props';
 import type { ArenaView, GroundPoint } from './view';
 
 /** The painted area, in GBA screen pixels: three screens wide (the intro slide) and past the bottom and top edges (camera shake). */
@@ -127,16 +127,21 @@ export function battlerBox(ctx: ArenaContext, who: 'player' | 'enemy'): [number,
   return who === 'enemy' ? [sx - 46, sy - 70, sx + 46, sy + 10] : [sx - 64, sy - 120, sx + 64, sy + 10];
 }
 
-/** True if a prop of this size standing at (x, z) would cover a battler or stand in front of it. */
-export function blocksBattler(ctx: ArenaContext, x: number, z: number, wPx: number, hPx: number): boolean {
-  const [sx, sy] = ctx.view.screen(x, 0, z);
-  const box = [sx - wPx / 2, sy - hPx, sx + wPx / 2, sy];
+/** True if a prop would cover a battler or stand in front of it (where it is drawn, sway included). */
+export function blocksBattler(ctx: ArenaContext, prop: PropSpec): boolean {
+  const r = propRect(ctx.view, prop);
   for (const who of ['player', 'enemy'] as const) {
     const b = battlerBox(ctx, who);
-    const overlaps = box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1];
-    if (overlaps) return true;
+    if (r[0] < b[2] && r[2] > b[0] && r[1] < b[3] && r[3] > b[1]) return true;
   }
   return false;
+}
+
+/** Stand a prop in the arena unless it would cover a battler; true if it was placed. */
+export function addProp(ctx: ArenaContext, prop: PropSpec): boolean {
+  if (blocksBattler(ctx, prop)) return false;
+  ctx.props.push(prop);
+  return true;
 }
 
 /** The ground point under screen pixel (sx, sy). */

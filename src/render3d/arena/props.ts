@@ -76,6 +76,20 @@ export interface PropSpec {
   sink?: number;
 }
 
+/**
+ * Where a prop is drawn on screen at rest, in GBA pixels [left, top, right,
+ * bottom) (including the columns its sway may reach): its bottom row sits on
+ * the row its ground point falls in (lower by `sink`), centered on it.
+ */
+export function propRect(view: ArenaView, spec: PropSpec): [number, number, number, number] {
+  const s = spec.sprite;
+  const margin = Math.ceil(Math.abs(spec.sway ?? 0)) + 1;
+  const [ax, ay] = view.screen(spec.x, 0, spec.z);
+  const bottom = Math.floor(ay) + 1 + (spec.sink ?? 0);
+  const left = Math.round(ax - s.w / 2) - margin;
+  return [left, bottom - s.h, left + s.w + 2 * margin, bottom];
+}
+
 export class ArenaProp {
   readonly mesh: THREE.Mesh;
   readonly anchor: THREE.Vector3;
@@ -84,17 +98,14 @@ export class ArenaProp {
   constructor(spec: PropSpec, view: ArenaView, seed: number) {
     const s = spec.sprite;
     const margin = Math.ceil(Math.abs(spec.sway ?? 0)) + 1;
-    const [ax, ay] = view.screen(spec.x, 0, spec.z);
-    // Whole pixels: the bottom row sits on the row the anchor falls in.
-    const bottom = Math.floor(ay) + 1 + (spec.sink ?? 0);
-    const left = Math.round(ax - s.w / 2) - margin;
+    // Whole pixels at the prop's depth: one sprite pixel per GBA pixel.
+    const [left, top, right, bottom] = propRect(view, spec);
     const depth = view.depth(spec.x, 0, spec.z);
-    const w = s.w + 2 * margin;
     const corners = [
       view.unproject(left, bottom, depth),
-      view.unproject(left + w, bottom, depth),
-      view.unproject(left + w, bottom - s.h, depth),
-      view.unproject(left, bottom - s.h, depth),
+      view.unproject(right, bottom, depth),
+      view.unproject(right, top, depth),
+      view.unproject(left, top, depth),
     ];
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(corners.flatMap((c) => [c.x, c.y, c.z]), 3));

@@ -138,7 +138,8 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `tools/calibrate/candidates.mjs` | compare stance variants by how well each fits the stock sprites |
 | `tools/models/optimize_model.mjs` | strip upstream animations and recompress a fetched model |
 | `tools/shots/move_sheet.mjs` | contact sheets of moves and clips in the battle view |
-| `.claude/skills/pokemon-gauntlet`, `pokemon-animation` | the process and the animation craft, as skills for agents |
+| `tools/arena/check.mjs` | the arenas' checks: every place has one, painted (no Emerald backgrounds, no platforms), fully painted, a pixel-art palette, nothing over a battler, seeded, fast to paint (`--render` adds screenshots) |
+| `.claude/skills/pokemon-gauntlet`, `pokemon-animation`, `pokemon-arena` | the process, the animation craft and the arenas' design rules, as skills for agents |
 | `tools/reference/` | build a harness ROM from the decomp and capture real frames with mGBA |
 
 ## Status

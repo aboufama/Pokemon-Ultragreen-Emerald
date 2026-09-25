@@ -14,12 +14,9 @@
 
 import * as THREE from 'three';
 import type { RGB } from '../gba/bitmap';
-import { Rng } from './arena/art';
-import { ARENAS } from './arena/arenas';
-import { type ArenaContext, newPaint } from './arena/design';
+import { type ARENAS, paintArena } from './arena';
 import { ArenaGround } from './arena/ground';
 import { ArenaProp } from './arena/props';
-import { ArenaView } from './arena/view';
 import type { PixelPipeline } from './pipeline';
 
 export interface EnvironmentOptions {
@@ -30,15 +27,11 @@ export interface EnvironmentOptions {
   /** Where the battlers stand. */
   player: THREE.Vector3;
   enemy: THREE.Vector3;
+  /** Leave out the props (tools that measure the Pokémon alone). */
+  props?: boolean;
 }
 
 const WHITE: RGB = [255, 255, 255];
-
-function seedOf(name: string): number {
-  let h = 2166136261;
-  for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  return (h >>> 0) % 1000000 || 1;
-}
 
 export class BattleEnvironment {
   readonly group = new THREE.Group();
@@ -59,20 +52,10 @@ export class BattleEnvironment {
   }
 
   static async load(opts: EnvironmentOptions): Promise<BattleEnvironment> {
-    const design = ARENAS[opts.name] ?? ARENAS.grass;
-    const view = new ArenaView(opts.camera);
-    const ctx: ArenaContext = {
-      view,
-      ground: newPaint(),
-      props: [],
-      rng: new Rng(seedOf(opts.name)),
-      player: { x: opts.player.x, z: opts.player.z },
-      enemy: { x: opts.enemy.x, z: opts.enemy.z },
-    };
-    design.paint(ctx);
+    const { design, ctx } = paintArena(opts.name, opts.camera, opts.player, opts.enemy, { props: opts.props });
     const ground = new ArenaGround(ctx.ground, design.look ?? {});
     ground.setCamera(opts.camera);
-    const props = ctx.props.map((p, i) => new ArenaProp(p, view, i * 7919 + 13));
+    const props = ctx.props.map((p, i) => new ArenaProp(p, ctx.view, i * 7919 + 13));
     return new BattleEnvironment(opts.name, opts.pipeline, ground, props, design, [opts.player.clone(), opts.enemy.clone()]);
   }
 
