@@ -5,12 +5,17 @@
 // described by gBattleHarnessConfig. The config lives in ROM so the capture
 // tool (tools/reference/capture) can patch it in the image before booting,
 // which lets one ROM build produce reference screenshots for any species pair.
+//
+// With SOUND_MAGIC patched in instead, the ROM plays songs rather than a
+// battle: tools/reference/capture/sound.c records the game's own sound engine
+// for tools/sound/reference/run.py.
 
 #include "global.h"
 #include "battle.h"
 #include "battle_main.h"
 #include "load_save.h"
 #include "main.h"
+#include "m4a.h"
 #include "malloc.h"
 #include "new_game.h"
 #include "pokemon.h"
@@ -20,6 +25,7 @@
 #include "constants/species.h"
 
 #define HARNESS_MAGIC 0x534E5248 // "HRNS"
+#define SOUND_MAGIC   0x444E5353 // "SSND"
 
 #define HARNESS_FLAG_PLAYER_SHINY  (1 << 0)
 #define HARNESS_FLAG_ENEMY_SHINY   (1 << 1)
@@ -85,9 +91,48 @@ static void CB2_BattleHarnessIdle(void)
 {
 }
 
+// The sound mode's mailbox: the recorder writes a song number, then a command.
+struct SoundHarness
+{
+    u16 song;
+    u16 cmd; // 1 start the song, 2 stop the BGM, 3 continue it, 4 fade it out
+};
+
+struct SoundHarness gSoundHarness;
+
+static void CB2_SoundHarness(void)
+{
+    u16 cmd = *(vu16 *)&gSoundHarness.cmd;
+
+    if (cmd == 0)
+        return;
+    *(vu16 *)&gSoundHarness.cmd = 0;
+    switch (cmd)
+    {
+    case 1:
+        m4aSongNumStart(*(vu16 *)&gSoundHarness.song);
+        break;
+    case 2:
+        m4aMPlayStop(&gMPlayInfo_BGM);
+        break;
+    case 3:
+        m4aMPlayContinue(&gMPlayInfo_BGM);
+        break;
+    case 4:
+        m4aMPlayFadeOut(&gMPlayInfo_BGM, 4);
+        break;
+    }
+}
+
 void CB2_BattleHarness(void)
 {
     u8 flags = gBattleHarnessConfig.flags;
+
+    if (gBattleHarnessConfig.magic == SOUND_MAGIC)
+    {
+        SetMainCallback2(CB2_SoundHarness);
+        return;
+    }
 
     SetSaveBlocksPointers(GetSaveBlocksPointersBaseOffset());
     ResetMenuAndMonGlobals();
