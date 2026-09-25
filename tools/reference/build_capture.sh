@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build mGBA (as a static library) and the headless reference-capture tool.
+# Build mGBA (as a static library) and the headless reference tools: capture
+# (screenshots of a battle) and sound (recordings of the game's sound engine).
 #
 #   tools/reference/build_capture.sh [mgba_src_dir]
 #
@@ -29,10 +30,19 @@ fi
 # Compile with exactly the defines libmgba was built with; several public
 # structs (e.g. struct mCore) change layout depending on them.
 DEFINES="$(sed -n 's/^C_DEFINES = //p' "$MGBA/build/CMakeFiles/mgba.dir/flags.make")"
+# ...and the libraries those options pull in.
+LIBS="-lpng -lz -lm -lpthread"
+case " $DEFINES " in *" -DUSE_FREETYPE "*) LIBS="$LIBS -lfreetype" ;; esac
+case " $DEFINES " in *" -DUSE_SQLITE3 "*) LIBS="$LIBS -lsqlite3" ;; esac
+case " $DEFINES " in *" -DUSE_LIBZIP "*) LIBS="$LIBS -lzip" ;; esac
+case " $DEFINES " in *" -DUSE_LZMA "*) LIBS="$LIBS -llzma" ;; esac
+case " $DEFINES " in *" -DUSE_ELF "*) LIBS="$LIBS -lelf" ;; esac
 
-cc -O2 -std=gnu11 $DEFINES \
-  -I"$MGBA/include" -I"$MGBA/build/include" \
-  "$ROOT/tools/reference/capture/capture.c" \
-  "$MGBA/build/libmgba.a" -lpng -lz -lm -lpthread \
-  -o "$OUT/capture"
-echo "built $OUT/capture"
+for tool in capture sound; do
+  cc -O2 -std=gnu11 $DEFINES \
+    -I"$MGBA/include" -I"$MGBA/build/include" \
+    "$ROOT/tools/reference/capture/$tool.c" \
+    "$MGBA/build/libmgba.a" $LIBS \
+    -o "$OUT/$tool"
+  echo "built $OUT/$tool"
+done
