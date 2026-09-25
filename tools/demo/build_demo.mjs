@@ -23,7 +23,7 @@
 //
 // The embedded asset list is recorded from a real battle on the dev server, so
 // it stays in sync with the code, plus what the setup can ask for: every
-// species with a 3D profile (model, palette, front sprite) and the menus.
+// species with a 3D profile (model, palette, front sprite), the title screen and the menus.
 // Embedded models are decoded from Draco (window.__EMBEDDED_MODELS__): that
 // page needs no WebAssembly decoder.
 
@@ -109,8 +109,8 @@ for (const slug of species) {
   assets.add(`assets/gba/pokemon/${slug}/palette.json`);
   assets.add(`assets/gba/pokemon/${slug}/front.png`);
 }
-// The playtest's menus (Birch's bag, windows, icons).
-for (const f of await readdir(join(ROOT, 'public/assets/gba/menu'))) if (f.endsWith('.png')) assets.add(`assets/gba/menu/${f}`);
+// The playtest's title screen and menus (Birch's bag, windows, icons).
+for (const dir of ['title', 'menu']) for (const f of await readdir(join(ROOT, `public/assets/gba/${dir}`))) if (f.endsWith('.png')) assets.add(`assets/gba/${dir}/${f}`);
 
 // 4. Copy the files; decode models and keep them for embedding.
 for (const f of ['index.html', 'page.html', 'assets.json', 'site', 'assets']) await rm(join(OUT, f), { recursive: true, force: true });
