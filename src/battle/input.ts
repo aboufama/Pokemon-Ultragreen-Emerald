@@ -15,8 +15,11 @@ export class Input {
   private held = new Set<Button>();
   private pressedThisFrame = new Set<Button>();
   private queue: Button[] = [];
+  /** Ignore the keyboard (a menu is open over the battle). */
+  muted = false;
 
   private readonly onKeyDown = (e: Event): void => {
+    if (this.muted) return;
     // Keys typed into page controls (the species picker) are theirs.
     if ((e.target as HTMLElement | null)?.closest?.('select, input, textarea, button')) return;
     const b = KEYMAP[(e as KeyboardEvent).code];

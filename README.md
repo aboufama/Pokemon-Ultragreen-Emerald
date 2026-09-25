@@ -7,6 +7,9 @@ look comes from a pixelation pass over the 3D viewport, not from baked assets.
 The interface, text, timings and battle rules come from the decomp and are
 checked against captures of the real game.
 
+**Play the battle playtest: <https://aboufama.github.io/Pokemon-Ultragreen-Emerald/>**
+(computer or phone; pick your Pokémon, the foe and the moves, then battle).
+
 This first milestone is the battle screen with the three Hoenn starters in their
 final forms: **Blaziken** (the reference species), **Sceptile** and **Swampert**.
 Blaziken was built by hand; Sceptile and Swampert were brought to the same bar by
@@ -34,9 +37,24 @@ needed to regenerate them (`npm run extract`, which needs `pip install -r tools/
 
 On touch screens, use the on-screen D-pad and A/B buttons (hide them with `?pad=0`).
 
-**Standalone demo:** `npm run demo` (with `npm run dev` running) builds `build/demo/`. That
-page has the app inlined, only the assets a battle loads, and the model embedded, so it
-can be hosted on any static host.
+**Battle playtest** (`demo.html`, src/demo/playtest.ts): choose your Pokémon and the
+opponent (or a random one), a moveset for each (**Random**: four of the moves it can know,
+with an attack of its main type; **Showcase**: its best-animated moves; **Choose**: any
+four of the level-up, TM/HM and tutor moves the battle engine plays), the arena and the
+level, then battle; a rematch or a new setup follows each battle. It plays like an
+emulator: the GBA screen as large as the window allows, the keyboard on a computer, and
+on a phone an on-screen D-pad and A/B (beside the screen when the phone is held sideways;
+"Add to Home Screen" runs it full screen). Shareable setups:
+`demo.html?player=sceptile&enemy=random&moves=LEAF_BLADE,AGILITY&env=sand&go=1`
+(`go=1` skips the setup).
+
+- `npm run demo` builds the static site into `build/demo/pages/`
+  (`--embed`, with `npm run dev` running, adds single-file builds with every asset inlined).
+- `node tools/demo/deploy_pages.mjs` builds it and publishes it to the `gh-pages` branch,
+  which GitHub Pages serves at the link above.
+- `node tools/battle/engine_check.mjs` checks the engine's move effects against the Gen 3
+  rules (Protect, recharge, Focus Punch, multi-hit, recoil, drain, Struggle...) and that
+  random movesets only hold moves it plays.
 
 **URL options:** `?autoplay=1` plays both sides.
 
@@ -63,7 +81,11 @@ can be hosted on any static host.
 - **Menus**: action and move selection with the controller's cursor rules, the
   healthbox/battler bounce, and PP colors.
 - **Turns** from a Gen 3 battle engine: damage formula, crits, STAB and type chart,
-  accuracy and stat stages, Blaze, burn, and EXP curves with level-ups.
+  accuracy and stat stages, Blaze, burn, and EXP curves with level-ups; stat moves
+  and stat changes on hits, multi-hit moves (2-5 hits), recoil, draining, fixed
+  damage, Hidden Power, Protect / Detect / Endure, Hyper Beam's recharge, Focus
+  Punch, and Struggle. Paralysis, poison, sleep, freeze, confusion, flinching and
+  weather are not modelled yet (moves that only cause those are left out of movesets).
 - **Presentation**:
   - HP drains at 1 HP per frame and the EXP bar fills at 1 px per frame, as in the game;
   - messages print and wait like battle text;

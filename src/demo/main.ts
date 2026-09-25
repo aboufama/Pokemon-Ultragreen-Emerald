@@ -1,10 +1,10 @@
-// Standalone playable battle: the published demo build (tools/demo/build_demo.mjs).
-// Same battle page as the default mode, without the dev tools.
+// Standalone battle playtest: the published demo build (tools/demo/build_demo.mjs).
+// Pick your Pokémon, the foe and the movesets, then battle; see playtest.ts.
 
-import { runBattle } from '../battle/run';
+import { runPlaytest } from './playtest';
 
 const root = document.getElementById('app')!;
-runBattle(root)
+runPlaytest(root)
   .then(() => ((window as { __ready?: boolean }).__ready = true))
   .catch((err: unknown) => {
     console.error(err);

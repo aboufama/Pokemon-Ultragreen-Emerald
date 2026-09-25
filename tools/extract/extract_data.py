@@ -129,6 +129,20 @@ def main(decomp: Path, out_dir: Path) -> None:
         learnsets_by_sym[sym] = moves
     learn_ptrs = C.parse_designated_table(C.read(decomp / "src/data/pokemon/level_up_learnset_pointers.h"), "gLevelUpLearnsets")
 
+    # TM/HM and move tutor learnsets: [SPECIES_X] = { .learnset = { .MOVE = TRUE, ... } }
+    # and [SPECIES_X] = (TUTOR(MOVE_A) | TUTOR(MOVE_B) ...).
+    def species_blocks(src: str) -> dict[str, str]:
+        marks = [(m.group(1), m.start()) for m in re.finditer(r"\[(SPECIES_\w+)\]\s*=", src)]
+        return {sp: src[start : marks[i + 1][1] if i + 1 < len(marks) else len(src)] for i, (sp, start) in enumerate(marks)}
+
+    tmhm_blocks = species_blocks(C.read(decomp / "src/data/pokemon/tmhm_learnsets.h"))
+    tutor_blocks = species_blocks(C.read(decomp / "src/data/pokemon/tutor_learnsets.h"))
+
+    def teachable(const: str) -> list[str]:
+        tm = [f"MOVE_{m}" for m in re.findall(r"\.(\w+)\s*=\s*TRUE", tmhm_blocks.get(const, ""))]
+        tutor = re.findall(r"TUTOR\((MOVE_\w+)\)", tutor_blocks.get(const, ""))
+        return list(dict.fromkeys(tm + tutor))
+
     def coords(raw: str | None) -> dict | None:
         if raw is None:
             return None
@@ -185,11 +199,20 @@ def main(decomp: Path, out_dir: Path) -> None:
                 {"level": e["level"], "move": e["move"]}
                 for e in learnsets_by_sym.get(learn_ptrs.get(const, ""), [])
             ],
+            "teachable": teachable(const),
         }
         species_out[slug] = entry
 
     # ---- moves -------------------------------------------------------------
     moves_table = C.parse_designated_table(C.read(decomp / "src/data/battle_moves.h"), "gBattleMoves")
+    # In-game descriptions (the summary screen's text), line breaks as spaces
+    # (a word hyphenated across lines is joined back up).
+    desc_src = C.read(decomp / "src/data/text/move_descriptions.h")
+    desc_text = {
+        sym: re.sub(r"\s+", " ", "".join(q.replace("-\\n", "-").replace("\\n", " ") for q in re.findall(r'"((?:[^"\\]|\\.)*)"', body))).strip()
+        for sym, body in re.findall(r"static const u8 (\w+)\[\]\s*=\s*_\((.*?)\);", desc_src, re.S)
+    }
+    move_desc = {mv: desc_text.get(sym, "") for mv, sym in re.findall(r"\[(MOVE_\w+) - 1\]\s*=\s*(\w+),", desc_src)}
     moves_out: dict[str, dict] = {}
     for const, raw in moves_table.items():
         f = C.parse_struct_fields(raw.strip()[1:-1])
@@ -209,6 +232,7 @@ def main(decomp: Path, out_dir: Path) -> None:
             "target": f.get("target"),
             "priority": int(C.eval_expr(f.get("priority", "0"), consts)),
             "flags": flags,
+            "description": move_desc.get(const, ""),
         }
 
     # ---- types -------------------------------------------------------------
