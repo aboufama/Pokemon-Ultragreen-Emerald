@@ -32,6 +32,8 @@ export interface SpeciesData {
   frontAnim: string | null;
   backAnim: string | null;
   learnset: { level: number; move: string }[];
+  /** TM, HM and move tutor moves (MOVE_ constants). */
+  teachable: string[];
 }
 
 export interface MoveData {
@@ -47,6 +49,8 @@ export interface MoveData {
   target: string;
   priority: number;
   flags: string[];
+  /** The in-game description (summary screen). */
+  description: string;
 }
 
 export const SPECIES = speciesJson as unknown as Record<string, SpeciesData>;

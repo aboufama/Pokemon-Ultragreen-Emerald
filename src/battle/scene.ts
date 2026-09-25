@@ -72,6 +72,10 @@ export interface BattleSceneOptions {
   manual?: boolean;
   /** Integer screen scale (default: fit the window). */
   scale?: number;
+  /** Fill the screen's box at any scale (phones) instead of whole device pixels per GBA pixel. */
+  fill?: boolean;
+  /** Called when a battle ends (after the fade), with who won or 'escaped'. */
+  onEnd?: (result: Side | 'escaped') => void;
 }
 
 export type Phase = 'loading' | 'intro' | 'action' | 'move' | 'turn' | 'end';
@@ -115,7 +119,9 @@ export class BattleScene {
   turn = 0;
   battles = 0;
   error: string | null = null;
-  private readonly opts: Required<Omit<BattleSceneOptions, 'seed' | 'scale'>> & { seed?: number };
+  private readonly opts: Required<Omit<BattleSceneOptions, 'seed' | 'scale' | 'fill' | 'onEnd'>> & Pick<BattleSceneOptions, 'seed' | 'onEnd'>;
+  /** How the last battle ended. */
+  result: Side | 'escaped' | null = null;
 
   // 2D layer state.
   private window: [number, number] | null = null;
@@ -164,7 +170,7 @@ export class BattleScene {
     for (const s of [opts.player.slug, opts.opponent.slug]) {
       if (!hasProfile(s)) throw new Error(`No 3D profile for "${s}" yet: species are added one by one (see docs/POKEMON_PIPELINE.md).`);
     }
-    const screen = new GbaScreen(parent, opts.scale);
+    const screen = new GbaScreen(parent, opts.scale, opts.fill);
     const stage = new BattleStage(screen.canvas3d);
     const fonts = await loadAllFonts();
     const [, textbox, hbPlayer, hbEnemy, trainerSheet, ballSheet, particleSheet, player, enemy] = await Promise.all([
@@ -406,6 +412,7 @@ export class BattleScene {
       await this.palFade(0, 16, (v) => (this.fade = { color: BLACK, amount: v / 16 }));
       await this.clock.frames(30);
       this.battles++;
+      if (this.result) this.opts.onEnd?.(this.result);
       if (!this.opts.loop) return;
     }
   }
@@ -416,6 +423,7 @@ export class BattleScene {
     const player = createMon(o.player.slug, { level: o.player.level, moves: o.player.moves, shiny: o.player.shiny, nature: o.player.nature, expProgress: o.player.expProgress });
     const opponent = createMon(o.opponent.slug, { level: o.opponent.level, moves: o.opponent.moves, shiny: o.opponent.shiny, nature: o.opponent.nature });
     this.engine = new BattleEngine(player, opponent, true, seed);
+    this.result = null;
     this.turn = 0;
     this.autoMove = 0;
     for (const [side, hb] of [['player', this.hbPlayer], ['opponent', this.hbEnemy]] as const) {
@@ -636,7 +644,8 @@ export class BattleScene {
 
   private async battleLoop(): Promise<void> {
     for (;;) {
-      const action = await this.chooseAction();
+      // After Hyper Beam the turn is spent recharging: no menu.
+      const action: Action = this.engine.player.recharging ? { kind: 'recharge' } : await this.chooseAction();
       this.phase = 'turn';
       this.turn++;
       const steps = this.engine.runTurn(action);
@@ -669,6 +678,11 @@ export class BattleScene {
         else if (inp.pressed('DOWN') && !(c & 2)) tb.actionCursor = c ^ 2;
         return false;
       });
+      if (choice === 0 && !this.engine.hasUsableMove()) {
+        this.stopBounce();
+        await this.printMessage(`${this.engine.player.name} has no\nmoves left!\\p`);
+        return { kind: 'struggle' };
+      }
       if (choice === 0) {
         const move = await this.chooseMove();
         if (move === null) continue;
@@ -763,6 +777,7 @@ export class BattleScene {
           await this.gainExp(s.gained);
           break;
         case 'end':
+          this.result = s.winner;
           return true;
       }
     }

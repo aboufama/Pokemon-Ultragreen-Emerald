@@ -1,6 +1,7 @@
 // The GBA "screen": a WebGL canvas for the 3D battle (rendered through the
 // pixel pipeline) with the 2D GBA layer (healthboxes, text box) on top.
-// Both are 240x160 internally and scaled by an integer factor.
+// Both are 240x160 internally, scaled so every GBA pixel covers whole device
+// pixels, or (`fill`) as large as the box allows, like an emulator on a phone.
 
 import { type Bitmap, createBitmap } from '../gba/bitmap';
 
@@ -13,7 +14,7 @@ export class GbaScreen {
   private readonly imageData: ImageData;
   scale = 1;
 
-  constructor(parent: HTMLElement, fixedScale?: number) {
+  constructor(parent: HTMLElement, fixedScale?: number, fill = false) {
     this.element = document.createElement('div');
     this.element.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);';
     this.canvas3d = document.createElement('canvas');
@@ -32,14 +33,19 @@ export class GbaScreen {
       // pixels (integer CSS scales on desktop, e.g. 4/3 on a 3x phone).
       const dpr = window.devicePixelRatio || 1;
       const fit = Math.min(parent.clientWidth / 240, parent.clientHeight / 160);
-      const s = fixedScale ?? Math.max(1 / dpr, Math.floor(fit * dpr) / dpr);
+      if (!(fit > 0)) return;
+      const s = fixedScale ?? (fill ? fit : Math.max(1 / dpr, Math.floor(fit * dpr) / dpr));
       this.scale = s;
       this.element.style.width = `${240 * s}px`;
       this.element.style.height = `${160 * s}px`;
     };
     resize();
+    // The box can change without the window resizing (on-screen buttons shown, rotation).
+    const observer = fixedScale === undefined && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null;
+    observer?.observe(parent);
     if (fixedScale === undefined) addEventListener('resize', resize);
     this.dispose = () => {
+      observer?.disconnect();
       removeEventListener('resize', resize);
       this.element.remove();
     };
