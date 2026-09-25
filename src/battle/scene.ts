@@ -7,12 +7,14 @@
 // battle_controller_player.c, and turns presented from BattleEngine steps.
 // Timings are the decomp's frame counts at 60 fps. The 3D battlers stand in
 // for the sprites; the 2D layer (text box, healthboxes, trainer, ball) is
-// drawn exactly as on the GBA.
+// drawn exactly as on the GBA. The music and sound effects play where the
+// game plays them (src/audio/sound.ts; silent unless the page enables sound).
 
 import * as THREE from 'three';
 import { type Bitmap, type RGB, blit, clear, fillRect, loadBitmap } from '../gba/bitmap';
 import { asset } from '../gba/assets';
-import { loadAllFonts } from '../gba/font';
+import { loadAllFonts, soundCues } from '../gba/font';
+import { panFor, sound } from '../audio/sound';
 import { BattleStage } from '../render3d/stage';
 import { Battler3D } from '../battle3d/battler';
 import { VfxSystem, preloadSheets } from '../battle3d/vfx';
@@ -133,6 +135,8 @@ export class BattleScene {
   private bounceHb = 0;
   private bounceMon = 0;
   private autoMove = 0;
+  /** gBattleSpritesDataPtr->battlerData[player].lowHpSong */
+  private lowHp = false;
   private lastTime = 0;
   private acc = 0;
   private disposed = false;
@@ -313,12 +317,14 @@ export class BattleScene {
       tb.page = 'message';
       tb.setMessage(page);
       const total = tb.message.filter((t) => t.kind === 'glyph' || t.kind === 'keypad').length;
+      const cues = soundCues(tb.message);
       let shown = 1;
       let timer = 0;
       // canABSpeedUpPrint: a press speeds printing up while A/B stays held.
       let spedUp = false;
       tb.visibleGlyphs = shown;
       await this.clock.until(() => {
+        while (cues.length && cues[0].at <= shown) sound.playSE(cues.shift()!.song);
         if (shown >= total) return true;
         if (this.input.pressed('A', 'B')) spedUp = true;
         const fast = spedUp && (this.input.isHeld('A') || this.input.isHeld('B'));
@@ -328,9 +334,12 @@ export class BattleScene {
         }
         return false;
       });
+      for (const c of cues) sound.playSE(c.song);
       if (waits) {
         tb.promptSince = this.clock.frame;
         await this.waitForButton();
+        // TextPrinterWaitWithDownArrow
+        sound.playSE('se_select');
         tb.promptSince = null;
       } else if (hold > 0) {
         await this.clock.frames(hold);
@@ -403,10 +412,15 @@ export class BattleScene {
   private async run(): Promise<void> {
     for (;;) {
       this.setupBattle();
+      // CreateBattleStartTask: the battle music starts with the transition.
+      sound.playBGM('mus_vs_wild');
       if (this.opts.intro) await this.intro();
       else await this.quickStart();
       await this.battleLoop();
       this.phase = 'end';
+      // BattleStopLowHpSound. A win keeps its victory music; otherwise the music fades with the screen.
+      this.setLowHp(false);
+      if (this.result !== 'player') sound.fadeOutBGM(4);
       // BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK)
       await this.palFade(0, 16, (v) => (this.fade = { color: BLACK, amount: v / 16 }));
       await this.clock.frames(30);
@@ -423,6 +437,7 @@ export class BattleScene {
     const opponent = createMon(o.opponent.slug, { level: o.opponent.level, moves: o.opponent.moves, shiny: o.opponent.shiny, nature: o.opponent.nature });
     this.engine = new BattleEngine(player, opponent, true, seed);
     this.result = null;
+    this.setLowHp(false);
     this.turn = 0;
     this.autoMove = 0;
     for (const [side, hb] of [['player', this.hbPlayer], ['opponent', this.hbEnemy]] as const) {
@@ -540,6 +555,8 @@ export class BattleScene {
     this.ball.frame = 1;
     void this.clock.frames(4).then(() => (this.ball.frame = 2));
     this.openParticles(this.ball.x, this.ball.y - 5);
+    // AnimateBallOpenParticles
+    sound.playSE('se_ball_open');
     mon.visible = true;
     mon.setTint(BALL_FADE, 1);
     // LaunchBallFadeMonTask: the backdrop fades to white; once it is white it
@@ -660,6 +677,7 @@ export class BattleScene {
         const c = tb.actionCursor;
         const inp = this.input;
         if (inp.pressed('A')) {
+          sound.playSE('se_select');
           choice = c;
           return true;
         }
@@ -667,6 +685,7 @@ export class BattleScene {
         else if (inp.pressed('RIGHT') && !(c & 1)) tb.actionCursor = c ^ 1;
         else if (inp.pressed('UP') && c & 2) tb.actionCursor = c ^ 2;
         else if (inp.pressed('DOWN') && !(c & 2)) tb.actionCursor = c ^ 2;
+        if (tb.actionCursor !== c) sound.playSE('se_select');
         return false;
       });
       if (choice === 0 && !this.engine.hasUsableMove()) {
@@ -699,10 +718,12 @@ export class BattleScene {
       await this.clock.until(() => {
         const c = tb.moveCursor, n = moves.length, inp = this.input;
         if (inp.pressed('A')) {
+          sound.playSE('se_select');
           result = c;
           return true;
         }
         if (inp.pressed('B')) {
+          sound.playSE('se_select');
           result = null;
           return true;
         }
@@ -710,6 +731,7 @@ export class BattleScene {
         else if (inp.pressed('RIGHT') && !(c & 1) && (c ^ 1) < n) tb.moveCursor = c ^ 1;
         else if (inp.pressed('UP') && c & 2) tb.moveCursor = c ^ 2;
         else if (inp.pressed('DOWN') && !(c & 2) && (c ^ 2) < n) tb.moveCursor = c ^ 2;
+        if (tb.moveCursor !== c) sound.playSE('se_select');
         return false;
       });
       if (result === null) return null;
@@ -764,6 +786,11 @@ export class BattleScene {
         case 'faint':
           await this.faint(s.side);
           break;
+        case 'victory':
+          // Cmd_getexp: BattleStopLowHpSound, PlayBGM(MUS_VICTORY_WILD).
+          this.setLowHp(false);
+          sound.playBGM('mus_victory_wild');
+          break;
         case 'exp':
           await this.gainExp(s.gained);
           break;
@@ -783,29 +810,51 @@ export class BattleScene {
     await performMove(attacker, target, move, this.vfx, {
       onHit: () => {
         const h = hp[landed++];
-        if (h) drains.push(this.drainHp(h.side, h.to));
+        if (!h) return;
+        this.hitSound(h);
+        drains.push(this.drainHp(h.side, h.to));
       },
     });
     // Hits the clip had no impact event for drain one after another.
     for (; landed < hp.length; landed++) {
       await Promise.all(drains);
+      this.hitSound(hp[landed]);
       drains.push(this.drainHp(hp[landed].side, hp[landed].to));
     }
     await Promise.all(drains);
     await this.clock.until(() => !this.vfx.busy);
   }
 
+  /** Cmd_effectivenesssound: the hit's sound, panned toward the target (PlaySE12WithPanning). */
+  private hitSound(h: Extract<Step, { kind: 'hp' }>): void {
+    if (h.effectiveness === undefined) return;
+    const song = h.effectiveness > 10 ? 'se_super_effective' : h.effectiveness < 10 ? 'se_not_effective' : 'se_effective';
+    sound.playSEPanned(song, panFor(h.side));
+  }
+
   /** MoveBattleBar: 1 HP per frame, or one bar pixel per frame below 48 max HP. */
-  private drainHp(side: Side, to: number): Promise<void> {
+  private async drainHp(side: Side, to: number): Promise<void> {
     const hb = this.healthbox(side);
     const rate = hb.maxHp >= 48 ? 1 : hb.maxHp / 48;
     let v = hb.shownHp;
     hb.hp = to;
-    return this.clock.until(() => {
+    await this.clock.until(() => {
       v = v > to ? Math.max(to, v - rate) : Math.min(to, v + rate);
       hb.shownHp = v > to ? Math.ceil(v) : Math.floor(v);
       return v === to;
     });
+    // HandleLowHpMusicChange, once the player's bar has settled: red (1-9 of 48 pixels) beeps.
+    if (side === 'player') {
+      const px = to > 0 ? Math.max(1, Math.floor((to * 48) / hb.maxHp)) : 0;
+      this.setLowHp(to < hb.maxHp && px > 0 && px <= 9);
+    }
+  }
+
+  /** The low-HP beep (SE_LOW_HEALTH loops on SE3 until stopped). */
+  private setLowHp(on: boolean): void {
+    if (on && !this.lowHp) sound.playSE('se_low_health');
+    else if (!on) sound.stopSE('se_low_health');
+    this.lowHp = on;
   }
 
   private async statFx(side: Side, delta: number): Promise<void> {
@@ -853,8 +902,12 @@ export class BattleScene {
 
   private async faint(side: Side): Promise<void> {
     const b = this.battler(side);
+    if (side === 'player') this.setLowHp(false);
     b.onEvent = (e) => {
-      if (e === 'thud') this.vfx.shake(0.03, 0.25);
+      if (e !== 'thud') return;
+      this.vfx.shake(0.03, 0.25);
+      // The sprite's slide down with SE_FAINT (SpriteCB_FaintOpponentMon / PlayerHandleFaintAnimation).
+      sound.playSEPanned('se_faint', panFor(side));
     };
     await b.play('faint');
     b.onEvent = null;
@@ -871,8 +924,10 @@ export class BattleScene {
     let level = hb.level;
     let exp = m.exp - gained;
     let remaining = gained;
-    await this.clock.frames(13);
     while (remaining > 0 && level < 100) {
+      // Task_PrepareToGiveExpWithExpBar: SE_EXP, then 13 frames before the bar moves.
+      sound.playSE('se_exp');
+      await this.clock.frames(13);
       const lo = expForLevel(growth, level), hi = expForLevel(growth, level + 1);
       const chunk = Math.min(remaining, hi - exp);
       exp += chunk;
@@ -888,6 +943,7 @@ export class BattleScene {
         hb.expFraction = (px + 1) / 64;
         return false;
       });
+      sound.stopSE('se_exp');
       if (exp >= hi) {
         level++;
         const stats = calcStats(m.species, level, m.nature);
@@ -896,6 +952,11 @@ export class BattleScene {
         hb.maxHp = stats.hp;
         hb.level = level;
         hb.expFraction = 0;
+        // B_ANIM_LVL_UP: SE_EXP_MAX while the healthbox flashes (16 frames).
+        sound.playSE('se_exp_max');
+        await this.clock.frames(16);
+        // BattleScript_LevelUp: fanfare MUS_LEVEL_UP, then the message.
+        sound.fanfare('mus_level_up', 80);
         await this.printMessage(`${m.name} grew to\nLV. ${level}!\\p`);
       }
     }

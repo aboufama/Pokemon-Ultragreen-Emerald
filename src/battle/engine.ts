@@ -264,9 +264,12 @@ const PROTECT_RATES = [0xffff, 0xffff / 2, 0xffff / 4, 0xffff / 8];
 export type Step =
   | { kind: 'message'; text: string; wait?: boolean }
   | { kind: 'move'; side: Side; move: MoveData; hits: number[]; missed: boolean }
-  | { kind: 'hp'; side: Side; from: number; to: number; cause?: 'burn' }
+  /** An HP change; a move's hits carry the type effectiveness (10 = normal) for the hit's sound. */
+  | { kind: 'hp'; side: Side; from: number; to: number; cause?: 'burn'; effectiveness?: number }
   | { kind: 'stat'; side: Side; stat: StatKey; delta: number }
   | { kind: 'faint'; side: Side }
+  /** The wild Pokémon is beaten: getexp plays the victory music. */
+  | { kind: 'victory' }
   /** EXP gain; the scene fills the bar and announces each level-up. */
   | { kind: 'exp'; gained: number; levelUps: number[] }
   | { kind: 'end'; winner: Side | 'escaped' };
@@ -321,7 +324,7 @@ export class BattleEngine {
     const steps: Step[] = [];
     if (this.over) return steps;
     if (action.kind === 'run') {
-      steps.push({ kind: 'message', text: 'Got away safely!\\p', wait: true }, { kind: 'end', winner: 'escaped' });
+      steps.push({ kind: 'message', text: '{PLAY_SE SE_FLEE}Got away safely!\\p', wait: true }, { kind: 'end', winner: 'escaped' });
       this.over = true;
       return steps;
     }
@@ -461,7 +464,7 @@ export class BattleEngine {
       const from = def.hp;
       def.hp = Math.max(0, def.hp - dmg);
       hits.push(from - def.hp);
-      hpSteps.push({ kind: 'hp', side: defSide, from, to: def.hp });
+      hpSteps.push({ kind: 'hp', side: defSide, from, to: def.hp, effectiveness: r.effectiveness });
       if (from > def.hp) this.hurt[defSide] = true;
     }
     steps.push(...hpSteps);
@@ -616,6 +619,7 @@ export class BattleEngine {
     if (this.opponent.hp <= 0) {
       steps.push({ kind: 'faint', side: 'opponent' });
       steps.push({ kind: 'message', text: `${this.displayName('opponent')}\nfainted!\\p`, wait: true });
+      if (this.player.hp > 0) steps.push({ kind: 'victory' });
       const gained = Math.floor((this.opponent.species.expYield * this.opponent.level) / 7) * (this.wild ? 1 : 1.5);
       steps.push(...this.gainExp(Math.floor(gained)));
       steps.push({ kind: 'end', winner: 'player' });

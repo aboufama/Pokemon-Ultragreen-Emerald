@@ -7,6 +7,7 @@
 //     &autoplay=1 &text=slow|mid|fast &intro=0 &loop=0 &manual=1 &scale=3
 //     &playerExp=0.9 (progress toward the next level, to see a level-up)
 //     &pad=0 (hide the on-screen buttons) &picker=0 (hide the species picker)
+//     &sound=1 (Emerald's music and sound effects, from the first key press or tap)
 //
 // Movesets default to each species' showcase moves; a mirror match gives the
 // opponent its Gen 3 wild moveset at its level instead.
@@ -16,6 +17,7 @@ import { getSpeciesProfile, profiledSpecies } from '../pokemon/registry';
 import { BattleScene, type BattleSceneOptions, type TextSpeed } from './scene';
 import { createTouchPad } from './touch_pad';
 import { ARENAS } from '../render3d/arena';
+import { sound } from '../audio/sound';
 
 declare global {
   interface Window {
@@ -62,6 +64,7 @@ const PICKER_CSS = `
 
 export async function runBattle(root: HTMLElement): Promise<BattleScene> {
   const params = new URLSearchParams(location.search);
+  if (params.get('sound') === '1') sound.enable();
   const num = (k: string, d?: number) => (params.has(k) ? Number(params.get(k)) : d);
   const list = (k: string) => params.get(k)?.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
   const level = num('level', 50) ?? 50;

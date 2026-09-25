@@ -23,7 +23,8 @@
 //
 // The embedded asset list is recorded from a real battle on the dev server, so
 // it stays in sync with the code, plus what the setup can ask for: every
-// species with a 3D profile (model, palette, front sprite), the title screen and the menus.
+// species with a 3D profile (model, palette, front sprite), the title screen, the menus
+// and the sound (Emerald's songs and samples).
 // Embedded models are decoded from Draco (window.__EMBEDDED_MODELS__): that
 // page needs no WebAssembly decoder.
 
@@ -111,6 +112,8 @@ for (const slug of species) {
 }
 // The playtest's title screen and menus (Birch's bag, windows, icons).
 for (const dir of ['title', 'menu']) for (const f of await readdir(join(ROOT, `public/assets/gba/${dir}`))) if (f.endsWith('.png')) assets.add(`assets/gba/${dir}/${f}`);
+// The music and sound effects (tools/extract/extract_sound.py).
+for (const f of await readdir(join(ROOT, 'public/assets/sound'))) assets.add(`assets/sound/${f}`);
 
 // 4. Copy the files; decode models and keep them for embedding.
 for (const f of ['index.html', 'page.html', 'assets.json', 'site', 'assets']) await rm(join(OUT, f), { recursive: true, force: true });
@@ -135,7 +138,7 @@ for (const rel of [...assets].sort()) {
 
 // Every other file goes in the page too, as a data: URL (window.__EMBEDDED_ASSETS__),
 // so index.html is a single self-contained file; assets/ is kept for reference.
-const MIME = { png: 'image/png', json: 'application/json' };
+const MIME = { png: 'image/png', json: 'application/json', bin: 'application/octet-stream' };
 const embedded = {};
 for (const rel of files) {
   const type = MIME[rel.split('.').pop()] ?? 'application/octet-stream';
