@@ -1,8 +1,9 @@
 // The arena's life, kept in the GBA look: wind with gusts (which also sways
-// the Pokémon's loose parts), drifting motes (seeds, sand, dust, bubbles),
-// dust kicked up on landings, and per-environment ground effects handled by
-// the environment shader (grass rippling in the wind, drifting cloud
-// shadows, water glints, underwater caustics).
+// the Pokémon's loose parts and the arena's tall grass, reeds and kelp),
+// drifting motes (seeds, sand, ash, dust, bubbles), dust kicked up on
+// landings, and per-arena ground effects handled by the arena's ground
+// shader (grass rippling in the wind, drifting cloud shadows, water glints,
+// underwater caustics).
 //
 // Particles are pixel squares (THREE.Points sized in GBA pixels), rendered
 // as environment pixels: never palette-snapped or outlined, and they don't
@@ -33,7 +34,8 @@ export const AMBIENCE: Record<string, AmbienceStyle> = {
   long_grass: { wind: 0.3, gusts: 0.7, grassWaves: true, clouds: 0.08, dust: [[176, 216, 144], [208, 232, 184], [152, 200, 120]], motes: { count: 30, colors: [[176, 224, 128], [216, 240, 176], [248, 248, 216]], size: [1, 2], rise: 0.02, drift: 1.2 } },
   plain: { wind: 0.2, gusts: 0.5, clouds: 0.08, dust: OUTDOOR_DUST, motes: { count: 18, colors: [[248, 248, 232], [240, 240, 216]], size: [1, 1], rise: 0.03, drift: 0.9 } },
   sand: { wind: 0.55, gusts: 0.9, clouds: 0.08, dust: [[240, 224, 168], [224, 200, 136], [248, 240, 200]], motes: { count: 34, colors: [[240, 224, 168], [224, 208, 144], [248, 240, 200]], size: [1, 1], rise: -0.01, drift: 2.4, streak: true } },
-  mountain: { wind: 0.4, gusts: 0.8, clouds: 0.08, dust: [[216, 200, 176], [192, 176, 152], [232, 224, 208]], motes: { count: 20, colors: [[224, 216, 200], [200, 192, 176]], size: [1, 1], rise: 0.01, drift: 1.6 } },
+  // Mt. Chimney: volcanic ash drifting down.
+  mountain: { wind: 0.3, gusts: 0.6, dust: [[222, 180, 164], [189, 131, 115], [238, 205, 197]], motes: { count: 34, colors: [[230, 222, 222], [200, 190, 190], [170, 160, 164]], size: [1, 1], rise: -0.09, drift: 0.9 } },
   cave: { wind: 0.05, gusts: 0.2, dust: [[176, 152, 112], [152, 128, 96], [200, 176, 136]], motes: { count: 22, colors: [[200, 184, 152], [168, 152, 128]], size: [1, 1], rise: -0.02, drift: 0.25 } },
   building: { wind: 0.02, gusts: 0.1, dust: [[216, 208, 200], [200, 192, 184]], motes: { count: 14, colors: [[240, 232, 224], [224, 216, 208]], size: [1, 1], rise: 0.01, drift: 0.2 } },
   water: { wind: 0.35, gusts: 0.6, glints: true, clouds: 0.08, dust: [[232, 248, 255], [200, 232, 248], [255, 255, 255]], motes: { count: 12, colors: [[255, 255, 255], [224, 240, 255]], size: [1, 1], rise: 0.05, drift: 1 } },

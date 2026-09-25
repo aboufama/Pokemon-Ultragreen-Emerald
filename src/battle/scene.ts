@@ -1,7 +1,7 @@
 // An Emerald single battle with 3D battlers.
 //
 // The flow follows the game: the environment intro of battle_intro.c
-// (window reveal, scanline-split slide, entry layer), the wild Pokémon's
+// (window reveal, scanline-split slide of the arena), the wild Pokémon's
 // shadowed slide-in, the trainer's throw and the Poké Ball send-out
 // (pokeball.c / battle_anim_throw.c), the action and move menus of
 // battle_controller_player.c, and turns presented from BattleEngine steps.
@@ -206,8 +206,7 @@ export class BattleScene {
     this.disposed = true;
     this.input.dispose();
     this.screen.dispose();
-    this.stage.renderer.dispose();
-    this.stage.renderer.forceContextLoss();
+    this.stage.dispose();
   }
 
   private readonly loop = (now: number): void => {
@@ -313,7 +312,7 @@ export class BattleScene {
       const tb = this.textbox;
       tb.page = 'message';
       tb.setMessage(page);
-      const total = tb.message.filter((t) => t.kind === 'glyph').length;
+      const total = tb.message.filter((t) => t.kind === 'glyph' || t.kind === 'keypad').length;
       let shown = 1;
       let timer = 0;
       // canABSpeedUpPrint: a press speeds printing up while A/B stays held.
@@ -448,7 +447,6 @@ export class BattleScene {
     const env = this.stage.environment!;
     env.slide = 0;
     env.whiteout = 0;
-    env.setEntry(false);
     this.textbox.page = 'message';
     this.textbox.setMessage('');
     this.textbox.actionCursor = 0;
@@ -476,29 +474,22 @@ export class BattleScene {
     this.trainer = { visible: true, x: 80 + 240, y: 80, frame: 3 };
 
     // BattleIntroSlide1: WIN0 opens from the middle row (1px/frame to row 48,
-    // then 4px/frame), BG1 (entry layer) scrolls 6px/frame and after 32
-    // frames sinks behind the text box, BG3 halves slide in 2px/frame. The
-    // wild Pokémon and the trainer ride along with their half.
-    let slide = 240, bg1x = 0, bg1y = 0, top = 80, bottom = 81, delay = 32, state = 2;
-    // Long grass sinks further and faster (BATTLE_ENVIRONMENT_LONG_GRASS).
-    const [sinkTo, sinkStep] = this.opts.environment === 'long_grass' ? [-80, 2] : [-56, 1];
+    // then 4px/frame) and the arena's halves slide in 2px/frame, the top half
+    // from the left and the bottom from the right. The wild Pokémon stands in
+    // the top half and rides in with it; the trainer rides the bottom half.
+    let slide = 240, top = 80, bottom = 81, state = 2;
     const apply = () => {
       env.slide = slide;
-      env.setEntry(state < 4, bg1x, bg1y);
       this.window = top > 0 ? [top, bottom] : null;
-      enemy.screenOffset = [-slide, 0];
       this.trainer.x = 80 + slide;
     };
     apply();
     await this.clock.task(() => {
-      bg1x += 6;
       if (state === 2) {
         top--;
         bottom++;
         if (top === 48) state = 3;
       } else {
-        if (delay > 0) delay--;
-        else if (bg1y > sinkTo) bg1y -= sinkStep;
         if (top > 0) {
           top -= 4;
           bottom += 4;

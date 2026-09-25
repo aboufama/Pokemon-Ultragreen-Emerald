@@ -288,7 +288,7 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
       seconds: +((performance.now() - t0) / 1000).toFixed(1),
       initialScore: +initial.toFixed(4),
       params: p,
-      camera: { fov: +p.fov.toFixed(3), height: spec.height, pitch: +p.pitch.toFixed(3), yaw: spec.yaw, anchors: { player: spec.anchors.player.map((v) => +v.toFixed(2)), enemy: spec.anchors.enemy.map((v) => +v.toFixed(2)) }, platforms: spec.platforms },
+      camera: { fov: +p.fov.toFixed(3), height: spec.height, pitch: +p.pitch.toFixed(3), yaw: spec.yaw, anchors: { player: spec.anchors.player.map((v) => +v.toFixed(2)), enemy: spec.anchors.enemy.map((v) => +v.toFixed(2)) } },
       calibration: {
         height: +cal.height.toFixed(4),
         outline: outlineFromSprites(),

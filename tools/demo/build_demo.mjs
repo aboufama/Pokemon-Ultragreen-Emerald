@@ -8,7 +8,8 @@
 //                           publishes it): index.html, demo.js, the app icon and
 //                           manifest, and assets/ and libs/draco/ as plain files,
 //                           so a browser fetches only what a battle needs and
-//                           caches it. Every roster species and arena is there.
+//                           caches it. Every roster species is there (arenas
+//                           are painted in code).
 //
 // With --embed (needs the dev server, npm run dev), also the single-file builds
 // for hosts that take nothing but a page:
@@ -22,7 +23,7 @@
 //
 // The embedded asset list is recorded from a real battle on the dev server, so
 // it stays in sync with the code, plus what the setup can ask for: every
-// species with a 3D profile (model, palette, front sprite) and every arena.
+// species with a 3D profile (model, palette, front sprite) and the menus.
 // Embedded models are decoded from Draco (window.__EMBEDDED_MODELS__): that
 // page needs no WebAssembly decoder.
 
@@ -61,11 +62,13 @@ for (const f of ['manifest.webmanifest', 'icon-192.png', 'icon-512.png']) await 
 await cp(join(ROOT, 'public/libs/draco'), join(PAGES, 'libs/draco'), { recursive: true });
 // Files Vite emitted for the bundle (three's default Draco decoder URLs; the app sets libs/draco/).
 await cp(join(ROOT, 'build/demo-dist/assets'), join(PAGES, 'assets'), { recursive: true });
-// Every asset except the sprites of species without a 3D model.
+// Every asset except the sprites of species without a 3D model and Emerald's
+// battle backgrounds (the arenas are painted by src/render3d/arena).
 await cp(join(ROOT, 'public/assets'), join(PAGES, 'assets'), {
   recursive: true,
   filter: (src) => {
     const rel = src.slice(join(ROOT, 'public/assets').length).replace(/\\/g, '/');
+    if (rel.startsWith('/gba/battle_env')) return false;
     const m = rel.match(/^\/gba\/pokemon\/([^/]+)/);
     return !m || species.includes(m[1]);
   },
@@ -106,7 +109,8 @@ for (const slug of species) {
   assets.add(`assets/gba/pokemon/${slug}/palette.json`);
   assets.add(`assets/gba/pokemon/${slug}/front.png`);
 }
-for (const f of await readdir(join(ROOT, 'public/assets/gba/battle_env'))) if (f.endsWith('.png')) assets.add(`assets/gba/battle_env/${f}`);
+// The playtest's menus (Birch's bag, windows, icons).
+for (const f of await readdir(join(ROOT, 'public/assets/gba/menu'))) if (f.endsWith('.png')) assets.add(`assets/gba/menu/${f}`);
 
 // 4. Copy the files; decode models and keep them for embedding.
 for (const f of ['index.html', 'page.html', 'assets.json', 'site', 'assets']) await rm(join(OUT, f), { recursive: true, force: true });

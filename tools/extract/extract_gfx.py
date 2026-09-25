@@ -9,6 +9,7 @@ Output root: public/assets/gba/
   pokemon/<slug>/{front,back}[_shiny].png, palette.json
   trainers/<name>_back.png
   balls/<ball>.png
+  menu/*.png                            setup screens: Birch's bag, window frame, type icons, cursors
 Plus src/data/generated/gfx_meta.json with environment ids and palettes needed at runtime.
 """
 
@@ -241,6 +242,48 @@ def extract_battle_anim_sprites(decomp: Path, out: Path, meta: dict) -> None:
     print(f"battle anim sprites: {len(names)}")
 
 
+def extract_menus(decomp: Path, out: Path, meta: dict) -> None:
+    """Graphics of the menus around the battles (the playtest's setup screens).
+
+      menu/starter_bg.png       Birch's bag on the grass, as starter_choose.c
+                                shows it (BG3 bag over BG2 grass), 240x160
+      menu/pokeball_select.png  Poké Ball frames (still, tilted left/right) and
+                                the pointing hand, 32x32 each, stacked
+      menu/starter_circle.png   the white circle the chosen Pokémon appears in
+      menu/frame_1.png          the standard window frame (3x3 tiles)
+      menu/menu_info.png        type icons and the TYPE / POWER / ACCURACY / PP labels
+      menu/arrow_cursor.png, menu/scroll_indicator.png
+      menu/keypad_icons.png     the button icons text can show ({A_BUTTON}...)
+      menu/down_arrow.png       the arrow a message shows while it waits for A
+    Plus meta['menuTextPalette']: the message box palette (1 white, 2 dark
+    gray, 3 light gray), which standard windows print with.
+    """
+    sc = decomp / "graphics/starter_choose"
+    tiles = G.tiles_of(G.indexed(sc / "tiles.png"))
+    pal = G.png_palette(sc / "tiles.png")
+    blocks = G.palette_blocks(pal, 0)
+    grass = G.compose_tilemap(tiles, np.fromfile(sc / "birch_grass.bin", dtype="<u2"), 32, blocks, backdrop=(*pal[0], 255))
+    bag = G.compose_tilemap(tiles, np.fromfile(sc / "birch_bag.bin", dtype="<u2"), 32, blocks)
+    screen = grass.copy()
+    screen.alpha_composite(bag, (0, 0))
+    save(screen.crop((0, 0, 240, 160)), out / "menu" / "starter_bg.png")
+    for src, name in [
+        (sc / "pokeball_selection.png", "pokeball_select.png"),
+        (sc / "starter_circle.png", "starter_circle.png"),
+        (decomp / "graphics/text_window/1.png", "frame_1.png"),
+        (decomp / "graphics/interface/menu_info.png", "menu_info.png"),
+        (decomp / "graphics/interface/arrow_cursor.png", "arrow_cursor.png"),
+        (decomp / "graphics/interface/scroll_indicator.png", "scroll_indicator.png"),
+        # {A_BUTTON}, {START_BUTTON}... in text (drawn in the text palette's colors).
+        (decomp / "graphics/fonts/keypad_icons.png", "keypad_icons.png"),
+        # The "more text" arrow at the end of a message page (sDownArrowTiles).
+        (decomp / "graphics/fonts/down_arrow.png", "down_arrow.png"),
+    ]:
+        save(G.to_rgba(G.indexed(src), G.png_palette(src)), out / "menu" / name)
+    meta["menuTextPalette"] = [list(c) for c in G.png_palette(decomp / "graphics/text_window/message_box.png")[:16]]
+    meta["frame1Palette"] = [list(c) for c in G.png_palette(decomp / "graphics/text_window/1.png")[:16]]
+
+
 def main(decomp: Path, root: Path) -> None:
     out = root / "public/assets/gba"
     data_dir = root / "src/data/generated"
@@ -253,6 +296,7 @@ def main(decomp: Path, root: Path) -> None:
     extract_trainers_and_balls(decomp, out)
     extract_battle_anim_sprites(decomp, out, meta)
     extract_pokemon(decomp, out, species)
+    extract_menus(decomp, out, meta)
     (data_dir / "gfx_meta.json").write_text(json.dumps(meta, separators=(",", ":")) + "\n")
     print(f"wrote {data_dir / 'gfx_meta.json'}")
 

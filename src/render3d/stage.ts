@@ -1,5 +1,5 @@
-// The 3D battle stage: calibrated camera, projected environment, battler slots
-// and the pixel pipeline. Screen-space numbers are GBA pixels (240x160).
+// The 3D battle stage: calibrated camera, the arena, battler slots and the
+// pixel pipeline. Screen-space numbers are GBA pixels (240x160).
 
 import * as THREE from 'three';
 import cameraJson from '../data/battle_camera.json';
@@ -20,8 +20,6 @@ export interface BattleCameraSpec {
   yaw: number;
   /** Where each battler stands, as the GBA pixel its feet project to. */
   anchors: Record<SlotName, [number, number]>;
-  /** Platform ellipse centers in the GBA background (for the extended backdrop). */
-  platforms: Record<SlotName, [number, number]>;
 }
 
 export const BATTLE_CAMERA: BattleCameraSpec = cameraJson as BattleCameraSpec;
@@ -107,25 +105,37 @@ export class BattleStage {
   }
 
   async setEnvironment(name: string): Promise<void> {
-    if (this.environment) this.scene.remove(this.environment.group);
     const env = await BattleEnvironment.load({
       name,
-      enemyPlatform: { cx: this.spec.platforms.enemy[0], cy: this.spec.platforms.enemy[1] },
-      playerPlatform: { cx: this.spec.platforms.player[0], cy: this.spec.platforms.player[1] },
+      camera: this.homeCamera,
+      pipeline: this.pipeline,
+      player: this.slots.player.position,
+      enemy: this.slots.enemy.position,
     });
-    env.setProjectionCamera(this.homeCamera);
+    // Replace whatever is up now (another load may have finished meanwhile).
+    if (this.environment) {
+      this.scene.remove(this.environment.group);
+      this.environment.dispose();
+    }
     this.environment = env;
     this.scene.add(env.group);
     // Ambience: centered between the two slots, filling the arena.
     if (this.ambience) this.scene.remove(this.ambience.group);
-    const style = AMBIENCE[name] ?? AMBIENCE.grass;
+    const style = AMBIENCE[env.design.ambience] ?? AMBIENCE.grass;
     const a = this.slots.player.position, b = this.slots.enemy.position;
     const center = a.clone().add(b).multiplyScalar(0.5);
     const s = this.pipeline.settings;
     this.ambience = new Ambience(style, this.homeCamera, center, a.distanceTo(b) * 0.75, s.density * s.supersample);
     this.scene.add(this.ambience.group);
-    env.setGroundEffects(style);
     env.setArena(center, a.distanceTo(b) * 0.75);
+    env.setGroundEffects(style);
+  }
+
+  /** Free the GPU: the renderer and its context. */
+  dispose(): void {
+    this.environment?.dispose();
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 
   /** Advance the arena's ambience (wind, motes, dust, ground effects). */

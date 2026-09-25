@@ -129,6 +129,10 @@ def main(decomp: Path, out_dir: Path) -> None:
         learnsets_by_sym[sym] = moves
     learn_ptrs = C.parse_designated_table(C.read(decomp / "src/data/pokemon/level_up_learnset_pointers.h"), "gLevelUpLearnsets")
 
+    # Pokédex categories ("FOREST" for the FOREST POKéMON), by national dex name.
+    dex_src = C.read(decomp / "src/data/pokemon/pokedex_entries.h")
+    categories = {m.group(1): m.group(2) for m in re.finditer(r"\[(NATIONAL_DEX_\w+)\]\s*=\s*\{[^}]*?categoryName\s*=\s*_\(\"([^\"]*)\"\)", dex_src, re.S)}
+
     # TM/HM and move tutor learnsets: [SPECIES_X] = { .learnset = { .MOVE = TRUE, ... } }
     # and [SPECIES_X] = (TUTOR(MOVE_A) | TUTOR(MOVE_B) ...).
     def species_blocks(src: str) -> dict[str, str]:
@@ -200,6 +204,7 @@ def main(decomp: Path, out_dir: Path) -> None:
                 for e in learnsets_by_sym.get(learn_ptrs.get(const, ""), [])
             ],
             "teachable": teachable(const),
+            "category": categories.get(f"NATIONAL_DEX_{dex_name}", "") if dex_name else "",
         }
         species_out[slug] = entry
 

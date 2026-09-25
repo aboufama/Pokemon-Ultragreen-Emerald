@@ -34,6 +34,8 @@ export interface SpeciesData {
   learnset: { level: number; move: string }[];
   /** TM, HM and move tutor moves (MOVE_ constants). */
   teachable: string[];
+  /** Pokédex category ("FOREST" for the FOREST POKéMON). */
+  category: string;
 }
 
 export interface MoveData {
@@ -77,6 +79,10 @@ export const GFX_META = gfxMetaJson as unknown as {
   windowTextPpPalette: RGB[];
   healthboxPalette: RGB[];
   healthbarPalette: RGB[];
+  /** Standard window text: 1 white, 2 dark gray, 3 light gray, 4 red. */
+  menuTextPalette: RGB[];
+  /** text_window/1.png, the standard window frame. */
+  frame1Palette: RGB[];
 };
 
 export function species(slug: string): SpeciesData {
