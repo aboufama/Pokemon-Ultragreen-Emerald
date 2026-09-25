@@ -26,6 +26,9 @@ export interface ArenaContext {
 }
 
 export interface ArenaDesign {
+  /** The Hoenn place it is, as the menus name it (ROUTE 101), and a line about it. */
+  name: string;
+  about: string;
   /** Ambience style (wind, motes, dust, ground effects) in src/render3d/ambience.ts. */
   ambience: string;
   look?: GroundLook;

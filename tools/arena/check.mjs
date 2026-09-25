@@ -6,7 +6,7 @@
 //   node tools/arena/check.mjs --render     + each arena in the browser, battlers and
 //                                           UI up, screenshots in build/arenas/ (needs npm run dev)
 //
-//   - every place the playtest offers has an arena;
+//   - every arena is a named Hoenn place, and the playtest lists them all;
 //   - arenas are painted, never Emerald's battle backgrounds projected (no
 //     platforms under the Pokémon);
 //   - the whole screen is painted (no holes), with a pixel-art palette;
@@ -36,11 +36,11 @@ const camera = makeBattleCamera(BATTLE_CAMERA);
 const player = groundPointAt(camera, ...BATTLE_CAMERA.anchors.player);
 const enemy = groundPointAt(camera, ...BATTLE_CAMERA.anchors.enemy);
 
-// Places the playtest offers.
+// Every arena is a Hoenn place the menus can list (the playtest's places and
+// the battle page's picker are built from the registry).
+for (const [id, d] of Object.entries(ARENAS)) gate(`${id}: names its place`, /^[A-Z0-9 .é']+$/.test(d.name ?? '') && (d.about ?? '').length > 8 && (d.about ?? '').length <= 64, `${d.name}: ${d.about}`);
 const playtest = await readFile(join(ROOT, 'src/demo/playtest.ts'), 'utf8');
-const places = [...playtest.matchAll(/arena: '(\w+)'/g)].map((m) => m[1]);
-gate('the playtest offers places', places.length > 0, `${places.length}`);
-for (const p of places) gate(`place "${p}" has an arena`, !!ARENAS[p]);
+gate('the playtest lists every arena', /PLACES[^=]*=\s*Object\.entries\(ARENAS\)/.test(playtest));
 
 // No projected Emerald backgrounds anywhere in the app.
 const offenders = [];

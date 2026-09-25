@@ -50,11 +50,13 @@ reference), then `design.ts` (the painting helpers) and the header of
 
 ## Workflow
 
-1. Write or change the arena in `arenas.ts` (add it to `ARENAS`, and to
-   `PLACES` in src/demo/playtest.ts with a Hoenn place name).
+1. Write or change the arena in `arenas.ts`: an entry in `ARENAS` with the
+   Hoenn place it is (`name`, as the menus show it, and a line `about` it).
+   The playtest's place list and the battle page's picker are built from
+   `ARENAS`, so that is the only list.
 2. Look at it: `/?mode=stage&env=<arena>&player=blaziken&enemy=swampert&scale=3`
    (`&ui=0` without the UI). Zoom into screenshots: judge at GBA pixels.
-3. `node tools/arena/check.mjs` (every place has an arena, no Emerald
+3. `node tools/arena/check.mjs` (every arena names its place, no Emerald
    backgrounds, the screen fully painted, the palette, nothing over a battler,
    seeded, painting time); `--render` also renders each arena in the browser
    into build/arenas/.

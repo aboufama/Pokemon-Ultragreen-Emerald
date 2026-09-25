@@ -22,6 +22,7 @@ import { bagBackdrop, chooseFromBag, displayName } from '../menus/bag';
 import { editMoves } from '../menus/moves';
 import { type Place, choosePlace } from '../menus/places';
 import { titleScreen } from '../menus/title';
+import { ARENAS } from '../render3d/arena';
 
 declare global {
   interface Window {
@@ -32,18 +33,8 @@ declare global {
 const LEVEL = 50;
 const STORE = 'ultragreen.playtest.v2';
 
-/** Places to battle, each an arena (see src/render3d). */
-export const PLACES: Place[] = [
-  { arena: 'grass', name: 'ROUTE 101', about: 'A quiet grassy route near LITTLEROOT TOWN.' },
-  { arena: 'long_grass', name: 'ROUTE 120', about: 'Tall grass sways in the rain-fed wind.' },
-  { arena: 'sand', name: 'ROUTE 111', about: 'The desert, where sand never stops blowing.' },
-  { arena: 'water', name: 'ROUTE 124', about: 'The open sea off LILYCOVE CITY.' },
-  { arena: 'pond', name: 'ROUTE 102', about: 'A calm pond hidden among the trees.' },
-  { arena: 'underwater', name: 'SEAFLOOR', about: 'Deep below the waves of ROUTE 128.' },
-  { arena: 'mountain', name: 'MT. CHIMNEY', about: 'Rocky slopes dusted with volcanic ash.' },
-  { arena: 'cave', name: 'GRANITE CAVE', about: 'A dim cave on DEWFORD ISLAND.' },
-  { arena: 'building', name: 'BATTLE TOWER', about: 'Where trainers test their POKéMON.' },
-];
+/** Places to battle: every arena, by its Hoenn place (src/render3d/arena/arenas.ts). */
+export const PLACES: Place[] = Object.entries(ARENAS).map(([arena, d]) => ({ arena, name: d.name, about: d.about }));
 
 interface Saved {
   you?: string;

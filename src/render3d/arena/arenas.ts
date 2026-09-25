@@ -601,12 +601,17 @@ function tower(ctx: ArenaContext): void {
   }
 }
 
+/** Every arena, in the order the playtest lists the places. */
 export const ARENAS: Record<string, ArenaDesign> = {
   grass: {
+    name: 'ROUTE 101',
+    about: 'A quiet grassy route near LITTLEROOT TOWN.',
     ambience: 'grass',
     paint: (ctx) => meadow(ctx, { grass: MEADOW, blades: BLADES, leaves: LEAVES, path: true }),
   },
   long_grass: {
+    name: 'ROUTE 120',
+    about: 'Tall grass sways in the rain-fed wind.',
     ambience: 'long_grass',
     paint: (ctx) =>
       meadow(ctx, {
@@ -620,17 +625,26 @@ export const ARENAS: Record<string, ArenaDesign> = {
         treeLine: 14.2,
       }),
   },
+  sand: { name: 'ROUTE 111', about: 'The desert, where sand never stops blowing.', ambience: 'sand', paint: desert },
+  water: {
+    name: 'ROUTE 124',
+    about: 'The open sea off LILYCOVE CITY.',
+    ambience: 'water',
+    look: { waveLight: [172, 197, 230], waveDark: [57, 82, 156], waveDensity: 0.14 },
+    ripples: 0.9,
+    paint: sea,
+  },
   pond: {
+    name: 'ROUTE 102',
+    about: 'A calm pond hidden among the trees.',
     ambience: 'pond',
     look: { waveLight: [166, 218, 248], waveDark: [63, 103, 168], waveDensity: 0.12 },
     ripples: 0,
     paint: (ctx) => meadow(ctx, { grass: MEADOW, blades: BLADES, leaves: LEAVES, pond: { x: -1.2, z: 12.4, rx: 5.2, rz: 2.3 }, tallGrass: 8, treeLine: 16.2 }),
   },
-  sand: { ambience: 'sand', paint: desert },
-  water: { ambience: 'water', look: { waveLight: [172, 197, 230], waveDark: [57, 82, 156], waveDensity: 0.14 }, ripples: 0.9, paint: sea },
-  underwater: { ambience: 'underwater', paint: seafloor },
-  mountain: { ambience: 'mountain', look: { lavaHot: [255, 190, 80] }, paint: chimney },
-  cave: { ambience: 'cave', paint: cave },
-  building: { ambience: 'building', paint: tower },
+  underwater: { name: 'SEAFLOOR', about: 'Deep below the waves of ROUTE 128.', ambience: 'underwater', paint: seafloor },
+  mountain: { name: 'MT. CHIMNEY', about: 'Rocky slopes dusted with volcanic ash.', ambience: 'mountain', look: { lavaHot: [255, 190, 80] }, paint: chimney },
+  cave: { name: 'GRANITE CAVE', about: 'A dim cave on DEWFORD ISLAND.', ambience: 'cave', paint: cave },
+  building: { name: 'BATTLE TOWER', about: 'Where trainers test their POKéMON.', ambience: 'building', paint: tower },
 };
 
