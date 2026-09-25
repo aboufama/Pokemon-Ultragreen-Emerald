@@ -142,6 +142,7 @@ export async function loadAllFonts(): Promise<Record<FontName, Font>> {
 //   {CLEAR_TO n}          move to x + n
 //   {COLOR n} {HIGHLIGHT n} {SHADOW n}  palette-index color changes
 //   {PKMN}, {LV_2} and other named glyph sequences from charmap.txt
+//   {PLAY_SE SE_FLEE}     play a sound effect when printing gets there
 // ---------------------------------------------------------------------------
 
 export type TextToken =
@@ -151,7 +152,8 @@ export type TextToken =
   | { kind: 'paragraph' }
   | { kind: 'scroll' }
   | { kind: 'clearTo'; x: number }
-  | { kind: 'color'; which: 'fg' | 'bg' | 'shadow'; index: number };
+  | { kind: 'color'; which: 'fg' | 'bg' | 'shadow'; index: number }
+  | { kind: 'sound'; song: string };
 
 const CHARS: Record<string, number> = charmapJson.chars;
 const NAMED: Record<string, number[]> = charmapJson.named;
@@ -164,6 +166,17 @@ const COLOR_NAMES: Record<string, number> = {
 
 function colorIndex(arg: string): number {
   return arg in COLOR_NAMES ? COLOR_NAMES[arg] : Number(arg);
+}
+
+/** The {PLAY_SE} cues of a text: each song and how many glyphs print before it. */
+export function soundCues(tokens: TextToken[]): { at: number; song: string }[] {
+  const cues: { at: number; song: string }[] = [];
+  let glyphs = 0;
+  for (const t of tokens) {
+    if (t.kind === 'glyph' || t.kind === 'keypad') glyphs++;
+    else if (t.kind === 'sound') cues.push({ at: glyphs, song: t.song });
+  }
+  return cues;
 }
 
 export function encodeText(text: string): TextToken[] {
@@ -191,6 +204,7 @@ export function encodeText(text: string): TextToken[] {
       else if (cmd === 'COLOR') out.push({ kind: 'color', which: 'fg', index: colorIndex(args[0]) });
       else if (cmd === 'HIGHLIGHT') out.push({ kind: 'color', which: 'bg', index: colorIndex(args[0]) });
       else if (cmd === 'SHADOW') out.push({ kind: 'color', which: 'shadow', index: colorIndex(args[0]) });
+      else if (cmd === 'PLAY_SE') out.push({ kind: 'sound', song: args[0].toLowerCase() });
       else if (cmd in EXTRA_SYMBOLS) out.push({ kind: 'glyph', id: 0x100 + EXTRA_SYMBOLS[cmd] });
       else if (cmd in NAMED && NAMED[cmd][0] === 0xf9) out.push({ kind: 'glyph', id: 0x100 + NAMED[cmd][1] });
       else if (cmd in NAMED && NAMED[cmd][0] === 0xf8) out.push({ kind: 'keypad', id: NAMED[cmd][1] });

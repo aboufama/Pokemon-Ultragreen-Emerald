@@ -47,8 +47,11 @@ set the moves (RANDOM gives four of the moves it can know, with an attack of its
 type; A on a move opens a Move Relearner-style list of every move it can know, with its
 TYPE, PP, POWER, ACCURACY and description, and the new move is learned "1, 2, and…
 Poof!"; SELECT sets the wild Pokémon's moves the same way; START or DONE goes on); pick
-the place, whose arena shows live behind the list; then battle, and battle again. It
-plays like an emulator: the GBA screen as large as the window allows, the keyboard on a
+the place, whose arena shows live behind the list; then battle, and battle again.
+Emerald's own music plays throughout (the title theme, Professor Birch's lab while you
+set up, the wild battle, its victory and the level-up fanfare) with the game's sound
+effects; browsers let sound start with the first key press or tap (on the title screen
+that press starts the music), and `sound=0` turns it off. It plays like an emulator: the GBA screen as large as the window allows, the keyboard on a
 computer, and on a phone an on-screen D-pad, A/B and START/SELECT (beside the screen when
 the phone is held sideways; "Add to Home Screen" runs it full screen). Shareable setups
 skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY&env=sand&go=1`
@@ -76,6 +79,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 | `intro=0` | skip the intro |
 | `loop=0` | stop after one battle |
 | `playerExp=0.9` | start close to a level-up |
+| `sound=1` | Emerald's music and sound effects (from the first key press or tap; the playtest has them on) |
 
 ## What's in the battle
 
@@ -97,6 +101,10 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
   - HP drains at 1 HP per frame and the EXP bar fills at 1 px per frame, as in the game;
   - messages print and wait like battle text;
   - faint, whiteout and escape all play out.
+- **Sound**, where the game plays it: the wild battle theme from the start, the ball's
+  pop, the hit sounds by effectiveness panned toward the target, the low-HP beep, the
+  faint, the victory theme when EXP is given, the EXP bar's fill, the level-up sparkle
+  and fanfare, the flee sound, and the select sound on menus and text.
 
 ## How it works
 
@@ -111,6 +119,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 | Rig and animation: semantic bone map, model-space rotations, aim constraints, foot IK, keyframed clips on smooth curves with events and crossfades, overlapping action, springs for loose parts (mane, tail, feathers), and a life layer (breathing, weight shifts, blinks, sprung turns and hit recoil) | `src/anim/`, `src/pokemon/`, `src/battle3d/battler.ts` |
 | Moves: animation category from move data, per-type effects from the stock battle-animation sprites, rendered in 3D through the pixel pass | `src/battle3d/` |
 | Battle engine, scene and frame clock | `src/battle/` |
+| Music and sound effects: Emerald's songs and samples, converted with the decomp's own tools (mid2agb, wav2agb), played by a port of its m4a sound engine (the sequencer, SoundMainRAM's DirectSound mixer and reverb, CgbSound on a model of the GB channels, the output stage) running in an AudioWorklet. Checked against the game in mGBA: the sampled instruments come out sample for sample the same | `src/audio/`, `tools/extract/extract_sound.py` |
 
 Species calibration fits each model's height and facing (silhouette IoU against
 the stock sprites) and its toon color grade (palette histograms). See
@@ -141,8 +150,10 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `tools/models/optimize_model.mjs` | strip upstream animations and recompress a fetched model |
 | `tools/shots/move_sheet.mjs` | contact sheets of moves and clips in the battle view |
 | `tools/arena/check.mjs` | the arenas' checks: every place has one, painted (no Emerald backgrounds, no platforms), fully painted, a pixel-art palette, nothing over a battler, seeded, fast to paint (`--render` adds screenshots) |
-| `.claude/skills/pokemon-gauntlet`, `pokemon-animation`, `pokemon-arena` | the process, the animation craft and the arenas' design rules, as skills for agents |
-| `tools/reference/` | build a harness ROM from the decomp and capture real frames with mGBA |
+| `tools/sound/check.mjs` | the sound's checks: the extracted bank is whole, every song the game plays is in it, every song renders (music loops, looping effects get stopped), the engine runs alone as the AudioWorklet builds it, fast enough for a phone (`--wav <song>` writes one to listen to) |
+| `tools/sound/reference/run.py` | the engine against the game itself in mGBA, song by song (after `tools/reference/build_rom.sh` and `build_capture.sh`) |
+| `.claude/skills/pokemon-gauntlet`, `pokemon-animation`, `pokemon-arena`, `pokemon-sound` | the process, the animation craft, the arenas' design rules and the sound, as skills for agents |
+| `tools/reference/` | build a harness ROM from the decomp, capture real frames and record its sound with mGBA |
 
 ## Status
 
@@ -156,7 +167,7 @@ the stock sprites) and its toon color grade (palette histograms). See
   - the overworld;
   - trainer battles and double battles;
   - the Bag and party screens (the menu options show a message);
-  - audio.
+  - Pokémon cries.
 
 ## Credits
 

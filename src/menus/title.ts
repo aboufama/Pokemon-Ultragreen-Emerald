@@ -4,10 +4,13 @@
 // drops and the logo rising, then Rayquaza under drifting, waving clouds with
 // its markings glowing, and PRESS START blinking. A or START goes on with a
 // fade to white. On a computer the keys are shown where the copyright line was.
+// The title music starts with the screen; while the browser keeps audio locked
+// it starts with the first press instead, and that press doesn't leave the title.
 
 import { type Bitmap, type RGB, loadBitmap } from '../gba/bitmap';
 import { asset } from '../gba/assets';
 import { centerX, print } from './draw';
+import { sound } from '../audio/sound';
 import type { MenuScreen } from './screen';
 
 const WHITE: RGB = [255, 255, 255];
@@ -61,6 +64,8 @@ interface Shine {
  */
 export async function titleScreen(m: MenuScreen, opts: { hints: boolean }): Promise<void> {
   const g = await loadTitleGfx();
+  // CB2_InitTitleScreen: m4aSongNumStart(MUS_TITLE).
+  sound.playBGM('mus_title');
   let phase = 1;
   let counter = 256;
   let skip = false;
@@ -185,7 +190,9 @@ export async function titleScreen(m: MenuScreen, opts: { hints: boolean }): Prom
   try {
     await m.clock.until(() => {
       frame++;
-      const any = m.pressed('A', 'B', 'START', 'SELECT');
+      // The press that lets the browser start audio only starts the music.
+      const unlocking = sound.takeUnlockPress();
+      const any = !unlocking && m.pressed('A', 'B', 'START', 'SELECT');
       // Shines move and, in their modes, set the backdrop.
       for (let i = shines.length - 1; i >= 0; i--) {
         const s = shines[i];
@@ -239,7 +246,11 @@ export async function titleScreen(m: MenuScreen, opts: { hints: boolean }): Prom
         }
         if (!(counter & 1) && bg2y !== 0) bg2y++;
       } else {
-        if (m.pressed('A', 'START')) return true;
+        if (!unlocking && m.pressed('A', 'START')) {
+          // Task_TitleScreenPhase3: FadeOutBGM(4) with the fade to white.
+          sound.fadeOutBGM(4);
+          return true;
+        }
         // The clouds drift up a pixel every four frames (BG1VOFS = tBg1Y / 2) and wave (a scanline sine on BG1HOFS).
         if (++counter & 1) cloudStep++;
         bg1y = (cloudStep >> 1) & 255;

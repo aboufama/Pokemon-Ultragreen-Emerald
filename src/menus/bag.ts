@@ -11,6 +11,7 @@ import { gbaSin } from '../battle/clock';
 import { centerX, darken, print, scaled, sprite } from './draw';
 import { loadFront } from './gfx';
 import type { MenuScreen } from './screen';
+import { sound } from '../audio/sound';
 
 // sPokeballCoords, sCursorCoords, sStarterLabelCoords (tiles) in starter_choose.c.
 const BALLS: [number, number][] = [[60, 64], [120, 88], [180, 64]];
@@ -102,9 +103,11 @@ export async function chooseFromBag(m: MenuScreen, o: BagOptions): Promise<strin
           wobbleStart = m.clock.frame;
         } else if (m.pressed('A')) return true;
         else if (m.pressed('B')) {
+          sound.playSE('se_select');
           action = 'b';
           return true;
         } else if (o.random && m.pressed('SELECT')) {
+          sound.playSE('se_select');
           action = 'random';
           return true;
         }

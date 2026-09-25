@@ -3,7 +3,9 @@
 // Professor Birch's bag and the wild Pokémon to battle, set the moves
 // (random, or learned one by one in a Move Relearner-style list), pick the
 // place (its arena shows live), battle, and battle again. The page is only
-// the screen and, on touch screens, the GBA buttons.
+// the screen and, on touch screens, the GBA buttons. Emerald's music plays
+// throughout: the title theme, Professor Birch's lab while you set up, the
+// wild battle theme and its victory (sound=0 turns it off).
 //
 //   demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY
 //            &enemyMoves=SURF,EARTHQUAKE&env=sand&go=1
@@ -23,10 +25,15 @@ import { editMoves } from '../menus/moves';
 import { type Place, choosePlace } from '../menus/places';
 import { titleScreen } from '../menus/title';
 import { ARENAS } from '../render3d/arena';
+import { sound } from '../audio/sound';
 
 declare global {
   interface Window {
-    __playtest?: { scene: () => BattleScene | null; menu: () => MenuScreen | null; step: () => string };
+    __playtest?: {
+      scene: () => BattleScene | null;
+      menu: () => MenuScreen | null;
+      step: () => string;
+    };
   }
 }
 
@@ -69,6 +76,7 @@ interface Battle {
 export async function runPlaytest(root: HTMLElement): Promise<void> {
   injectCss();
   const params = new URLSearchParams(location.search);
+  if (params.get('sound') !== '0') sound.enable();
   const coarse = matchMedia('(pointer: coarse)').matches;
   const roster = profiledSpecies().sort((a, b) => (SPECIES[a]?.nationalDex ?? 0) - (SPECIES[b]?.nationalDex ?? 0)).slice(0, 3);
   const showcase: Record<string, string[]> = {};
@@ -108,7 +116,11 @@ export async function runPlaytest(root: HTMLElement): Promise<void> {
   const firstMoves = (slug: string) => (showcase[slug]?.length === 4 ? showcase[slug] : randomMoveset(slug, LEVEL));
 
   let step = 'you';
-  window.__playtest = { scene: () => scene, menu: () => menu, step: () => step };
+  window.__playtest = {
+    scene: () => scene,
+    menu: () => menu,
+    step: () => step,
+  };
   // The playtest runs for as long as the page is open: ready once it can take input.
   (window as { __ready?: boolean }).__ready = true;
 
@@ -154,6 +166,8 @@ export async function runPlaytest(root: HTMLElement): Promise<void> {
   let arena = PLACES.some((p) => p.arena === saved.arena) ? saved.arena! : 'grass';
   for (;;) {
     const m = openMenu();
+    // Setting up plays Professor Birch's lab (after the last song's fade-out).
+    sound.playBGM('mus_birch_lab');
     if (step === 'you' || step === 'battle') {
       step = 'you';
       m.fadeAmount = 16;
@@ -209,6 +223,8 @@ export async function runPlaytest(root: HTMLElement): Promise<void> {
       // Battle, then offer another.
       for (;;) {
         const result = await battle({ you, foe, moves, foeMoves, arena });
+        // A win keeps its victory music; otherwise the lab's comes back.
+        if (result !== 'player') sound.playBGM('mus_birch_lab');
         const after = openMenu();
         after.fadeAmount = 16;
         const removeBg = after.show(bagBackdrop(after));
@@ -217,6 +233,8 @@ export async function runPlaytest(root: HTMLElement): Promise<void> {
         const removeMsg = await after.message(`${said}\\pBattle again?`);
         const again = await after.yesNo();
         removeMsg();
+        // Back to the setup: the victory music fades out first.
+        if (!again && sound.currentBGM !== 'mus_birch_lab') sound.fadeOutBGM(4);
         await after.fadeTo(16);
         removeBg();
         if (!again) break;

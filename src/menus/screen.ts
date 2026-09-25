@@ -10,7 +10,8 @@ import { GbaScreen } from '../battle/screen';
 import { type Button, Input } from '../battle/input';
 import { FrameClock } from '../battle/clock';
 import { TEXT_FRAMES } from '../battle/scene';
-import { encodeText } from '../gba/font';
+import { encodeText, soundCues } from '../gba/font';
+import { sound } from '../audio/sound';
 import type { MenuGfx } from './gfx';
 import { blit } from '../gba/bitmap';
 import { fade, print, stdWindow, textWidth } from './draw';
@@ -155,9 +156,12 @@ export class MenuScreen {
     for (let p = 0; p < pages.length; p++) {
       current = pages[p];
       shown = 0;
-      const total = encodeText(current).filter((t) => t.kind === 'glyph' || t.kind === 'keypad').length;
+      const tokens = encodeText(current);
+      const total = tokens.filter((t) => t.kind === 'glyph' || t.kind === 'keypad').length;
+      const cues = soundCues(tokens);
       let timer = 0, fast = false;
       await this.clock.until(() => {
+        while (cues.length && cues[0].at <= shown) sound.playSE(cues.shift()!.song);
         if (shown >= total) return true;
         if (this.input.pressed('A', 'B')) fast = true;
         if ((fast && (this.input.isHeld('A') || this.input.isHeld('B'))) || ++timer >= TEXT_FRAMES.fast) {
@@ -172,6 +176,8 @@ export class MenuScreen {
           arrow++;
           return this.input.pressed('A', 'B');
         });
+        // TextPrinterWaitWithDownArrow
+        sound.playSE('se_select');
         arrow = -1;
       }
     }
@@ -192,12 +198,20 @@ export class MenuScreen {
     });
     let result = false;
     await this.clock.until(() => {
-      if (this.input.pressed('UP')) cursor = 0;
-      else if (this.input.pressed('DOWN')) cursor = 1;
-      else if (this.input.pressed('A')) {
+      if (this.input.pressed('UP') && cursor !== 0) {
+        cursor = 0;
+        sound.playSE('se_select');
+      } else if (this.input.pressed('DOWN') && cursor !== 1) {
+        cursor = 1;
+        sound.playSE('se_select');
+      } else if (this.input.pressed('A')) {
+        sound.playSE('se_select');
         result = cursor === 0;
         return true;
-      } else if (this.input.pressed('B')) return true;
+      } else if (this.input.pressed('B')) {
+        sound.playSE('se_select');
+        return true;
+      }
       return false;
     });
     remove();
@@ -244,14 +258,20 @@ export class MenuScreen {
         if (cursor < top) top = cursor;
         if (cursor >= top + rows) top = cursor - rows + 1;
         items[cursor]?.onHover?.();
+        sound.playSE('se_select');
       }
       if (this.input.pressed('A')) {
+        sound.playSE('se_select');
         index = cursor;
         return true;
       }
-      if (this.input.pressed('B')) return true;
+      if (this.input.pressed('B')) {
+        sound.playSE('se_select');
+        return true;
+      }
       for (const b of ['START', 'SELECT'] as Button[]) {
         if (this.input.pressed(b) && opts.extra?.(b)) {
+          sound.playSE('se_select');
           button = b;
           index = cursor;
           return true;
