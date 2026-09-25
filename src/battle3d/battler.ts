@@ -2,8 +2,8 @@
 // Applies the non-skeletal pose channels every frame: root motion (advance
 // toward the target, jumps, spins, sinking), facing, eye expression, effects.
 // On top of the clips it adds what makes the creature feel alive: loose parts
-// on springs, eye blinks, a sprung turn toward the target and a sprung recoil
-// when hit.
+// on springs, eye blinks, a turn toward the target that rides a contact move's
+// travel, and a sprung recoil when hit.
 
 import * as THREE from 'three';
 import { Animator } from '../anim/animator';
@@ -20,13 +20,11 @@ import { slotYaw } from '../pokemon/profile';
 const DEG = Math.PI / 180;
 /** Effect origins every species has, by the rig bones they sit on. */
 const BUILTIN_EMITTERS: Record<string, string[]> = { mouth: ['head'], eyes: ['head'], hands: ['handR', 'handL'], feet: ['footR', 'footL'], body: ['chest'] };
-/** Clips that are not moves: every other clip faces the target while it plays. */
-const MOMENT_CLIPS = new Set(['idle', 'intro', 'hit', 'faint']);
 
 export class Battler3D {
   readonly animator: Animator;
   target: Battler3D | null = null;
-  /** 0 = calibrated display yaw (matches the stock sprite), 1 = facing the target. */
+  /** 0 = calibrated display yaw (matches the stock sprite), 1 = facing the target (while travelling to it). */
   facing = 0;
   /** Scale multiplier for the Poke Ball appear/withdraw effect. */
   appear = 1;
@@ -42,8 +40,6 @@ export class Battler3D {
   private blinkTime = 0;
   private time = 0;
   private readonly chains: SpringChain[] = [];
-  /** Turning toward the target: quick, smooth start, settles with a slight overshoot. */
-  private readonly facingSpring = new SecondOrder(2.2, 0.8, 0);
   /** Recoil from hits (0 = at rest, 1 = a strong hit's push), a loose spring. */
   private readonly recoilSpring = new SecondOrder(2.4, 0.38, 0);
   /** Eye blinks: seconds until the next one, and time into the current one. */
@@ -329,9 +325,12 @@ export class Battler3D {
     this.time += dt;
     const pose = this.animator.update(dt);
     this.pose = pose;
-    const clip = this.animator.currentClip;
-    const attacking = !!clip && !MOMENT_CLIPS.has(clip);
-    this.facing = this.facingSpring.update(dt, attacking ? 1 : 0);
+    // Turn toward the target only while travelling to it: the turn rides a
+    // contact move's leap (and unwinds on the hop home) instead of pivoting
+    // on the spot before every move. Moves made from home keep the display
+    // yaw, like the stock sprites, which never turn.
+    const travel = Math.min(1, Math.abs(pose.advance ?? 0) * 2);
+    this.facing = travel * travel * (3 - 2 * travel);
     const recoil = this.recoilSpring.update(dt, 0);
 
     // Root transform: calibration + animation channels (+ hit recoil: pushed

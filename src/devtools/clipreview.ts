@@ -8,8 +8,11 @@
 //   &mark=mouth (or any emitter: cannons, flower, hands...) marks where the
 //   attacker's effects start
 //
-// window.__clip = { start(), step(frames), grab(): PNG data URL, done }
+// window.__clip = { start(), step(frames), grab(): PNG data URL, done,
+//   tick(frames) (no rendering), joints(names) } — the last two feed
+//   tools/gauntlet/motion.mjs
 
+import * as THREE from 'three';
 import { GbaScreen } from '../battle/screen';
 import { Healthbox } from '../battle/ui/healthbox';
 import { BattleTextbox } from '../battle/ui/textbox';
@@ -27,6 +30,10 @@ declare global {
     __clip?: {
       start: () => void;
       step: (frames: number) => Promise<void>;
+      /** Advance without rendering (motion analysis). */
+      tick: (frames: number) => void;
+      /** The attacker's joints (semantic rig names) in body heights, in its slot's frame; null where the rig has none. 'rootYaw' gives the body's yaw in degrees. */
+      joints: (names: string[]) => Record<string, [number, number, number] | null>;
       grab: () => string;
       done: boolean;
       label: string;
@@ -154,6 +161,26 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
         await macrotask();
       }
       render();
+    },
+    tick(frames: number) {
+      for (let i = 0; i < frames; i++) update();
+    },
+    joints(names: string[]) {
+      stage.scene.updateMatrixWorld(true);
+      const toSlot = stage.slots[attackerSide].matrixWorld.clone().invert();
+      const H = attacker.profile.calibration.height;
+      const out: Record<string, [number, number, number] | null> = {};
+      for (const n of names) {
+        if (n === 'rootYaw') {
+          out[n] = [THREE.MathUtils.radToDeg(attacker.inst.root.rotation.y), 0, 0];
+          continue;
+        }
+        const node = attacker.inst.rig.node(n);
+        if (!node) { out[n] = null; continue; }
+        const p = new THREE.Vector3().setFromMatrixPosition(node.matrixWorld).applyMatrix4(toSlot).divideScalar(H);
+        out[n] = [p.x, p.y, p.z];
+      }
+      return out;
     },
     grab() {
       const c = document.createElement('canvas');

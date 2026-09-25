@@ -46,6 +46,27 @@ small unless the body should fold over (tackle, quake).
 - [x] `heal`: Rest — settles down heavily with the arms dropping limp, eyes closing and the head sinking forward, slow deep breaths (moving hold) while sparkles rise, gets back up
 - Also mapped: tackle → `physical_weak`, tackle_strong and slam → `physical_strong`, spit → `special_weak`, beam → `special_strong`, buff and weather → `status_self`, roar → `status_target`, throw → `wave`
 
+## Fluidity pass (after comparing with Blaziken)
+
+Measured with `tools/gauntlet/motion.mjs` against Blaziken and re-reviewed on
+contact sheets from both sides:
+
+- The battler no longer pivots toward the foe before every move (the engine
+  turn now rides a contact move's leap and unwinds on the hop home).
+- `physical_weak`: the shoulder charge no longer yaws the whole body on its
+  planted feet (a 31° turn on the spot); the spine twists instead, with a
+  longer sink, a squash on the crash and a heavier head-shaking hop home.
+- `quake`: the fists rise through the sides (`ARMS_OUT`) instead of sweeping
+  across the body, and the hammer lands into a squash and a rebound.
+- `shield`: the forearms rise into the X (`GUARD_RISING`) and the hold sinks
+  slowly instead of trembling in place; `status_self` and `glare` got moving
+  holds the same way.
+- `physical_strong`: the belly slam got breakdown keys in the air (it popped
+  at the crash). `punch` and `strike` swing the torso less (±18–23°, were up
+  to ±28°) after a slower wind-up, and the chop starts from an arm cocked
+  further back as it lands, over 6 frames (was under 5): heavy, not snappy.
+- `hit`: the snap into the flinch is 4 frames (was 3).
+
 ## Showcase moves in battle
 
 - [x] a full battle with swampert as ours and as the opponent (autoplay, both

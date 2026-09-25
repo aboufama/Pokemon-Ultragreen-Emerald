@@ -71,6 +71,8 @@ const arms = (armL: Vec3, forearmL: Vec3, handL: Vec3, right?: [Vec3, Vec3, Vec3
 
 /** Both fists raised high overhead (rearing up for a slam or a wave). */
 const ARMS_UP = arms([0.5, 0.82, 0.28], [0.18, 0.95, 0.25], [-0.1, 0.97, 0.2]);
+/** Arms raised out at the sides, on the way up (a breakdown: raises go through here, not across the body). */
+const ARMS_OUT = arms([0.95, 0.28, 0.1], [0.72, 0.68, 0.12], [0.42, 0.9, 0.12]);
 /** Arms flung up and out in a V (battle cry, calling the sky). */
 const ARMS_SPREAD_UP = arms([0.85, 0.45, 0.25], [0.55, 0.8, 0.2], [0.2, 0.95, 0.2]);
 /** Arms thrown wide at shoulder height (roaring at the foe). */
@@ -85,6 +87,8 @@ const PUSH_LOW = arms([0.32, -0.35, 0.88], [0.15, -0.3, 0.94], [0.02, -0.1, 0.99
 const ARMS_SCOOP = arms([0.55, -0.75, -0.35], [0.3, -0.7, -0.65], [0.1, -0.5, -0.86]);
 /** Forearms crossed in front of the face (Protect). */
 const CROSSED_GUARD = arms([0.55, -0.45, 0.7], [-0.72, 0.62, 0.3], [-0.55, 0.8, 0.2]);
+/** Forearms rising in front of the chest (on the way into CROSSED_GUARD). */
+const GUARD_RISING = arms([0.6, -0.55, 0.58], [-0.35, 0.55, 0.76], [-0.3, 0.8, 0.52]);
 /** Arms crossed low in front of the belly (gathering, curled up). */
 const CROSSED_LOW = arms([0.45, -0.7, 0.55], [-0.75, -0.2, 0.62], [-0.6, -0.55, 0.55]);
 /** Sumo brace: arms planted low at the sides, hands by the knees (bracing a blast). */
@@ -109,6 +113,8 @@ const PUNCH_R = arms([0.75, -0.35, -0.55], [0.35, -0.2, 0.92], [0.2, -0.3, 0.93]
 const PUNCH_R_THROUGH = arms([0.75, -0.35, -0.55], [0.35, -0.2, 0.92], [0.2, -0.3, 0.93], [[0.12, -0.08, 0.99], [0.2, -0.1, 0.97], [0.25, -0.1, 0.96]]);
 /** Right hand raised high behind the head, edge ready to chop (Brick Break). */
 const CHOP_RAISED = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.55, 0.6, -0.58], [-0.1, 0.95, 0.3], [0.0, 0.95, 0.3]]);
+/** CHOP_RAISED cocked further back as it lands, so the chop starts from a turnaround, not a dead stop. */
+const CHOP_COCKED = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.5, 0.64, -0.58], [-0.06, 0.97, -0.2], [0.02, 0.9, -0.42]]);
 /** The chop drives down and across in front. */
 const CHOP_DOWN = arms([0.7, -0.5, -0.5], [0.3, -0.4, 0.87], [0.1, -0.5, 0.86], [[-0.25, -0.35, 0.9], [0.35, -0.75, 0.56], [0.45, -0.8, 0.4]]);
 /** Fingers curled into fists. */
@@ -176,7 +182,7 @@ const hit: Clip = {
   duration: 0.66,
   keys: [
     key(0),
-    snap(0.05, bend(-12, -6, -4, -16), FLINCH, jaw(10), HURT),
+    snap(0.066, bend(-12, -6, -4, -16), FLINCH, jaw(10), HURT),
     key(0.2, bend(-5, -2, -2, -7), jaw(4), HURT),
     key(0.38, bend(3, 1, 0, 3), HURT),
     key(0.66, OPEN_EYES),
@@ -212,17 +218,18 @@ const physicalWeak: Clip = {
   duration: 1.4,
   keys: [
     key(0),
-    key(0.18, pelvis(0, -0.05, -0.02), { root: { yaw: 16 } }, bend(12, 4, 2, 12), ARMS_TUCKED, MOUTH_SHUT, ANGRY),
-    key(0.36, { advance: 0.6, root: { y: 0.05, yaw: 20 } }, TUCK, bend(22, 6, 2, 16), ARMS_TUCKED, MOUTH_SHUT, ANGRY),
-    // Body blow: lands shoulder-first on the foe.
-    snap(0.46, { advance: 1, root: { yaw: 14, pitch: 6 } }, LAND, pelvis(0, -0.03, 0.02), bend(26, 8, 2, 16), ARMS_TUCKED, MOUTH_SHUT, SQUINT),
-    key(0.52, { advance: 1, root: { yaw: 13, pitch: 6 } }, LAND, pelvis(0, -0.03, 0.02), bend(26, 8, 2, 15), ARMS_TUCKED, MOUTH_SHUT, SQUINT),
-    // Bounces off, shakes its head.
-    key(0.66, { advance: 0.9, root: { yaw: 4 } }, pelvis(0, -0.035), bend(8, 2, 0, 0, 6), ANGRY),
-    key(0.8, { advance: 0.9 }, pelvis(0, -0.035), bend(9, 2, 0, 0, -4), ANGRY),
-    // Hops home.
-    key(0.96, { advance: 0.45, root: { y: 0.05 } }, HOP, bend(6, 0, 0, 0), ANGRY),
-    key(1.1, { advance: 0 }, LAND, ANGRY),
+    // Wind-up: sinks, the right shoulder draws back (the spine twists; the feet stay put), head lowering.
+    key(0.2, pelvis(0, -0.055, -0.02), twist(-12), bend(12, 4, 2, 12), ARMS_TUCKED, MOUTH_SHUT, ANGRY),
+    // Launch: the right shoulder drives forward as it hops in low, head down.
+    key(0.36, { advance: 0.6, root: { y: 0.05 } }, TUCK, twist(14), bend(22, 6, 2, 16), ARMS_TUCKED, MOUTH_SHUT, ANGRY),
+    // Body blow: lands shoulder-first on the foe and compresses into it.
+    snap(0.46, { advance: 1, root: { pitch: 6 } }, LAND, pelvis(0, -0.035, 0.02), twist(18), bend(26, 8, 2, 16), ARMS_TUCKED, MOUTH_SHUT, SQUINT),
+    key(0.54, { advance: 1, root: { pitch: 5 } }, LAND, pelvis(0, -0.045, 0.02), twist(16), bend(24, 8, 2, 14), ARMS_TUCKED, MOUTH_SHUT, SQUINT),
+    // Rebounds off the foe in a low hop, shaking its head, and carries on home in one flow.
+    key(0.7, { advance: 0.72, root: { y: 0.05 } }, HOP, twist(4), bend(8, 2, 0, 0, 7), ANGRY),
+    key(0.84, { advance: 0.38, root: { y: 0.055 } }, HOP, bend(6, 0, 0, 0, -5), ANGRY),
+    key(0.98, { advance: 0 }, LAND, ANGRY),
+    key(1.14, pelvis(0, -0.02), bend(3, 1, 0, 1), ANGRY),
     key(1.4, OPEN_EYES),
   ],
   events: [{ t: 0.47, name: 'impact' }],
@@ -246,7 +253,8 @@ const physicalStrong: Clip = {
     key(0.76, { advance: 0.8, root: { y: 0.15, pitch: 24 } }, TUCK, bend(12, 4, 0, -4), ARMS_FWD_SPREAD, jaw(12), ANGRY),
     // Crash: belly-first onto the foe.
     fall(0.88, { advance: 1, root: { y: 0.02, pitch: 38 } }, TUCK, bend(16, 6, 2, 0), ARMS_FWD_SPREAD, MOUTH_SHUT, SQUINT),
-    key(1.0, { advance: 1, root: { y: 0, pitch: 34 } }, TUCK, pelvis(0, -0.03), bend(15, 6, 2, 2), ARMS_FWD_SPREAD, MOUTH_SHUT, SQUINT),
+    key(0.95, { advance: 1, root: { y: 0, pitch: 40 } }, TUCK, pelvis(0, -0.04), bend(18, 7, 2, 2), ARMS_FWD_SPREAD, MOUTH_SHUT, SQUINT),
+    key(1.06, { advance: 1, root: { y: 0.01, pitch: 33 } }, TUCK, pelvis(0, -0.03), bend(15, 6, 2, 2), ARMS_FWD_SPREAD, MOUTH_SHUT, SQUINT),
     // Shoves off and plants its feet again.
     key(1.24, { advance: 1, root: { pitch: 6 } }, LAND, pelvis(0, -0.04), bend(10, 2, 0, 0), ANGRY),
     key(1.38, { advance: 1 }, LAND, pelvis(0, -0.03), bend(8, 2, 0, 0), ANGRY),
@@ -320,10 +328,11 @@ const statusSelf: Clip = {
     key(0),
     key(0.32, pelvis(0, -0.06), bend(18, 6, 2, 14), CROSSED_LOW, MOUTH_SHUT, SHUT),
     key(0.44, pelvis(0, -0.066), bend(20, 6, 2, 16, 0, 1), CROSSED_LOW, MOUTH_SHUT, SHUT),
-    snap(0.6, pelvis(0, 0.02), bend(-12, -8, -6, -26), ARMS_SPREAD_UP, jaw(20), ANGRY),
-    key(0.78, pelvis(0, 0.024), bend(-13, -8, -6, -27, 0, 2), ARMS_SPREAD_UP, jaw(22), ANGRY),
-    key(0.96, pelvis(0, 0.02), bend(-12, -9, -6, -26, 0, -2), ARMS_SPREAD_UP, jaw(20), ANGRY),
-    key(1.14, pelvis(0, 0.022), bend(-13, -8, -6, -27, 0, 1.5), ARMS_SPREAD_UP, jaw(22), ANGRY),
+    key(0.54, pelvis(0, -0.03), bend(8, 2, 0, 4), ARMS_OUT, jaw(8), ANGRY),
+    snap(0.62, pelvis(0, 0.02), bend(-12, -8, -6, -26), ARMS_SPREAD_UP, jaw(20), ANGRY),
+    key(0.8, pelvis(0, 0.026), bend(-14, -8, -6, -28, 4, 2), ARMS_UP, jaw(24), ANGRY),
+    key(1.02, pelvis(0, 0.03), bend(-15, -9, -6, -29, -4, -2), ARMS_SPREAD_UP, jaw(26), ANGRY),
+    key(1.16, pelvis(0, 0.024), bend(-12, -8, -6, -25, 0, 1), ARMS_SPREAD_UP, jaw(18), ANGRY),
     key(1.4, pelvis(0, -0.02), bend(6, 2, 0, -2), jaw(2), ANGRY),
     key(1.9, OPEN_EYES),
   ],
@@ -355,18 +364,27 @@ const statusTarget: Clip = {
  */
 const quake: Clip = {
   name: 'quake',
-  duration: 1.9,
+  duration: 1.95,
   keys: [
     key(0),
-    key(0.36, pelvis(0, 0.02, -0.02), bend(-12, -6, -4, -12), ARMS_UP, FISTS, MOUTH_SHUT, ANGRY),
-    key(0.5, pelvis(0, 0.026, -0.025), bend(-14, -7, -4, -14), ARMS_UP, FISTS, MOUTH_SHUT, ANGRY),
-    snap(0.64, pelvis(0, -0.08, 0.02), bend(22, 8, 2, 6), HAMMER_DOWN, FISTS, jaw(10), ANGRY),
-    key(0.84, pelvis(0, -0.075, 0.018), bend(20, 7, 2, 4, 3), HAMMER_DOWN, FISTS, jaw(8), ANGRY),
-    key(1.04, pelvis(0, -0.078, 0.018), bend(21, 8, 2, 5, -3), HAMMER_DOWN, FISTS, jaw(8), ANGRY),
-    key(1.35, pelvis(0, -0.03), bend(6, 2, 0, 0), ANGRY),
-    key(1.9, OPEN_EYES),
+    // A small dip before rearing up (anticipation), the arms starting out to the sides.
+    key(0.14, pelvis(0, -0.03), bend(8, 2, 0, 6), MOUTH_SHUT, ANGRY),
+    // Rearing up: the arms rise out through the sides...
+    key(0.34, pelvis(0, 0.01, -0.01), bend(-6, -3, -2, -6), ARMS_OUT, FISTS, jaw(6), ANGRY),
+    // ...to both fists high overhead, reared tall (a moving hold, still rising).
+    key(0.5, pelvis(0, 0.024, -0.02), bend(-13, -6, -4, -13), ARMS_UP, FISTS, jaw(14), ANGRY),
+    key(0.6, pelvis(0, 0.03, -0.025), bend(-15, -7, -4, -15), ARMS_UP, FISTS, jaw(16), ANGRY),
+    // The hammer: drops into a deep crouch and drives both fists into the ground.
+    snap(0.72, pelvis(0, -0.085, 0.02), bend(22, 8, 2, 6), HAMMER_DOWN, FISTS, jaw(10), ANGRY),
+    // Squash on impact, then a small rebound.
+    key(0.8, pelvis(0, -0.097, 0.022), bend(25, 9, 2, 8), HAMMER_DOWN, FISTS, jaw(8), ANGRY),
+    key(0.96, pelvis(0, -0.07, 0.018), bend(19, 7, 2, 4, 3), HAMMER_DOWN, FISTS, jaw(8), ANGRY),
+    // Holds the crouch while the ground heaves, pressing down (moving hold).
+    key(1.16, pelvis(0, -0.078, 0.018), bend(21, 8, 2, 5, -3), HAMMER_DOWN, FISTS, jaw(6), ANGRY),
+    key(1.42, pelvis(0, -0.03), bend(6, 2, 0, 0), ANGRY),
+    key(1.95, OPEN_EYES),
   ],
-  events: [{ t: 0.72, name: 'impact' }],
+  events: [{ t: 0.77, name: 'impact' }],
 };
 
 /**
@@ -396,12 +414,15 @@ const shield: Clip = {
   duration: 1.6,
   keys: [
     key(0),
-    key(0.18, pelvis(0, -0.03), bend(6, 2, 0, 4), ANGRY),
-    snap(0.34, pelvis(0, -0.06), bend(12, 4, 2, 14), CROSSED_GUARD, MOUTH_SHUT, SQUINT),
-    key(0.54, pelvis(0, -0.062), bend(12, 4, 2, 15, 0, 1), CROSSED_GUARD, MOUTH_SHUT, SQUINT),
-    key(0.74, pelvis(0, -0.06), bend(13, 4, 2, 14, 0, -1), CROSSED_GUARD, MOUTH_SHUT, SQUINT),
-    key(0.94, pelvis(0, -0.062), bend(12, 4, 2, 15, 0, 1), CROSSED_GUARD, MOUTH_SHUT, SQUINT),
-    key(1.16, pelvis(0, -0.03), bend(4, 1, 0, 2), ANGRY),
+    // Digs in, the forearms rising in front of the chest.
+    key(0.16, pelvis(0, -0.03), bend(6, 2, 0, 4), GUARD_RISING, ANGRY),
+    snap(0.32, pelvis(0, -0.06), bend(12, 4, 2, 14), CROSSED_GUARD, MOUTH_SHUT, SQUINT),
+    // Braces behind the guard: settles deeper and leans into it (moving hold, never frozen).
+    key(0.46, pelvis(0, -0.066), bend(13, 4, 2, 15, 0, 1), CROSSED_GUARD, MOUTH_SHUT, SQUINT),
+    key(0.84, pelvis(0, -0.075, 0.012), bend(15, 5, 2, 16, 0, -1), CROSSED_GUARD, MOUTH_SHUT, SQUINT),
+    // Lowers the guard, the arms opening back to the stance.
+    key(1.04, pelvis(0, -0.05), bend(9, 3, 1, 9), GUARD_RISING, ANGRY),
+    key(1.24, pelvis(0, -0.02), bend(3, 1, 0, 2), ANGRY),
     key(1.6, OPEN_EYES),
   ],
   events: [{ t: 0.4, name: 'aura' }],
@@ -417,13 +438,13 @@ const punch: Clip = {
   duration: 1.6,
   keys: [
     key(0),
-    key(0.2, pelvis(0, -0.05), bend(10, 2, 0, 4), twist(-24), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
-    key(0.4, { advance: 0.6, root: { y: 0.05 } }, TUCK, bend(8, 2, 0, 2), twist(-26), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
-    key(0.52, { advance: 1 }, LAND, bend(12, 2, 0, 4), twist(-26), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
+    key(0.22, pelvis(0, -0.05), bend(10, 2, 0, 4), twist(-18), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
+    key(0.4, { advance: 0.6, root: { y: 0.05 } }, TUCK, bend(8, 2, 0, 2), twist(-20), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
+    key(0.52, { advance: 1 }, LAND, bend(12, 2, 0, 4), twist(-20), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
     // The punch: hips and shoulders unwind, the fist drives straight at the foe.
-    snap(0.6, { advance: 1 }, pelvis(0, -0.035, 0.02), bend(14, 4, 0, 4), twist(24), PUNCH_R, FISTS, jaw(6), ANGRY),
+    snap(0.6, { advance: 1 }, pelvis(0, -0.035, 0.02), bend(14, 4, 0, 4), twist(18), PUNCH_R, FISTS, jaw(6), ANGRY),
     // Follow-through: the fist carries on, the body leans into it.
-    key(0.78, { advance: 1 }, pelvis(0, -0.035, 0.025), bend(16, 4, 0, 4), twist(28), PUNCH_R_THROUGH, FISTS, jaw(4), ANGRY),
+    key(0.78, { advance: 1 }, pelvis(0, -0.035, 0.025), bend(16, 4, 0, 4), twist(23), PUNCH_R_THROUGH, FISTS, jaw(4), ANGRY),
     key(0.94, { advance: 1 }, pelvis(0, -0.035), bend(8, 2, 0, 0), ANGRY),
     key(1.1, { advance: 0.45, root: { y: 0.05 } }, HOP, ANGRY),
     key(1.24, { advance: 0 }, LAND, ANGRY),
@@ -441,17 +462,17 @@ const strike: Clip = {
   duration: 1.5,
   keys: [
     key(0),
-    key(0.16, pelvis(0, -0.04), bend(10, 2, 0, 2), twist(-18), CHOP_RAISED, MOUTH_SHUT, ANGRY),
-    key(0.34, { advance: 0.55, root: { y: 0.05 } }, TUCK, bend(8, 2, 0, 0), twist(-20), CHOP_RAISED, MOUTH_SHUT, ANGRY),
-    key(0.46, { advance: 1 }, LAND, bend(12, 2, 0, 2), twist(-20), CHOP_RAISED, MOUTH_SHUT, ANGRY),
-    snap(0.54, { advance: 1 }, pelvis(0.01, -0.045, 0.01), bend(22, 6, 0, 6), twist(20), CHOP_DOWN, jaw(6), ANGRY),
-    key(0.72, { advance: 1 }, pelvis(0.012, -0.045, 0.012), bend(23, 6, 0, 6), twist(23), CHOP_DOWN, jaw(4), ANGRY),
-    key(0.88, { advance: 1 }, pelvis(0, -0.035), bend(10, 2, 0, 0), ANGRY),
+    key(0.2, pelvis(0, -0.04), bend(10, 2, 0, 2), twist(-15), CHOP_RAISED, MOUTH_SHUT, ANGRY),
+    key(0.36, { advance: 0.55, root: { y: 0.05 } }, TUCK, bend(8, 2, 0, 0), twist(-16), CHOP_RAISED, MOUTH_SHUT, ANGRY),
+    key(0.47, { advance: 1 }, LAND, bend(12, 2, 0, 2), twist(-20), CHOP_COCKED, MOUTH_SHUT, ANGRY),
+    snap(0.57, { advance: 1 }, pelvis(0.01, -0.045, 0.01), bend(22, 6, 0, 6), twist(16), CHOP_DOWN, jaw(6), ANGRY),
+    key(0.74, { advance: 1 }, pelvis(0.012, -0.045, 0.012), bend(23, 6, 0, 6), twist(20), CHOP_DOWN, jaw(4), ANGRY),
+    key(0.9, { advance: 1 }, pelvis(0, -0.035), bend(10, 2, 0, 0), ANGRY),
     key(1.04, { advance: 0.45, root: { y: 0.05 } }, HOP, ANGRY),
     key(1.18, { advance: 0 }, LAND, ANGRY),
     key(1.5, OPEN_EYES),
   ],
-  events: [{ t: 0.6, name: 'impact' }],
+  events: [{ t: 0.63, name: 'impact' }],
 };
 
 /**
@@ -465,7 +486,7 @@ const glare: Clip = {
     key(0),
     key(0.26, pelvis(0, -0.04, 0.03), bend(12, 4, 0, -6, 0, 6), BRACED, MOUTH_SHUT, NARROW),
     key(0.44, pelvis(0, -0.05, 0.04), bend(14, 5, 0, -6, -6, 8), BRACED, MOUTH_SHUT, NARROW),
-    key(0.72, pelvis(0, -0.05, 0.04), bend(14, 5, 0, -6, 6, 5), BRACED, MOUTH_SHUT, NARROW),
+    key(0.74, pelvis(0, -0.058, 0.052), bend(16, 6, 0, -6, 6, 5), BRACED, MOUTH_SHUT, NARROW),
     key(0.96, pelvis(0, -0.02, 0.01), bend(5, 2, 0, -2), ANGRY),
     key(1.35, OPEN_EYES),
   ],

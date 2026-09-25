@@ -19,8 +19,9 @@
 // body; events that depend on them sit a few frames after their key),
 // breathing, blinks and the springs (see index.ts).
 //
-// Motif clips keep a category prefix (physical_weak_tackle...) so the battler
-// turns to face its target while they play; index.ts maps motifs to clips.
+// Motif clips keep a category prefix (physical_weak_tackle...); index.ts maps
+// motifs to clips. The battler turns toward its target only while a contact
+// move carries it there (advance); on the spot, FACE turns the head and chest.
 
 import type { Clip, Keyframe } from '../../anim/clip';
 import { compose } from '../../anim/animator';
@@ -52,6 +53,8 @@ const bend = (spine: number, chest: number, neck: number, head: number, headY = 
 });
 /** Turn the upper body and head from the stance's sideways look to face the foe. */
 const FACE: Pose = { bones: { spine: { y: 12 }, neck: { z: -6 }, head: { y: 22, z: 2 } } };
+/** Part of FACE: the head leads the turn over the anticipation instead of snapping round. */
+const face = (f: number): Pose => ({ bones: { spine: { y: 12 * f }, neck: { z: -6 * f }, head: { y: 22 * f, z: 2 * f } } });
 /** Torso twist (+ turns the chest to its left, bringing the right shoulder forward) and lean (+z: to its right). */
 const twist = (y: number, z = 0): Pose => ({ bones: { spine: { y: y * 0.6, z }, chest: { y: y * 0.4 } } });
 /** The tail chain: lift (+ raises it) and sweep (+ swings it toward its right), spread along the chain. */
@@ -186,29 +189,29 @@ const intro: Clip = {
  */
 const physicalWeak: Clip = {
   name: 'physical_weak',
-  duration: 1.2,
+  duration: 1.3,
   keys: [
     key(0),
-    // Wind up: crouch, right shoulder back, the blade raised high behind like a sword.
-    key(0.1, pelvis(0, -0.04), FACE, twist(-44), bend(8, 0, 0, -6, 20), BLADE_COCKED, FOCUS, tail(8, -14)),
+    // Wind up: crouch, the head turning to the foe first, right shoulder back, the blade raised high behind like a sword.
+    key(0.16, pelvis(0, -0.04), face(0.6), twist(-26), bend(8, 0, 0, -6, 14), BLADE_COCKED, FOCUS, tail(8, -12)),
     // Leap along an arc, legs tucked.
-    key(0.22, advance(0.55), root({ y: 0.08 }), TUCK, FACE, twist(-48), bend(6, 0, 0, -6, 22), ANGRY, tail(14, -16),
+    key(0.28, advance(0.55), root({ y: 0.08 }), TUCK, FACE, twist(-30), bend(6, 0, 0, -6, 16), ANGRY, tail(14, -14),
       arms([[-0.55, 0.68, -0.48], [-0.15, 0.97, -0.2], [-0.05, 0.9, -0.43]], [[0.4, -0.5, 0.77], [-0.2, 0.75, 0.63], [-0.15, 0.95, 0.25]])),
-    // Land in front of the foe, knees taking the weight.
-    key(0.32, advance(1), LAND, FACE, twist(-46), bend(12, 0, 0, -6, 21), BLADE_COCKED, ANGRY, tail(6, -14)),
+    // Land in front of the foe, knees taking the weight, the blade still cocked.
+    key(0.38, advance(1), LAND, FACE, twist(-30), bend(12, 0, 0, -6, 15), BLADE_COCKED, ANGRY, tail(6, -12)),
     // Slash: the torso unwinds, the forearm sweeps down and across, blade leading.
-    snap(0.39, advance(1), pelvis(0.012, -0.035), FACE, twist(44, -8), bend(20, 4, 0, -6, -10), ANGRY, tail(4, 26),
+    snap(0.45, advance(1), pelvis(0.012, -0.035), FACE, twist(26, -6), bend(20, 4, 0, -6, -8), ANGRY, tail(4, 22),
       arms([[0.45, -0.45, 0.77], [0.8, -0.5, 0.33], [0.85, -0.5, 0.15]], [[0.5, -0.62, -0.6], [0.2, -0.2, 0.96], [0.2, -0.3, 0.93]])),
     // Follow-through: the blade carries on down past its left hip, then hangs there.
-    key(0.55, advance(1), pelvis(0.014, -0.032), FACE, twist(50, -9), bend(22, 4, 0, -6, -12), ANGRY, tail(2, 32),
+    key(0.6, advance(1), pelvis(0.014, -0.032), FACE, twist(32, -7), bend(22, 4, 0, -6, -10), ANGRY, tail(2, 28),
       arms([[0.6, -0.65, 0.45], [0.7, -0.7, 0.15], [0.6, -0.8, 0.02]], [[0.5, -0.62, -0.6], [0.2, -0.2, 0.96], [0.2, -0.3, 0.93]])),
-    key(0.7, advance(1), pelvis(0, -0.035), FACE, twist(8), bend(12, 2, 0, -2), GUARD, ANGRY, tail(4, 8)),
-    // Hop back home.
-    key(0.84, advance(0.45), root({ y: 0.065 }), HOP, FACE, bend(8, 0, 0, 0), GUARD, ANGRY, tail(10)),
-    key(0.96, advance(0), LAND, FACE, GUARD, ANGRY, tail(2)),
-    key(1.2, OPEN_EYES),
+    key(0.76, advance(1), pelvis(0, -0.035), FACE, twist(8), bend(12, 2, 0, -2), GUARD, ANGRY, tail(4, 8)),
+    // Hop back home, the head easing back to its sideways look.
+    key(0.9, advance(0.45), root({ y: 0.065 }), HOP, face(0.8), bend(8, 0, 0, 0), GUARD, ANGRY, tail(10)),
+    key(1.02, advance(0), LAND, face(0.5), GUARD, ANGRY, tail(2)),
+    key(1.3, OPEN_EYES),
   ],
-  events: [{ t: 0.44, name: 'impact' }],
+  events: [{ t: 0.5, name: 'impact' }],
 };
 
 /**
@@ -253,19 +256,19 @@ const specialWeak: Clip = {
   keys: [
     key(0),
     // Breath in: chest up, head back, elbows back.
-    key(0.18, pelvis(0, 0.012), FACE, bend(-8, -8, -8, -18), ELBOWS_BACK, ANGRY, tail(10)),
-    // Three pecks: the head drives forward, jaw wide, and bobs back.
-    snap(0.26, pelvis(0, -0.014, 0.03), FACE, bend(16, 8, 0, -2), BRACED, jaw(32), ANGRY, tail(3)),
-    key(0.36, pelvis(0, -0.006, 0.012), FACE, bend(4, 2, -2, -14), BRACED, jaw(10), ANGRY, tail(6)),
-    snap(0.44, pelvis(0, -0.014, 0.03), FACE, bend(16, 8, 0, -2, 4), BRACED, jaw(32), ANGRY, tail(3)),
-    key(0.54, pelvis(0, -0.006, 0.012), FACE, bend(4, 2, -2, -14, 3), BRACED, jaw(10), ANGRY, tail(6)),
-    snap(0.62, pelvis(0, -0.016, 0.034), FACE, bend(17, 8, 0, -2, -4), BRACED, jaw(34), ANGRY, tail(2)),
+    key(0.2, pelvis(0, 0.012), face(0.8), bend(-8, -8, -8, -18), ELBOWS_BACK, ANGRY, tail(10)),
+    // Three pecks: the head drives forward, jaw wide, and bobs back, each a little further in.
+    snap(0.28, pelvis(0, -0.012, 0.026), FACE, bend(11, 6, 0, -4), BRACED, jaw(32), ANGRY, tail(3)),
+    key(0.37, pelvis(0, -0.008, 0.016), FACE, bend(6, 3, -2, -10), BRACED, jaw(12), ANGRY, tail(6)),
+    snap(0.45, pelvis(0, -0.014, 0.03), FACE, bend(12, 6, 0, -4, 4), BRACED, jaw(32), ANGRY, tail(3)),
+    key(0.54, pelvis(0, -0.009, 0.018), FACE, bend(7, 3, -2, -10, 3), BRACED, jaw(12), ANGRY, tail(6)),
+    snap(0.62, pelvis(0, -0.016, 0.034), FACE, bend(13, 7, 0, -4, -4), BRACED, jaw(34), ANGRY, tail(2)),
     // Recoil: the head bobs back up as the jaw closes.
     key(0.78, pelvis(0, -0.004, 0.008), FACE, bend(2, 1, -2, -14), BRACED, jaw(6), ANGRY, tail(7)),
     key(0.96, pelvis(0, -0.003), bend(2, 1, 0, -2), jaw(0), ANGRY, tail(2)),
     key(1.25, OPEN_EYES),
   ],
-  events: [{ t: 0.32, name: 'release' }, { t: 0.5, name: 'release' }, { t: 0.68, name: 'release' }],
+  events: [{ t: 0.34, name: 'release' }, { t: 0.51, name: 'release' }, { t: 0.68, name: 'release' }],
 };
 
 /**
@@ -278,7 +281,7 @@ const specialStrong: Clip = {
   duration: 2.4,
   keys: [
     key(0),
-    key(0.14, pelvis(0, -0.02), FACE, bend(4, 0, 0, 6)),
+    key(0.14, pelvis(0, -0.02), face(0.5), bend(4, 0, 0, 6)),
     // Soak up light: rise, face to the sky, arms open, eyes shut.
     key(0.5, pelvis(0, 0.018), FACE, bend(-12, -10, -12, -30), SPREAD, SPLAYED, SHUT, tail(25)),
     key(0.66, pelvis(0, 0.022), FACE, bend(-13, -11, -13, -32, 0, 2), SPREAD, SPLAYED, SHUT, tail(28)),
@@ -301,28 +304,30 @@ const specialStrong: Clip = {
 /**
  * Agility (self status; Double Team, Swords Dance): blurs from side to side
  * in three quick hops, leaning into each, lands centred and snaps its blades
- * up with an aura.
+ * up with an aura. Each hop peaks halfway across, so the body keeps flowing
+ * through the air and only stops where it lands.
  */
 const statusSelf: Clip = {
   name: 'status_self',
-  duration: 1.5,
+  duration: 1.6,
   keys: [
     key(0),
-    key(0.1, pelvis(0, -0.05), FACE, bend(12, 4, 2, 6), GUARD, FOCUS, tail(6)),
-    key(0.2, root({ x: 0.17, y: 0.05 }), HOP, FACE, twist(0, -12), bend(8, 2, 0, 2), GUARD, FOCUS, tail(10, 20)),
-    key(0.28, root({ x: 0.2 }), LAND, FACE, twist(0, -4), GUARD, FOCUS, tail(4, 14)),
-    key(0.38, root({ x: -0.14, y: 0.05 }), HOP, FACE, twist(0, 12), bend(8, 2, 0, 2), GUARD, FOCUS, tail(10, -20)),
-    key(0.46, root({ x: -0.18 }), LAND, FACE, twist(0, 4), GUARD, FOCUS, tail(4, -14)),
-    key(0.56, root({ x: 0.03, y: 0.05 }), HOP, FACE, twist(0, -6), bend(6, 2, 0, 2), GUARD, FOCUS, tail(10, 10)),
-    key(0.64, root({ x: 0 }), LAND, FACE, GUARD, FOCUS, tail(4)),
+    // Crouch, the hips loading to its left to push off to the right.
+    key(0.14, pelvis(-0.02, -0.05), face(0.7), twist(0, 4), bend(12, 4, 2, 6), GUARD, FOCUS, tail(6, -6)),
+    key(0.25, root({ x: 0.09, y: 0.06 }), HOP, FACE, twist(0, -12), bend(8, 2, 0, 2), GUARD, FOCUS, tail(10, 20)),
+    key(0.35, root({ x: 0.18 }), LAND, FACE, twist(0, -4), GUARD, FOCUS, tail(4, 14)),
+    key(0.46, root({ x: 0.01, y: 0.065 }), HOP, FACE, twist(0, 12), bend(8, 2, 0, 2), GUARD, FOCUS, tail(10, -20)),
+    key(0.57, root({ x: -0.17 }), LAND, FACE, twist(0, 4), GUARD, FOCUS, tail(4, -14)),
+    key(0.67, root({ x: -0.08, y: 0.05 }), HOP, FACE, twist(0, -6), bend(6, 2, 0, 2), GUARD, FOCUS, tail(10, 10)),
+    key(0.77, LAND, FACE, GUARD, FOCUS, tail(4)),
     // Pose: blades snapped up, chest out; a moving hold with a tremor.
-    snap(0.76, pelvis(0, -0.01), FACE, bend(-6, -4, -4, -8), SPREAD, ANGRY, tail(20)),
-    key(0.9, pelvis(0, -0.013), FACE, bend(-7, -4, -4, -9, 0, 1.5), SPREAD, ANGRY, tail(22)),
-    key(1.04, pelvis(0, -0.01), FACE, bend(-6, -5, -4, -8, 0, -1.5), SPREAD, ANGRY, tail(21)),
-    key(1.18, pelvis(0, -0.02), bend(4, 2, 0, -2), GUARD, ANGRY, tail(8)),
-    key(1.5, OPEN_EYES),
+    snap(0.88, pelvis(0, -0.01), FACE, bend(-6, -4, -4, -8), SPREAD, ANGRY, tail(20)),
+    key(1.02, pelvis(0, -0.013), FACE, bend(-7, -4, -4, -9, 0, 1.5), SPREAD, ANGRY, tail(22)),
+    key(1.16, pelvis(0, -0.01), FACE, bend(-6, -5, -4, -8, 0, -1.5), SPREAD, ANGRY, tail(21)),
+    key(1.3, pelvis(0, -0.02), bend(4, 2, 0, -2), GUARD, ANGRY, tail(8)),
+    key(1.6, OPEN_EYES),
   ],
-  events: [{ t: 0.8, name: 'aura' }],
+  events: [{ t: 0.92, name: 'aura' }],
 };
 
 /**
@@ -335,15 +340,15 @@ const statusTarget: Clip = {
   duration: 1.4,
   keys: [
     key(0),
-    key(0.18, pelvis(0, 0.014), FACE, bend(-12, -8, -10, -20), CLAWS_UP, SPLAYED, ANGRY, tail(24)),
-    snap(0.28, pelvis(0, -0.022, 0.035), FACE, bend(18, 10, 4, -4), CLAWS_OUT, SPLAYED, jaw(36), ANGRY, tail(8)),
+    key(0.2, pelvis(0, 0.014), face(0.7), bend(-10, -7, -9, -18), CLAWS_UP, SPLAYED, ANGRY, tail(24)),
+    snap(0.3, pelvis(0, -0.022, 0.035), FACE, bend(17, 9, 4, -4), CLAWS_OUT, SPLAYED, jaw(36), ANGRY, tail(8)),
     key(0.46, pelvis(0, -0.022, 0.035), FACE, bend(18, 10, 4, -4, 8, 4), CLAWS_OUT, SPLAYED, jaw(38), ANGRY, tail(12)),
     key(0.64, pelvis(0, -0.022, 0.032), FACE, bend(17, 10, 4, -4, -8, -4), CLAWS_OUT, SPLAYED, jaw(36), ANGRY, tail(8)),
     key(0.8, pelvis(0, -0.02, 0.03), FACE, bend(16, 9, 4, -4, 5, 2), CLAWS_OUT, jaw(32), ANGRY, tail(10)),
     key(0.96, pelvis(0, -0.01, 0.012), FACE, bend(6, 2, 0, -3), jaw(8), ANGRY, tail(4)),
     key(1.4, OPEN_EYES),
   ],
-  events: [{ t: 0.34, name: 'emit' }],
+  events: [{ t: 0.36, name: 'emit' }],
 };
 
 /**
@@ -352,20 +357,20 @@ const statusTarget: Clip = {
  */
 const physicalWeakTackle: Clip = {
   name: 'physical_weak_tackle',
-  duration: 1.0,
+  duration: 1.05,
   keys: [
     key(0),
-    key(0.09, pelvis(0, -0.06), FACE, bend(22, 6, 0, -8), ELBOWS_BACK, FOCUS, tail(15)),
-    key(0.2, advance(0.7), root({ y: 0.05, pitch: 18 }), TUCK, FACE, twist(18), bend(24, 6, 0, -14), ELBOWS_BACK, ANGRY, tail(25)),
-    snap(0.26, advance(1), root({ y: 0.03, pitch: 20 }), TUCK, FACE, twist(24), bend(26, 6, 0, -14), ELBOWS_BACK, ANGRY, tail(22)),
+    key(0.14, pelvis(0, -0.06), face(0.7), bend(18, 5, 0, -6), ELBOWS_BACK, FOCUS, tail(12)),
+    key(0.24, advance(0.7), root({ y: 0.05, pitch: 16 }), TUCK, FACE, twist(14), bend(24, 6, 0, -12), ELBOWS_BACK, ANGRY, tail(24)),
+    snap(0.3, advance(1), root({ y: 0.03, pitch: 18 }), TUCK, FACE, twist(18), bend(25, 6, 0, -12), ELBOWS_BACK, ANGRY, tail(22)),
     // Bounce off the foe.
-    key(0.34, advance(0.85), root({ y: 0.06, pitch: 4 }), HOP, FACE, bend(4, 2, 0, -4), GUARD, ANGRY, tail(12)),
-    key(0.46, advance(0.8), LAND, FACE, GUARD, ANGRY, tail(4)),
-    key(0.6, advance(0.35), root({ y: 0.06 }), HOP, FACE, GUARD, ANGRY, tail(10)),
-    key(0.72, advance(0), LAND, FACE, GUARD, ANGRY, tail(2)),
-    key(1.0, OPEN_EYES),
+    key(0.4, advance(0.84), root({ y: 0.06, pitch: 6 }), HOP, FACE, twist(6), bend(8, 2, 0, -6), GUARD, ANGRY, tail(14)),
+    key(0.5, advance(0.78), LAND, FACE, bend(6, 2, 0, -2), GUARD, ANGRY, tail(6)),
+    key(0.64, advance(0.35), root({ y: 0.06 }), HOP, face(0.8), GUARD, ANGRY, tail(10)),
+    key(0.76, advance(0), LAND, face(0.5), GUARD, ANGRY, tail(2)),
+    key(1.05, OPEN_EYES),
   ],
-  events: [{ t: 0.27, name: 'impact' }],
+  events: [{ t: 0.31, name: 'impact' }],
 };
 
 /**
@@ -379,24 +384,24 @@ const physicalStrongPunch: Clip = {
   keys: [
     key(0),
     // Chamber: crouch, right shoulder back, fist at the hip, left guard forward.
-    key(0.18, pelvis(0, -0.05), FACE, twist(-28), bend(12, 4, 0, -4, 10), FISTS, FOCUS, tail(10, -8),
+    key(0.2, pelvis(0, -0.05), face(0.6), twist(-22), bend(12, 4, 0, -4, 8), FISTS, FOCUS, tail(10, -8),
       arms([[-0.5, -0.66, -0.56], [-0.18, -0.2, 0.96], [-0.1, -0.1, 0.99]], [[0.4, -0.45, 0.8], [-0.25, 0.65, 0.72], [-0.2, 0.9, 0.4]])),
     key(0.32, advance(0.55), root({ y: 0.07 }), TUCK, FACE, twist(-30), bend(10, 4, 0, -6, 12), FISTS, ANGRY, tail(16, -10),
       arms([[-0.5, -0.66, -0.56], [-0.18, -0.2, 0.96], [-0.1, -0.1, 0.99]], [[0.4, -0.45, 0.8], [-0.25, 0.65, 0.72], [-0.2, 0.9, 0.4]])),
-    key(0.43, advance(1), LAND, FACE, twist(-30), bend(14, 4, 0, -6, 12), FISTS, ANGRY, tail(8, -8),
+    key(0.42, advance(1), LAND, FACE, twist(-28), bend(14, 4, 0, -6, 12), FISTS, ANGRY, tail(8, -8),
       arms([[-0.5, -0.66, -0.56], [-0.18, -0.2, 0.96], [-0.1, -0.1, 0.99]], [[0.4, -0.45, 0.8], [-0.25, 0.65, 0.72], [-0.2, 0.9, 0.4]])),
     // Punch: hips and shoulders turn into it, the fist drives straight out.
-    snap(0.49, advance(1), pelvis(0, -0.03, 0.03), FACE, twist(30), bend(16, 6, 0, -6, -8), FISTS, ANGRY, tail(4, 18),
+    snap(0.5, advance(1), pelvis(0, -0.03, 0.03), FACE, twist(26), bend(16, 6, 0, -6, -8), FISTS, ANGRY, tail(4, 18),
       arms([[-0.1, 0.02, 0.99], [-0.02, 0.05, 1], [0, 0.05, 1]], [[0.5, -0.66, -0.56], [0.18, -0.2, 0.96], [0.1, -0.1, 0.99]])),
     // Follow-through: the arm stays out a moment, the body leaning in.
-    key(0.64, advance(1), pelvis(0, -0.032, 0.034), FACE, twist(34), bend(18, 6, 0, -6, -9), FISTS, ANGRY, tail(2, 22),
+    key(0.66, advance(1), pelvis(0, -0.032, 0.034), FACE, twist(30), bend(18, 6, 0, -6, -9), FISTS, ANGRY, tail(2, 22),
       arms([[-0.08, -0.04, 0.99], [0, -0.02, 1], [0.02, -0.02, 1]], [[0.5, -0.66, -0.56], [0.18, -0.2, 0.96], [0.1, -0.1, 0.99]])),
-    key(0.8, advance(1), pelvis(0, -0.035), FACE, twist(6), bend(12, 2, 0, -2), GUARD, ANGRY, tail(4, 6)),
-    key(0.94, advance(0.45), root({ y: 0.065 }), HOP, FACE, bend(8, 0, 0, 0), GUARD, ANGRY, tail(10)),
-    key(1.06, advance(0), LAND, FACE, GUARD, ANGRY, tail(2)),
+    key(0.82, advance(1), pelvis(0, -0.035), FACE, twist(6), bend(12, 2, 0, -2), GUARD, ANGRY, tail(4, 6)),
+    key(0.96, advance(0.45), root({ y: 0.065 }), HOP, face(0.8), bend(8, 0, 0, 0), GUARD, ANGRY, tail(10)),
+    key(1.08, advance(0), LAND, face(0.5), GUARD, ANGRY, tail(2)),
     key(1.5, OPEN_EYES),
   ],
-  events: [{ t: 0.53, name: 'impact' }],
+  events: [{ t: 0.54, name: 'impact' }],
 };
 
 /**
@@ -448,11 +453,10 @@ const statusSelfShield: Clip = {
   duration: 1.5,
   keys: [
     key(0),
-    key(0.16, pelvis(0, -0.03), FACE, bend(8, 2, 0, 6), BRACED, FOCUS, tail(4)),
+    key(0.16, pelvis(0, -0.03), face(0.7), bend(8, 2, 0, 6), BRACED, FOCUS, tail(4)),
     snap(0.3, pelvis(0, -0.045), FACE, bend(6, 2, 0, 4), CROSSED, FOCUS, tail(12)),
-    key(0.46, pelvis(0, -0.047), FACE, bend(6, 2, 0, 4, 0, 1.5), CROSSED, FOCUS, tail(13)),
-    key(0.64, pelvis(0, -0.044), FACE, bend(7, 2, 0, 5, 0, -1.5), CROSSED, FOCUS, tail(12)),
-    key(0.82, pelvis(0, -0.047), FACE, bend(6, 2, 0, 4, 0, 1), CROSSED, FOCUS, tail(13)),
+    key(0.46, pelvis(0, -0.05), FACE, bend(7, 2, 0, 5, 0, 1), CROSSED, FOCUS, tail(13)),
+    key(0.84, pelvis(0, -0.058), FACE, bend(10, 3, 1, 7, 0, -1), CROSSED, FOCUS, tail(16)),
     key(1.08, pelvis(0, -0.02), FACE, bend(4, 1, 0, 0), GUARD, ANGRY, tail(4)),
     key(1.5, OPEN_EYES),
   ],
@@ -499,10 +503,10 @@ const statusTargetGlare: Clip = {
   duration: 1.3,
   keys: [
     key(0),
-    key(0.2, pelvis(0, -0.035, 0.026), FACE, bend(16, 6, 10, 14), ANGRY, tail(4)),
+    key(0.2, pelvis(0, -0.035, 0.026), face(0.7), bend(16, 6, 10, 14), ANGRY, tail(4)),
     key(0.34, pelvis(0, -0.04, 0.03), FACE, bend(17, 6, 11, 16, 0, 4), ANGRY, tail(5)),
-    key(0.6, pelvis(0, -0.04, 0.03), FACE, bend(17, 6, 11, 16, 3, 8), ANGRY, tail(6)),
-    key(0.84, pelvis(0, -0.038, 0.028), FACE, bend(16, 6, 10, 15, -2, 6), ANGRY, tail(5)),
+    key(0.62, pelvis(0, -0.046, 0.04), FACE, bend(19, 7, 12, 17, 4, 8), ANGRY, tail(7)),
+    key(0.84, pelvis(0, -0.044, 0.036), FACE, bend(18, 6, 11, 16, -2, 5), ANGRY, tail(5)),
     key(1.02, pelvis(0, -0.012), bend(4, 1, 0, 2), ANGRY, tail(2)),
     key(1.3, OPEN_EYES),
   ],
@@ -515,16 +519,21 @@ const physicalStrongQuake: Clip = {
   duration: 1.6,
   keys: [
     key(0),
-    key(0.22, pelvis(0, -0.08), FACE, bend(18, 6, 0, 6), BRACED, FOCUS, tail(10)),
-    key(0.42, root({ y: 0.22 }), HOP, FACE, bend(-8, -4, -4, -12), SPREAD, ANGRY, tail(35)),
-    key(0.52, root({ y: 0.14 }), DROP, FACE, bend(-2, -2, -2, -8), SPREAD, ANGRY, tail(30)),
-    // Stomp: accelerate into a deep landing, arms driven down.
-    fall(0.6, LAND, pelvis(0, -0.06), FACE, bend(26, 8, 4, 14), BRACED, ANGRY, tail(-12)),
-    key(0.76, pelvis(0, -0.1), FACE, bend(24, 8, 4, 12, 0, 2), BRACED, ANGRY, tail(-14)),
-    key(0.96, pelvis(0, -0.06), FACE, bend(14, 4, 2, 6), BRACED, ANGRY, tail(-4)),
+    key(0.22, pelvis(0, -0.08), face(0.7), bend(18, 6, 0, 6), BRACED, FOCUS, tail(10)),
+    key(0.38, root({ y: 0.19 }), HOP, FACE, bend(-8, -4, -4, -12), SPREAD, ANGRY, tail(35)),
+    // Top of the leap: a moment's hang, the legs reaching down.
+    key(0.47, root({ y: 0.225 }), DROP, FACE, bend(-5, -3, -3, -9), SPREAD, ANGRY, tail(36)),
+    // Stomp: falls from the top, accelerating into a deep landing, arms driven
+    // down; the knees keep sinking after touchdown (the root dips below the
+    // ground line with the feet pinned) instead of stopping dead.
+    fall(0.62, LAND, pelvis(0, -0.06), FACE, bend(16, 6, 2, 8), BRACED, ANGRY, tail(-12)),
+    key(0.7, root({ y: -0.025 }), LAND, pelvis(0, -0.07), FACE, bend(24, 8, 4, 12, 0, 1), BRACED, ANGRY, tail(-15)),
+    key(0.8, root({ y: -0.02 }), pelvis(0, -0.07), FACE, bend(25, 8, 4, 13, 0, 2), BRACED, ANGRY, tail(-14)),
+    key(0.98, root({ y: -0.008 }), pelvis(0, -0.06), FACE, bend(14, 4, 2, 6), BRACED, ANGRY, tail(-4)),
+    key(1.24, pelvis(0, -0.02), face(0.5), bend(5, 1, 0, 2), ANGRY, tail(2)),
     key(1.6, OPEN_EYES),
   ],
-  events: [{ t: 0.6, name: 'impact' }],
+  events: [{ t: 0.62, name: 'impact' }],
 };
 
 /** Taking a hit: snaps back and winces (the battler adds a sprung recoil), then shakes it off. */

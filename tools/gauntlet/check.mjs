@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { speciesBrief } from './brief.mjs';
+import { lintClips } from './cliplint.mjs';
 import { readGlbJson } from './rigmap.mjs';
 import { CATEGORY_CLIPS, MOMENT_CLIPS, ROOT, clipOf, gameData, loadProfile, reviewJobs } from './species.mjs';
 
@@ -179,6 +180,10 @@ for (const chain of profile.dynamics ?? []) {
   gate(`spring chain ${chain.bones.join('>')}`, bad.length === 0, bad.join(', '));
 }
 if (!(profile.dynamics ?? []).length) warn('no spring chains', 'loose parts (tail, ears, fins, leaves, wings) should sway: add profile.dynamics');
+
+// Clip mistakes that read as robotic (tools/gauntlet/cliplint.mjs): slides,
+// planted pivots, half-aimed bones, hitches after snaps.
+for (const i of lintClips(clips)) warn(`clip ${i.clip}: ${i.kind}`, i.what);
 
 // Moves by body part (tools/gauntlet/classify_moves.mjs): every part must be
 // one the file offered; a missing file only warns (Jev needs an API key).

@@ -230,7 +230,38 @@ function sampleFlat(flat: FlatClip, clip: Clip, time: number, out: Float64Array)
     const m2 = hasNext ? tangent(v1, v2, v3, t2 - t1, t3 - t2) : 0;
     out[c] = h00 * v1 + h10 * h * m1 + h01 * v2 + h11 * h * m2;
   }
+  retimeAimArcs(channels, k1.values, k2.values, out);
   return { expression: u < 0.5 ? k1.expression ?? k2.expression : k2.expression ?? k1.expression };
+}
+
+/**
+ * Aimed limbs swing along the arc between two key directions at an even
+ * angular speed. The component splines trace the chord, and a normalized
+ * chord whips through the middle of a large swing (1.7x the average speed
+ * at 120°, 3x at 150°, crawling at both ends); here the progress along the
+ * chord is re-mapped onto the great circle, keeping the spline's bend from
+ * the neighbouring keys. Swings under 60° are left as they are (the chord
+ * and the arc agree), and near-opposite directions have no single arc.
+ */
+function retimeAimArcs(channels: Channel[], a: Float64Array, b: Float64Array, out: Float64Array): void {
+  for (let c = 0; c + 2 < channels.length; c++) {
+    if (channels[c].kind !== 'aim' || channels[c].axis !== 0) continue;
+    const ux = a[c], uy = a[c + 1], uz = a[c + 2];
+    const wx = b[c], wy = b[c + 1], wz = b[c + 2];
+    if (Number.isNaN(ux) || Number.isNaN(wx) || Number.isNaN(out[c])) continue;
+    const dot = ux * wx + uy * wy + uz * wz;
+    if (dot > 0.5 || dot < -0.985) continue;
+    const cx = wx - ux, cy = wy - uy, cz = wz - uz;
+    const px = out[c] - ux, py = out[c + 1] - uy, pz = out[c + 2] - uz;
+    const s = Math.min(1, Math.max(0, (px * cx + py * cy + pz * cz) / (cx * cx + cy * cy + cz * cz)));
+    const theta = Math.acos(dot);
+    const f1 = Math.sin((1 - s) * theta) / Math.sin(theta), f2 = Math.sin(s * theta) / Math.sin(theta);
+    // The spline's bend off the chord (from the neighbouring keys), kept.
+    const rx = px - s * cx, ry = py - s * cy, rz = pz - s * cz;
+    out[c] = f1 * ux + f2 * wx + rx;
+    out[c + 1] = f1 * uy + f2 * wy + ry;
+    out[c + 2] = f1 * uz + f2 * wz + rz;
+  }
 }
 
 function unflatten(flat: FlatClip, values: Float64Array, expression?: string): Pose {

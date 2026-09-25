@@ -102,6 +102,8 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `tools/gauntlet/skeleton.mjs` | a model's skeleton, what each bone moves, its textures, and any animations it ships |
 | `tools/gauntlet/classify_moves.mjs` | which body part a species uses for each move, classified by [Jev](https://typesafe.ai) (needs `TYPESAFE_API_KEY`) |
 | `tools/gauntlet/check.mjs` | the gauntlet's quality gates for a species (`--render` adds battles) |
+| `tools/gauntlet/cliplint.mjs` | static clip checks: slides, pivots on planted feet, partly aimed bones, torso rushes, limb hitches |
+| `tools/gauntlet/motion.mjs` | how fluid a species' clips are on the animated joints (stop-starts, pops, dead holds, early turns), next to Blaziken |
 | `tools/gauntlet/setup_worktree.mjs` | ready a git worktree for a gauntlet run beside other agents |
 | `tools/gauntlet/review_page.mjs` | one review page with every clip GIF, brief and review note of one or more species |
 | `tools/calibrate/candidates.mjs` | compare stance variants by how well each fits the stock sprites |
