@@ -32,7 +32,12 @@ declare global {
       step: (frames: number) => Promise<void>;
       /** Advance without rendering (motion analysis). */
       tick: (frames: number) => void;
-      /** The attacker's joints (semantic rig names) in body heights, in its slot's frame; null where the rig has none. 'rootYaw' gives the body's yaw in degrees. */
+      /**
+       * The attacker's joints (semantic rig names) in body heights, in its
+       * slot's frame; null where the rig has none. 'rootYaw' gives the body's
+       * yaw in degrees, 'headYaw' which way the head faces relative to the
+       * body (degrees; 0 = at the opponent).
+       */
       joints: (names: string[]) => Record<string, [number, number, number] | null>;
       grab: () => string;
       done: boolean;
@@ -173,6 +178,11 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
       for (const n of names) {
         if (n === 'rootYaw') {
           out[n] = [THREE.MathUtils.radToDeg(attacker.inst.root.rotation.y), 0, 0];
+          continue;
+        }
+        if (n === 'headYaw') {
+          const h = attacker.inst.rig.heading('head');
+          out[n] = h === null ? null : [h, 0, 0];
           continue;
         }
         const node = attacker.inst.rig.node(n);

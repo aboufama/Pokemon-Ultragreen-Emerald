@@ -40,8 +40,16 @@ const gate = (name, ok, detail = '') => results.push({ level: ok ? 'pass' : 'FAI
 const warn = (name, detail) => results.push({ level: 'warn', name, detail });
 
 // Thresholds (Blaziken, the reference species: IoU 0.60 / 0.61, box 0.80 / 0.98, color loss 0.94).
-const MIN_IOU = 0.55;
-const MIN_BOX_IOU = 0.75;
+/**
+ * Silhouette fit against the stock sprites. The opponent side's front sprite
+ * is drawn about the way the model faces, so it must match closely; back
+ * sprites are drawn side-on while the model always faces the foe, so on the
+ * player side the model only has to cover the sprite's area (size and
+ * placement). A stance that fails is fixed, never the thresholds.
+ */
+const FIT_GATES = { enemy: { iou: 0.55, box: 0.75 }, player: { iou: 0.45, box: 0.65 } };
+/** How far the stance's head may turn from the foe (degrees). */
+const MAX_HEAD_YAW = 20;
 const MAX_COLOR_LOSS = 1.0;
 
 const REQUIRED_EVENTS = {
@@ -114,13 +122,14 @@ if (missingUseful.length) warn('bones not mapped', `${missingUseful.join(', ')}:
 // 5. Stance.
 const stance = profile.poses?.stance ?? {};
 const shaped = Object.keys(stance.bones ?? {}).length + Object.keys(stance.aim ?? {}).length;
-gate('stance shaped to the stock sprite (not the bind pose)', shaped >= 3, `${shaped} bones/aims set`);
+gate('stance shaped to the stock sprite\'s posture (not the bind pose)', shaped >= 3, `${shaped} bones/aims set`);
 
 // 6. Calibration.
 const cal = profile.calibration;
 for (const side of ['enemy', 'player']) {
   const fit = cal.fit?.[side];
-  gate(`${side} silhouette fit (IoU >= ${MIN_IOU}, box >= ${MIN_BOX_IOU})`, !!fit && fit.iou >= MIN_IOU && (fit.boxIou ?? 0) >= MIN_BOX_IOU, fit ? `IoU ${fit.iou}, box ${fit.boxIou}` : 'not fitted: node tools/calibrate/run.mjs --species ' + slug);
+  const g = FIT_GATES[side];
+  gate(`${side} silhouette fit (IoU >= ${g.iou}, box >= ${g.box})`, !!fit && fit.iou >= g.iou && (fit.boxIou ?? 0) >= g.box, fit ? `IoU ${fit.iou}, box ${fit.boxIou}` : 'not fitted: node tools/calibrate/run.mjs --species ' + slug);
 }
 gate(`color fit (loss <= ${MAX_COLOR_LOSS})`, !!cal.colorFit && cal.colorFit.loss <= MAX_COLOR_LOSS, cal.colorFit ? `loss ${cal.colorFit.loss}` : 'not fitted: --phase color');
 
@@ -242,6 +251,20 @@ if (args.render) {
   let errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  // The stance faces the foe. Battlers always face their opponent; a head
+  // turned away at rest (to match a side-on sprite) reads as looking the wrong
+  // way, then turning round to attack.
+  {
+    const q = new URLSearchParams({ mode: 'clipreview', species: slug, enemy: slug, attacker: 'enemy', clip: 'idle' });
+    await page.goto(`${base}?${q}`, { waitUntil: 'load' });
+    await page.waitForFunction(() => window.__ready === true && !!window.__clip, null, { timeout: 180000 });
+    const yaw = await page.evaluate(() => {
+      window.__clip.start();
+      window.__clip.tick(1);
+      return window.__clip.joints(['headYaw']).headYaw?.[0] ?? null;
+    });
+    gate(`stance faces the foe (head within ${MAX_HEAD_YAW} deg of it)`, yaw !== null && Math.abs(yaw) <= MAX_HEAD_YAW, yaw === null ? 'no head bone mapped' : `head turned ${yaw.toFixed(1)} deg`);
+  }
   const moves = showcase.map((m) => m.replace('MOVE_', '')).join(',');
   for (const [side, q] of [['player', `player=${slug}&moves=${moves}`], ['enemy', `enemy=${slug}&enemyMoves=${moves}`]]) {
     errors = [];

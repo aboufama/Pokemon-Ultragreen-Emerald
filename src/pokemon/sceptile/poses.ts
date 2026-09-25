@@ -12,11 +12,11 @@
 import type { Pose } from '../../anim/rig';
 
 /**
- * Battle stance matched to the stock Emerald sprites (silhouette IoU: front
- * 0.57, back 0.56): a low, wide, bow-legged crouch with the left foot drawn
- * back; the upper body turned a little to its right against the hips; the
- * long neck leaning to its right, the head turned the same way, looking down
- * its snout; the right claw raised to head height and open, its blades out
+ * Battle stance with the posture of the stock Emerald sprites, facing the foe
+ * (battlers always face their opponent): a low, wide, bow-legged crouch with
+ * the left foot drawn back; the upper body square to the foe; the long neck
+ * leaning a little to its right, the head facing the foe and looking down its
+ * snout; the right claw raised to head height and open, its blades out
  * (the spikes of the back sprite); the left forearm held forward and low as a
  * guard, its blade turned in so it hides behind the torso from our side, as
  * in the back sprite; the leafy tail swept round to its left and low, fanned
@@ -28,9 +28,9 @@ export const STANCE: Pose = {
   expression: 'open',
   bones: {
     hips: { y: 6 },
-    spine: { x: 2, y: -12 },
-    neck: { x: -4, z: 8 },
-    head: { x: 2, y: -25, z: -2 },
+    spine: { x: 2 },
+    neck: { x: -4, z: 2 },
+    head: { x: 2, y: -3 },
     jaw: { x: -10 },
     // Tail: swept to its left and lifted a little so the lower leaflets clear
     // the ground; the last segments curl up.

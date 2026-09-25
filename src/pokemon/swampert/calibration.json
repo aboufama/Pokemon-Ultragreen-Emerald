@@ -1,16 +1,14 @@
 {
-  "height": 1.2997,
+  "height": 1.3653,
   "slots": {
     "enemy": {
-      "yaw": -15.29,
-      "dx": 0,
+      "dx": -0.038,
       "dz": 0,
       "lift": 0
     },
     "player": {
-      "yaw": 28.86,
-      "dx": 0,
-      "dz": 0,
+      "dx": -0.235,
+      "dz": -0.716,
       "lift": 0
     }
   },
@@ -20,25 +18,25 @@
     "selective": true
   },
   "grade": {
-    "gain": 1.5864,
-    "saturation": 1.6508,
+    "gain": 1.5597,
+    "saturation": 1.9304,
     "bands": [
-      0.7598,
-      0.7617,
+      0.7602,
+      1,
       1
     ]
   },
   "fit": {
     "enemy": {
-      "iou": 0.5671,
-      "boxIou": 0.8012
+      "iou": 0.5916,
+      "boxIou": 0.8215
     },
     "player": {
-      "iou": 0.6727,
-      "boxIou": 0.7633
+      "iou": 0.5822,
+      "boxIou": 0.8248
     }
   },
   "colorFit": {
-    "loss": 0.7825
+    "loss": 0.8552
   }
 }

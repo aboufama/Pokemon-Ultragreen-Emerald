@@ -208,8 +208,9 @@ const refSpecies = JSON.parse(await readFile(join(ROOT, 'src/data/generated/spec
 const calibration = {
   height: +(ref.height * (species.frontCoords.height / refSpecies.frontCoords.height)).toFixed(4),
   slots: {
-    enemy: { yaw: 0, dx: 0, dz: 0, lift: 0 },
-    player: { yaw: 30, dx: 0, dz: 0, lift: 0 },
+    // No yaw: battlers always face their opponent.
+    enemy: { dx: 0, dz: 0, lift: 0 },
+    player: { dx: 0, dz: 0, lift: 0 },
   },
   outline: ref.outline,
   grade: ref.grade,

@@ -1,6 +1,6 @@
 ---
 name: pokemon-gauntlet
-description: Bring one Pokémon species into this repo's 3D battle system at the reference (Blaziken) quality, end to end — a species brief from the game's own data, the pre-rigged model, rig map, a stance matched to the stock Emerald sprites, calibration, springs and effect emitters, a bespoke clip for every attack category and for the move motifs its moves need, frame-by-frame review from both sides, and the automated gates. Use for "add <species>", "run the gauntlet for X", "rig/animate a new Pokémon", or finishing a species that fails tools/gauntlet/check.mjs.
+description: Bring one Pokémon species into this repo's 3D battle system at the reference (Blaziken) quality, end to end — a species brief from the game's own data, the pre-rigged model, rig map, a stance with the stock Emerald sprites' posture that faces the foe, calibration, springs and effect emitters, a bespoke clip for every attack category and for the move motifs its moves need, frame-by-frame review from both sides, and the automated gates. Use for "add <species>", "run the gauntlet for X", "rig/animate a new Pokémon", or finishing a species that fails tools/gauntlet/check.mjs.
 ---
 
 # The Pokémon gauntlet
@@ -101,8 +101,13 @@ them). Check `/?mode=riglab&species=<slug>&bones=1`.
 
 ## 4. Stance (`poses.ts`)
 
-Match the stock **front** sprite's silhouette: posture, head angle, limb
-placement, how wide it stands. Iterate:
+Match the stock **front** sprite's posture: the crouch, how the limbs are
+held, the head's tilt, the tail, how wide it stands. Not its orientation:
+every battler always faces its opponent, at rest and in every move, so the
+stance faces the foe (body square to it, head looking at it). Sprites are
+drawn side-on; copying that turn leaves the Pokémon looking away until it
+attacks, then turning round to strike, which reads as wrong. The render gate
+measures it (`stance faces the foe`: head within 20°). Iterate:
 
 ```sh
 node tools/shots/shoot.mjs --url "http://127.0.0.1:5173/?mode=riglab&species=<slug>&onion=0.5" --out build/riglab/<slug>.png
@@ -115,12 +120,16 @@ if the eyes use an atlas. Conventions are in the pokemon-animation skill.
 ## 5. Calibrate
 
 ```sh
-node tools/calibrate/run.mjs --species <slug>                # height + per-side yaw (silhouette IoU)
+node tools/calibrate/run.mjs --species <slug>                # height (silhouette IoU; the model faces the foe, no yaw)
 node tools/calibrate/run.mjs --species <slug> --phase color  # toon grade + outline policy
 ```
 
-Gates: IoU ≥ 0.55 and box IoU ≥ 0.75 on both sides, color loss ≤ 1.0. A poor
-fit means the stance is wrong — fix the stance and re-run, never the
+The fit sets the height and where the model stands in each slot (a small
+sideways and depth offset), never a turn. Gates: opponent side IoU ≥ 0.55 and
+box IoU ≥ 0.75 (the front sprite is drawn about the way the model faces);
+player side IoU ≥ 0.45 and box IoU ≥ 0.65 (back sprites are side-on, the
+model faces the foe: it has to cover the sprite's area); color loss ≤ 1.0. A
+poor fit means the stance is wrong — fix the stance and re-run, never the
 thresholds. Check `reference/calibration/<slug>.png`. Floating species set
 `slots.enemy.lift` by hand.
 
@@ -130,16 +139,16 @@ change you are testing: more crouch, head up, arms wider) and compare them in
 one run instead of editing the stance back and forth:
 
 ```sh
-node tools/calibrate/candidates.mjs --species <slug> --poses stance,c1,c2,c3 --quick
+node tools/calibrate/candidates.mjs --species <slug> --poses stance,c1,c2,c3
 ```
 
-It prints each candidate's height, yaws and fit against the gates, marks the
-best, and saves `build/calibrate/<slug>-<pose>.png` (battle view and overlap:
-green both, red sprite only, blue model only — red at the top means the model
-is too short there, blue at the sides means it stands too wide). Confirm the
-finalists without `--quick`, make the winner the `stance`, delete the
-candidates, then run `run.mjs`. If the fit turns the model side-on or away
-from the foe to cover a wide back sprite, pass `--init yawLimit=60`.
+It prints each candidate's height and fit against the gates, marks the best,
+and saves `build/calibrate/<slug>-<pose>.png` (battle view and overlap: green
+both, red sprite only, blue model only — red at the top means the model is too
+short there, blue at the sides means it stands too wide). Make the winner the
+`stance`, delete the candidates, then run `run.mjs`. Candidates vary posture
+only: a candidate that turns the head or body away from the foe fails the
+facing gate, whatever its IoU.
 
 ## 6. Life: springs, eyes, effects, emitters
 

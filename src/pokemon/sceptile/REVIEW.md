@@ -49,10 +49,10 @@ and ends on the stance. GIFs are exported by the orchestrator.
 Measured with `tools/gauntlet/motion.mjs` against Blaziken and re-reviewed on
 contact sheets from both sides:
 
-- The battler no longer pivots toward the foe before every move (the engine
-  turn now rides a contact move's leap and unwinds on the hop home). FACE,
-  which turned the head and chest in the very first key, now grows over the
-  anticipation (`face(0.6–0.8)` → FACE) in every move made from home.
+- The battler no longer turns toward the foe before its moves: every battler
+  now always faces its opponent, and the stance faces it too (the sideways
+  look copied from the stock sprite is gone, and so is the FACE turn every
+  move made to undo it; `stance faces the foe` gate: head at -0.8 deg).
 - `physical_weak`: a longer wind-up (0.16 s), smaller torso twists (±26–32°,
   were ±44–50°), the head easing back to its sideways look on the hop home.
 - `physical_weak_tackle`, `physical_strong_punch`: longer anticipation; the
