@@ -10,6 +10,7 @@ Output root: public/assets/gba/
   trainers/<name>_back.png
   balls/<ball>.png
   menu/*.png                            setup screens: Birch's bag, window frame, type icons, cursors
+  title/*.png                           the title screen: Rayquaza, clouds, the logo, EMERALD VERSION, PRESS START
 Plus src/data/generated/gfx_meta.json with environment ids and palettes needed at runtime.
 """
 
@@ -284,6 +285,69 @@ def extract_menus(decomp: Path, out: Path, meta: dict) -> None:
     meta["frame1Palette"] = [list(c) for c in G.png_palette(decomp / "graphics/text_window/1.png")[:16]]
 
 
+def extract_title(decomp: Path, out: Path) -> None:
+    """The title screen's layers, as title_screen.c sets them up.
+
+      title/rayquaza.png        BG0, Rayquaza (256x256; color 0 clear)
+      title/rayquaza_marks.png  where BG0 uses palette 14 color 15: Rayquaza's
+                                markings, whose color UpdateLegendaryMarkingColor pulses
+      title/clouds.png          BG1, the clouds blended over Rayquaza (256x256)
+      title/logo.png            BG2, the POKéMON logo (8bpp affine map, 256x256)
+      title/logo_shine.png      the shine sprite (64x64) whose shape lightens the logo
+      title/emerald_version.png the EMERALD VERSION banner (two 64x32 sprites side by side)
+      title/press_start.png     PRESS START (the five 32x8 sprite frames in a row)
+    The BG palettes are pokemon_logo.pal's first 224 colors then
+    rayquaza_and_clouds.pal (palette 14), as gTitleScreenBgPalettes.
+    """
+    t = decomp / "graphics/title_screen"
+    bg_pal = G.read_jasc_pal(t / "pokemon_logo.pal")[:224] + G.read_jasc_pal(t / "rayquaza_and_clouds.pal")[:16]
+    blocks = G.palette_blocks(bg_pal, 0)
+    rq_tiles = G.tiles_of(G.indexed(t / "rayquaza.png"))
+    rq_map = np.fromfile(t / "rayquaza.bin", dtype="<u2")
+    save(G.compose_tilemap(rq_tiles, rq_map, 32, blocks), out / "title" / "rayquaza.png")
+    marks = np.zeros((256, 256, 4), dtype=np.uint8)
+    for i, entry in enumerate(rq_map):
+        entry = int(entry)
+        if entry >> 12 != 14:
+            continue
+        px = rq_tiles[entry & 0x3FF]
+        if entry & 0x400:
+            px = px[:, ::-1]
+        if entry & 0x800:
+            px = px[::-1, :]
+        ty, tx = divmod(i, 32)
+        marks[ty * 8 : ty * 8 + 8, tx * 8 : tx * 8 + 8][(px & 0xF) == 15] = (255, 255, 255, 255)
+    save(Image.fromarray(marks, "RGBA"), out / "title" / "rayquaza_marks.png")
+    cl_tiles = G.tiles_of(G.indexed(t / "clouds.png"))
+    save(G.compose_tilemap(cl_tiles, np.fromfile(t / "clouds.bin", dtype="<u2"), 32, blocks), out / "title" / "clouds.png")
+    # The logo: an 8bpp affine map, one byte per tile, 32x32.
+    logo_tiles = G.tiles_of(G.indexed(t / "pokemon_logo.png"))
+    logo_map = np.fromfile(t / "pokemon_logo.bin", dtype=np.uint8)
+    logo = np.zeros((256, 256, 4), dtype=np.uint8)
+    for i, tile in enumerate(logo_map):
+        ty, tx = divmod(i, 32)
+        px = logo_tiles[int(tile)]
+        for y in range(8):
+            for x in range(8):
+                c = int(px[y, x])
+                if c and c < len(bg_pal):
+                    logo[ty * 8 + y, tx * 8 + x] = (*bg_pal[c], 255)
+    save(Image.fromarray(logo, "RGBA"), out / "title" / "logo.png")
+    for name in ["logo_shine", "emerald_version"]:
+        save(G.to_rgba(G.indexed(t / f"{name}.png"), G.png_palette(t / f"{name}.png")), out / "title" / f"{name}.png")
+    # PRESS START: sprite frames 1, 5, 9, 13, 17 (32x8 each, four tiles from
+    # that tile on), with tiles numbered in 4x1 blocks across the sheet.
+    ps = G.indexed(t / "press_start.png")
+    per_row = ps.shape[1] // 32
+    vram = []
+    for m in range((ps.shape[0] // 8) * per_row):
+        mx, my = m % per_row, m // per_row
+        for k in range(4):
+            vram.append(ps[my * 8 : my * 8 + 8, mx * 32 + k * 8 : mx * 32 + k * 8 + 8])
+    frames = [np.concatenate(vram[f : f + 4], axis=1) for f in (1, 5, 9, 13, 17)]
+    save(G.to_rgba(np.concatenate(frames, axis=1), G.png_palette(t / "press_start.png")), out / "title" / "press_start.png")
+
+
 def main(decomp: Path, root: Path) -> None:
     out = root / "public/assets/gba"
     data_dir = root / "src/data/generated"
@@ -297,6 +361,7 @@ def main(decomp: Path, root: Path) -> None:
     extract_battle_anim_sprites(decomp, out, meta)
     extract_pokemon(decomp, out, species)
     extract_menus(decomp, out, meta)
+    extract_title(decomp, out)
     (data_dir / "gfx_meta.json").write_text(json.dumps(meta, separators=(",", ":")) + "\n")
     print(f"wrote {data_dir / 'gfx_meta.json'}")
 

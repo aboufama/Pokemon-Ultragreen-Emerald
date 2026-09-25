@@ -1,12 +1,13 @@
 // The battle playtest (the published demo), played entirely on the GBA
-// screen like the game: choose your Pokémon from Professor Birch's bag, then
-// the wild Pokémon to battle, set the moves (random, or learned one by one
-// in a Move Relearner-style list), pick the place, battle, and battle again.
-// The page is only the screen and, on touch screens, the GBA buttons.
+// screen like the game: the title screen, then choose your Pokémon from
+// Professor Birch's bag and the wild Pokémon to battle, set the moves
+// (random, or learned one by one in a Move Relearner-style list), pick the
+// place (its arena shows live), battle, and battle again. The page is only
+// the screen and, on touch screens, the GBA buttons.
 //
 //   demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY
 //            &enemyMoves=SURF,EARTHQUAKE&env=sand&go=1
-//   (optional; go=1 skips the menus and battles at once)
+//   (optional; go=1 skips the menus and battles at once, title=0 skips the title)
 
 import { MOVES, SPECIES } from '../data';
 import { getSpeciesProfile, profiledSpecies } from '../pokemon/registry';
@@ -20,6 +21,7 @@ import { MenuScreen } from '../menus/screen';
 import { bagBackdrop, chooseFromBag, displayName } from '../menus/bag';
 import { editMoves } from '../menus/moves';
 import { type Place, choosePlace } from '../menus/places';
+import { titleScreen } from '../menus/title';
 
 declare global {
   interface Window {
@@ -151,7 +153,9 @@ export async function runPlaytest(root: HTMLElement): Promise<void> {
     await battle({ you, foe, moves: list('moves')?.slice(0, 4) ?? firstMoves(you), foeMoves: list('enemyMoves')?.slice(0, 4) ?? null, arena: params.get('env') ?? 'grass' });
   }
 
-  // The setup, one screen after another; B goes back a screen.
+  // The title screen, then the setup, one screen after another; B goes back a screen.
+  if (params.get('title') !== '0') await titleScreen(openMenu(), { hints: !coarse });
+
   let you = valid(saved.you) ?? roster[1] ?? roster[0];
   let foe = valid(saved.foe) ?? roster[2] ?? roster[0];
   let moves = knows(you, saved.moves) ? saved.moves! : firstMoves(you);
