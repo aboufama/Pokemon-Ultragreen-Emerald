@@ -155,7 +155,8 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
   root.appendChild(holder);
   const screen = new GbaScreen(holder, 3);
   const stage = new BattleStage(screen.canvas3d, structuredClone(BATTLE_CAMERA), { supersample: 2 });
-  await stage.setEnvironment('grass');
+  // Nothing standing in the arena: the fit measures the Pokémon alone.
+  await stage.setEnvironment('grass', { props: false });
 
   const models: Record<SlotName, { root: THREE.Object3D; rig: Rig; toon: ToonHandles }> = {} as never;
   for (const slot of ['player', 'enemy'] as SlotName[]) {
