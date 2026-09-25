@@ -139,6 +139,19 @@ export class Rig {
     return this.nodes.get(this.profile.bones[name] ?? name);
   }
 
+  /**
+   * Which way a bone faces now, as a yaw in degrees in the model frame (0 =
+   * straight ahead, the way the bind pose faces; + toward the creature's
+   * left): its bind-pose forward (+Z), turned by everything above it.
+   */
+  heading(name: string): number | null {
+    const info = this.info(name);
+    if (!info) return null;
+    const q = this.modelQuat(info.node, new THREE.Quaternion()).multiply(info.bindModelQ.clone().invert());
+    const f = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    return THREE.MathUtils.radToDeg(Math.atan2(f.x, f.z));
+  }
+
   /** World rotation of a node relative to the model root. */
   modelQuat(node: THREE.Object3D, out: THREE.Quaternion): THREE.Quaternion {
     node.updateWorldMatrix(true, false);

@@ -30,13 +30,12 @@ is the finished reference set, and its header explains the channels.
 - **Life layer.** Breathing, weight shifts, an idle bounce, gaze drift and
   blinks run on top of every clip; the battler gets knocked back on a spring
   when hit (you animate the flinch pose, not the knock-back).
-- **Facing follows travel.** The body turns toward the target only while a
-  contact move carries it there (`advance`), and turns back on the hop home.
-  Never pivot the whole body on planted feet before a move (`root.yaw` with
-  the feet down reads as a mechanical turn on the spot): if the species' stance
-  looks away from the foe, turn the head and chest over the anticipation
-  (Sceptile's `face(f)` grows from 0.5–0.7 at the first key to full FACE at the
-  action) or twist the spine.
+- **Always facing the foe.** A battler faces its opponent at rest, in every
+  move and on the way home, and the stance faces it too (the gauntlet's
+  `stance faces the foe` gate). No clip turns to look at the foe: a head or
+  chest that swings round at the start of a move means the stance looks away;
+  fix the stance. Twist the spine for wind-ups and follow-through, and use
+  `root.yaw` only for real spins, never to pivot on planted feet.
 
 ## Pose authoring
 
@@ -168,7 +167,7 @@ that acts. Contact moves must have `advance: 1` at `impact`.
 | flailing arms | arms not acting: brace them (`CHAMBER`/`BRACED`), let the acting part lead |
 | effect from the wrong place | emitter / `emitterFor`; verify with `/?mode=clipreview&mark=<emitter>` |
 | pop at a key | an aimed bone missing from some keys; an ease after a snap; a big pose change in < 3 frames |
-| turns on the spot before the move | `root.yaw` on planted feet, or FACE at full strength in the first key: grade the turn over the anticipation (`face(0.6)` → FACE) or twist the spine; the body turns only while travelling |
+| turns to the foe before the move | the stance looks away from the foe: fix the stance (it must face the foe) rather than turning in the clip; `root.yaw` on planted feet is a pivot, twist the spine instead |
 | stutters mid-motion | a key that stops a channel halfway (a `fall()` that starts mid-descent instead of at the apex; a hop whose apex sits near the landing): fall from the top; put a hop's apex halfway across |
 | strike snaps harder than Blaziken's | under 5 frames, or a torso swing over ~50°: land, then a 0.08 s snap; cock the arm further back as it lands so the strike starts from a turnaround |
 | unreadable from our side | the back view hides it: exaggerate the silhouette, move the action above y≈92 px |

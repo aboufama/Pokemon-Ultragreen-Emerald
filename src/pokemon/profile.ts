@@ -10,14 +10,14 @@ import type { FireOptions } from '../render3d/fire';
 import type { SpringChainSpec } from '../anim/dynamics';
 import type { Motif } from '../battle3d/motifs';
 
+/**
+ * Where a battler stands in its slot. There is no yaw: every battler always
+ * faces its opponent (the slot looks at the other slot), at rest and while
+ * attacking. The stock sprites are drawn side-on, but fitting their
+ * orientation left the battlers turned away until they attacked; the
+ * calibration fits the size and placement only.
+ */
 export interface SlotCalibration {
-  /** Extra yaw (degrees) on top of facing the opponent, fitted to the stock sprite. */
-  yaw: number;
-  /**
-   * Art-directed turn on top of the fitted yaw (degrees, + toward the
-   * battler's own left). Not part of the fit; recalibration keeps it.
-   */
-  yawAdjust?: number;
   /** Offsets in the slot's local frame (world units): x = its left, z = toward opponent. */
   dx: number;
   dz: number;
@@ -165,14 +165,10 @@ export interface SpeciesProfile {
   placeInSlot(root: THREE.Object3D, slot: SlotName, stage: BattleStage): void;
 }
 
-/** Resting yaw of a slot in degrees: the fitted yaw plus the art adjustment. */
-export function slotYaw(c: SlotCalibration): number {
-  return c.yaw + (c.yawAdjust ?? 0);
-}
-
+/** Size and place a model in its slot, facing the opponent. */
 export function applyCalibration(root: THREE.Object3D, cal: Calibration, slot: SlotName): void {
   const c = cal.slots[slot];
   root.scale.setScalar(cal.height);
-  root.rotation.set(0, THREE.MathUtils.degToRad(slotYaw(c)), 0);
+  root.rotation.set(0, 0, 0);
   root.position.set(c.dx, c.lift, c.dz);
 }

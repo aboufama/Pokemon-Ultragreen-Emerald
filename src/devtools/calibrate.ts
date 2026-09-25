@@ -6,7 +6,12 @@
 // and the stock sprite at the exact position Emerald draws it, for both the
 // opponent slot (front sprite) and the player slot (back sprite). Parameters:
 //   camera (optional, global): vertical fov, pitch, feet anchors of both slots
-//   species: model height, per-slot yaw and small ground offsets
+//   species: model height, and where it stands in each slot (dx sideways,
+//   dz toward the foe for the player side) so it covers the sprite's area
+// There is no yaw to fit: a battler always faces its opponent, and the stance
+// must face it too. The sprites are drawn side-on, so a model facing the foe
+// leans its upper body another way than the sprite; placement covers that,
+// never a turn.
 // window.calibrate.run() returns the fitted values; tools/calibrate/run.mjs
 // writes them to src/data/battle_camera.json and src/pokemon/<slug>/calibration.json.
 
@@ -33,8 +38,9 @@ interface Params {
   playerAnchorX: number;
   playerAnchorY: number;
   height: number;
-  enemyYaw: number;
-  playerYaw: number;
+  enemyDx: number;
+  playerDx: number;
+  playerDz: number;
 }
 
 type Key = keyof Params;
@@ -177,17 +183,18 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
     playerAnchorX: stage.spec.anchors.player[0],
     playerAnchorY: stage.spec.anchors.player[1],
     height: profile.calibration.height,
-    enemyYaw: profile.calibration.slots.enemy.yaw,
-    playerYaw: profile.calibration.slots.player.yaw,
+    enemyDx: profile.calibration.slots.enemy.dx,
+    playerDx: profile.calibration.slots.player.dx,
+    playerDz: profile.calibration.slots.player.dz,
   };
   for (const k of Object.keys(base) as Key[]) {
     if (params.has(k)) base[k] = Number(params.get(k));
   }
   const cameraKeys: Key[] = ['fov', 'pitch', 'enemyAnchorX', 'enemyAnchorY', 'playerAnchorX', 'playerAnchorY'];
-  const speciesKeys: Key[] = ['height', 'enemyYaw', 'playerYaw'];
+  const speciesKeys: Key[] = ['height', 'enemyDx', 'playerDx', 'playerDz'];
   const keys = fitCamera ? [...cameraKeys, ...speciesKeys] : speciesKeys;
   const stepOf: Record<Key, number> = {
-    fov: 4, pitch: 3, enemyAnchorX: 4, enemyAnchorY: 4, playerAnchorX: 6, playerAnchorY: 8, height: 0.2, enemyYaw: 20, playerYaw: 20,
+    fov: 4, pitch: 3, enemyAnchorX: 4, enemyAnchorY: 4, playerAnchorX: 6, playerAnchorY: 8, height: 0.2, enemyDx: 0.3, playerDx: 0.3, playerDz: 0.3,
   };
 
   const apply = (p: Params) => {
@@ -208,10 +215,9 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
     const cal: Calibration = {
       ...profile.calibration,
       height: p.height,
-      // Fit the plain yaw: art adjustments (yawAdjust) are not part of the fit.
       slots: {
-        enemy: { ...profile.calibration.slots.enemy, yaw: p.enemyYaw, yawAdjust: 0 },
-        player: { ...profile.calibration.slots.player, yaw: p.playerYaw, yawAdjust: 0 },
+        enemy: { ...profile.calibration.slots.enemy, dx: p.enemyDx },
+        player: { ...profile.calibration.slots.player, dx: p.playerDx, dz: p.playerDz },
       },
     };
     for (const slot of ['player', 'enemy'] as SlotName[]) applyCalibration(models[slot].root, cal, slot);
@@ -241,13 +247,11 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
     keys.forEach((k, i) => (p[k] = v[i]));
     return p;
   };
-  // Optional bound on the slot yaws (&yawLimit=60): wide, cut-off back
-  // sprites can fit best side-on, facing away from the foe.
-  const yawLimit = Number(params.get('yawLimit') ?? 360);
   const objective = (v: number[]) => {
     const p = fromVec(v);
     if (p.fov < 8 || p.fov > 70 || p.pitch < 0 || p.pitch > 60 || p.height < 0.3) return 10;
-    if (Math.abs(p.enemyYaw) > yawLimit || Math.abs(p.playerYaw) > yawLimit) return 10;
+    // Placement stays a nudge within the slot (world units; a battler is ~1.4 tall).
+    if (Math.abs(p.enemyDx) > 1 || Math.abs(p.playerDx) > 1.2 || Math.abs(p.playerDz) > 1.2) return 10;
     const s = score(p);
     // Silhouette overlap plus bounding-box agreement (size and placement are
     // what matter most; the box term keeps the fit stable when poses differ).
@@ -258,18 +262,13 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
     const t0 = performance.now();
     let best = { x: toVec(base), fx: objective(toVec(base)) };
     const initial = -best.fx;
-    // Multi-start over the slot yaws (silhouettes have mirror-like local optima),
-    // then refine the best candidate with shrinking simplex sizes. Fewer
-    // starts (&starts=-15,15) give a quick look when comparing stances.
-    const yawStarts = (params.get('starts') ?? '-40,-15,0,15,40').split(',').map(Number);
-    for (const ey of yawStarts) {
-      for (const py of yawStarts) {
-        const start = fromVec(best.x);
-        start.enemyYaw = ey;
-        start.playerYaw = py;
-        const res = nelderMead(objective, toVec(start), keys.map((k) => stepOf[k] * 0.6), 120);
-        if (res.fx < best.fx) best = res;
-      }
+    // A few starts across the player's sideways placement (the silhouettes
+    // have side-to-side local optima), then refine with shrinking simplex sizes.
+    for (const dx of [-0.6, -0.3, 0, 0.3]) {
+      const start = fromVec(best.x);
+      start.playerDx = dx;
+      const res = nelderMead(objective, toVec(start), keys.map((k) => stepOf[k] * 0.6), 160);
+      if (res.fx < best.fx) best = res;
       await new Promise((r) => setTimeout(r, 0));
     }
     for (const scale of [1, 0.5, 0.25]) {
@@ -293,10 +292,9 @@ export async function runCalibrate(root: HTMLElement): Promise<unknown> {
       calibration: {
         height: +cal.height.toFixed(4),
         outline: outlineFromSprites(),
-        // Spread the stored slots so hand-set fields (yawAdjust) survive.
         slots: {
-          enemy: { ...profile.calibration.slots.enemy, yaw: +cal.slots.enemy.yaw.toFixed(2) },
-          player: { ...profile.calibration.slots.player, yaw: +cal.slots.player.yaw.toFixed(2) },
+          enemy: { ...profile.calibration.slots.enemy, dx: +p.enemyDx.toFixed(3) },
+          player: { ...profile.calibration.slots.player, dx: +p.playerDx.toFixed(3), dz: +p.playerDz.toFixed(3) },
         },
         fit: cal.fit,
       },
