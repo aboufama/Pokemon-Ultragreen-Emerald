@@ -15,6 +15,7 @@ import { SPECIES } from '../data';
 import { getSpeciesProfile, profiledSpecies } from '../pokemon/registry';
 import { BattleScene, type BattleSceneOptions, type TextSpeed } from './scene';
 import { createTouchPad } from './touch_pad';
+import { ARENAS } from '../render3d/arena';
 
 declare global {
   interface Window {
@@ -26,10 +27,8 @@ declare global {
   }
 }
 
-const ARENAS: [string, string][] = [
-  ['grass', 'Grass'], ['long_grass', 'Tall grass'], ['sand', 'Sand'], ['water', 'Water'], ['pond', 'Pond'],
-  ['underwater', 'Underwater'], ['mountain', 'Mountain'], ['cave', 'Cave'], ['building', 'Building'], ['plain', 'Plain'],
-];
+/** Every arena by its Hoenn place. */
+const ARENA_CHOICES: [string, string][] = Object.entries(ARENAS).map(([id, d]) => [id, d.name]);
 
 const displayName = (slug: string) => {
   const n = SPECIES[slug]?.name ?? slug;
@@ -148,7 +147,7 @@ export async function runBattle(root: HTMLElement): Promise<BattleScene> {
       select('You', mons, choice.player, (v) => (choice.player = v)),
       vs,
       select('Foe', mons, choice.enemy, (v) => (choice.enemy = v)),
-      select('Arena', ARENAS, choice.env, (v) => (choice.env = v)),
+      select('Arena', ARENA_CHOICES, choice.env, (v) => (choice.env = v)),
       go,
     );
     root.append(picker);
