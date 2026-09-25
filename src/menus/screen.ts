@@ -113,8 +113,12 @@ export class MenuScreen {
     return hit;
   }
 
-  /** BeginNormalPaletteFade: the coefficient moves 2 every other frame. */
-  fadeTo(target: number, color: RGB = BLACK): Promise<void> {
+  /**
+   * BeginNormalPaletteFade: the coefficient moves 2 every other frame. Fading
+   * in keeps the color the screen faded out to (white after the title);
+   * fading out goes to black unless told otherwise.
+   */
+  fadeTo(target: number, color: RGB = target === 0 ? this.fadeColor : BLACK): Promise<void> {
     this.fadeColor = color;
     let f = 0;
     return this.clock.until(() => {

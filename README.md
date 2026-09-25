@@ -40,8 +40,9 @@ needed to regenerate them (`npm run extract`, which needs `pip install -r tools/
 On touch screens, use the on-screen D-pad and A/B buttons (hide them with `?pad=0`).
 
 **Battle playtest** (`demo.html`, src/demo/playtest.ts), played entirely on the GBA
-screen the way the game plays, with Emerald's own menus (src/menus/): choose your Pokémon
-from Professor Birch's bag, then the wild Pokémon to battle (SELECT picks one at random);
+screen the way the game plays, with Emerald's own screens and menus (src/menus/): the
+title screen (Rayquaza, the logo's shine, PRESS START; on a computer it shows the keys),
+then choose your Pokémon from Professor Birch's bag, then the wild Pokémon to battle (SELECT picks one at random);
 set the moves (RANDOM gives four of the moves it can know, with an attack of its main
 type; A on a move opens a Move Relearner-style list of every move it can know, with its
 TYPE, PP, POWER, ACCURACY and description, and the new move is learned "1, 2, and…
@@ -50,7 +51,8 @@ the place, whose arena shows live behind the list; then battle, and battle again
 plays like an emulator: the GBA screen as large as the window allows, the keyboard on a
 computer, and on a phone an on-screen D-pad, A/B and START/SELECT (beside the screen when
 the phone is held sideways; "Add to Home Screen" runs it full screen). Shareable setups
-skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY&env=sand&go=1`.
+skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY&env=sand&go=1`
+(`title=0` skips only the title screen).
 
 - `npm run demo` builds the static site into `build/demo/pages/`
   (`--embed`, with `npm run dev` running, adds single-file builds with every asset inlined).
@@ -105,7 +107,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 | 3D stage: camera calibrated so both battlers land where the stock sprites are drawn | `src/render3d/stage.ts`, `src/data/battle_camera.json` |
 | Arenas, designed from scratch for the remake in Hoenn's overworld colors, with no platforms under the Pokémon: each place is painted pixel by pixel for the battle camera (ground, paths, ponds, dunes, ridges, walls, a tree line) and projected onto the ground, props stand at their depth one sprite pixel per screen pixel (trees, tall grass, reeds, rocks, kelp, coral, lamp posts) and sway, and the ground lives per pixel (wind in the grass, waves and glints, ripples at the battlers' feet, lava, caustics, cloud shadows) | `src/render3d/arena/`, `environment.ts`, `ambience.ts` |
 | Viewport pixel pass: object IDs, majority downsampling, snap to the species' stock palette, outline policy from the sprites, palette blends (fades, glows) and the arena's fades (the ball's white flash, move tints), scanline bands (the intro slide), RGB555 | `src/render3d/pipeline.ts` |
-| Menus drawn like Emerald's: window frames, text and the keypad icons, messages with the waiting arrow, YES/NO, list menus with scroll arrows, Birch's bag, the move relearner | `src/menus/`, `src/gba/font.ts` |
+| Screens and menus drawn like Emerald's: the title screen (title_screen.c's layers, blends, shines and timings), window frames, text and the keypad icons, messages with the waiting arrow, YES/NO, list menus with scroll arrows, Birch's bag, the move relearner | `src/menus/`, `src/gba/font.ts` |
 | Rig and animation: semantic bone map, model-space rotations, aim constraints, foot IK, keyframed clips on smooth curves with events and crossfades, overlapping action, springs for loose parts (mane, tail, feathers), and a life layer (breathing, weight shifts, blinks, sprung turns and hit recoil) | `src/anim/`, `src/pokemon/`, `src/battle3d/battler.ts` |
 | Moves: animation category from move data, per-type effects from the stock battle-animation sprites, rendered in 3D through the pixel pass | `src/battle3d/` |
 | Battle engine, scene and frame clock | `src/battle/` |
