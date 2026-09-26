@@ -1117,9 +1117,11 @@ function tower(ctx: ArenaContext): void {
     if (w) return [wallColor(sx, sy, w), MAT.BACKDROP];
     const gr = view.ground(sx + 1, sy)!, gd = view.ground(sx, sy + 1)!;
     if (inCourt(g.x, g.z)) {
-      // White lines around the court (wider near the camera).
+      // White lines around the court (wider near the camera), down its middle and across its far end.
       const lw = Math.max(0.06, 1.05 / g.ppu), lz = Math.max(0.03, 0.55 / g.ppu);
       if (Math.min(g.x - court.x0, court.x1 - g.x) < lw || Math.min(g.z - court.z0, court.z1 - g.z) < lz) return [G[7], MAT.SOLID];
+      const midX = (court.x0 + court.x1) / 2;
+      if (Math.abs(g.x - midX) < lw * 0.5 || (Math.abs(g.z - (court.z1 - 1.5)) < lz * 0.6 && Math.abs(g.x - midX) > lw * 2)) return [G[6], MAT.SOLID];
       // Polished slate slabs, a darker seam between them.
       const k = slab(g.x, g.z);
       const seam = (inCourt(gr.x, gr.z) && slab(gr.x, gr.z) !== k) || (inCourt(gd.x, gd.z) && slab(gd.x, gd.z) !== k);
