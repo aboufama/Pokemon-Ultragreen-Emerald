@@ -265,8 +265,13 @@ export type Step =
   | { kind: 'message'; text: string; wait?: boolean }
   | { kind: 'move'; side: Side; move: MoveData; hits: number[]; missed: boolean }
   /** An HP change; a move's hits carry the type effectiveness (10 = normal) for the hit's sound. */
-  | { kind: 'hp'; side: Side; from: number; to: number; cause?: 'burn'; effectiveness?: number }
-  | { kind: 'stat'; side: Side; stat: StatKey; delta: number }
+  | { kind: 'hp'; side: Side; from: number; to: number; effectiveness?: number }
+  /** The stat change animation (playstatchangeanimation): one for the stats a move changes at once; their messages follow. */
+  | { kind: 'stat'; side: Side; stats: StatKey[]; delta: number }
+  /** A status condition's animation (statusanimation: B_ANIM_STATUS_BRN). */
+  | { kind: 'statusAnim'; side: Side; status: Exclude<Status, 'none'> }
+  /** The healthbox's status icon changes (updatestatusicon). */
+  | { kind: 'statusIcon'; side: Side; status: Status }
   | { kind: 'faint'; side: Side }
   /** The wild Pokémon is beaten: getexp plays the victory music. */
   | { kind: 'victory' }
@@ -501,16 +506,16 @@ export class BattleEngine {
     if (def.hp > 0 && chance > 0 && (move.effect === 'EFFECT_BURN_HIT' || move.effect === 'EFFECT_BLAZE_KICK') && lands()) {
       if (def.status === 'none' && !def.species.types.includes('TYPE_FIRE')) {
         def.status = 'burn';
+        // BattleScript_MoveEffectBurn: the animation, the message, then the healthbox's icon.
+        steps.push({ kind: 'statusAnim', side: defSide, status: 'burn' });
         steps.push({ kind: 'message', text: `${this.displayName(defSide)} was burned!` });
+        steps.push({ kind: 'statusIcon', side: defSide, status: 'burn' });
       }
     }
     const changes = HIT_STAT_CHANGES[move.effect];
     if (changes && lands()) {
-      for (const [who, stat, n] of changes) {
-        if (who === 'foe' && def.hp <= 0) continue;
-        if (who === 'self' && atk.hp <= 0) continue;
-        this.changeStat(who === 'self' ? side : defSide, stat, n, steps, true);
-      }
+      const target = changes[0][0] === 'self' ? side : defSide;
+      if (this.mon(target).hp > 0) this.changeStats(target, changes, steps, true);
     }
   }
 
@@ -518,7 +523,7 @@ export class BattleEngine {
     const defSide = this.other(side);
     const changes = STAT_MOVES[move.effect];
     if (changes) {
-      for (const [who, stat, n] of changes) this.changeStat(who === 'self' ? side : defSide, stat, n, steps);
+      this.changeStats(changes[0][0] === 'self' ? side : defSide, changes, steps);
       return;
     }
     switch (move.effect) {
@@ -540,20 +545,31 @@ export class BattleEngine {
     }
   }
 
-  /** Change a stat stage; `quiet` (a hit's side effect) says nothing when it can't go further. */
-  private changeStat(side: Side, stat: StatKey, delta: number, steps: Step[], quiet = false): void {
+  /**
+   * Change the stat stages one move changes (all the user's or all the
+   * foe's), as the game does: one animation for the stats that can still
+   * move, gray when several do (Cmd_playstatchangeanimation), then a message
+   * for each; a stat at its limit is skipped without a word, and when none
+   * can move a status move says so (`quiet`: a hit's side effect says nothing).
+   */
+  private changeStats(side: Side, changes: StatChange[], steps: Step[], quiet = false): void {
     const m = this.mon(side);
-    const before = m.stages[stat];
-    const after = Math.max(-6, Math.min(6, before + delta));
     const name = this.displayName(side);
-    if (after === before) {
-      if (!quiet) steps.push({ kind: 'message', text: delta > 0 ? `${name}'s ${STAT_NAMES[stat]}\nwon't go higher!` : `${name}'s ${STAT_NAMES[stat]}\nwon't go lower!` });
+    const limit = (stat: StatKey, delta: number) => Math.max(-6, Math.min(6, m.stages[stat] + delta));
+    const moving = changes.filter(([, stat, delta]) => limit(stat, delta) !== m.stages[stat]);
+    if (!moving.length) {
+      if (quiet) return;
+      const [, stat, delta] = changes[0];
+      const way = delta > 0 ? 'higher' : 'lower';
+      steps.push({ kind: 'message', text: changes.length > 1 ? `${name}'s stats won't\ngo any ${way}!` : `${name}'s ${STAT_NAMES[stat]}\nwon't go ${way}!` });
       return;
     }
-    m.stages[stat] = after;
-    steps.push({ kind: 'stat', side, stat, delta });
-    const verb = delta > 0 ? (delta > 1 ? 'sharply rose!' : 'rose!') : delta < -1 ? 'harshly fell!' : 'fell!';
-    steps.push({ kind: 'message', text: `${name}'s ${STAT_NAMES[stat]}\n${verb}` });
+    steps.push({ kind: 'stat', side, stats: moving.map(([, stat]) => stat), delta: moving[0][2] });
+    for (const [, stat, delta] of moving) {
+      m.stages[stat] = limit(stat, delta);
+      const verb = delta > 0 ? (delta > 1 ? 'sharply rose!' : 'rose!') : delta < -1 ? 'harshly fell!' : 'fell!';
+      steps.push({ kind: 'message', text: `${name}'s ${STAT_NAMES[stat]}\n${verb}` });
+    }
   }
 
   /** CalculateBaseDamage + crit + typecalc (STAB, type chart) + random factor. */
@@ -660,8 +676,10 @@ export class BattleEngine {
       if (m.status === 'burn' && m.hp > 0) {
         const from = m.hp;
         m.hp = Math.max(0, m.hp - Math.max(1, Math.floor(m.stats.hp / 8)));
+        // BattleScript_BurnTurnDmg: the message, the animation, then the HP.
         steps.push({ kind: 'message', text: `${this.displayName(side)} is hurt\nby its burn!` });
-        steps.push({ kind: 'hp', side, from, to: m.hp, cause: 'burn' });
+        steps.push({ kind: 'statusAnim', side, status: 'burn' });
+        steps.push({ kind: 'hp', side, from, to: m.hp });
         if (this.checkFaints(steps)) return;
       }
     }

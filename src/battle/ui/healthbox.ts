@@ -9,6 +9,9 @@ import { GFX_META } from '../../data';
 
 export type Side = 'player' | 'opponent';
 export type Gender = 'male' | 'female' | null;
+/** The healthbox's status icons, in the rows of status_icons.png. */
+export const STATUS_ICONS = ['psn', 'prz', 'slp', 'frz', 'brn'] as const;
+export type StatusIcon = (typeof STATUS_ICONS)[number];
 
 export interface HealthboxLayout {
   /** Top-left of the healthbox image on screen (sprite center + centerToCornerVec). */
@@ -20,11 +23,13 @@ export interface HealthboxLayout {
   hpBar: [number, number];
   hpText?: [number, number];
   expBar?: [number, number];
+  /** The status icon (UpdateStatusIconInHealthbox: tile 0x1A of our box, 0x11 of the foe's). */
+  status: [number, number];
 }
 
 export const HEALTHBOX_LAYOUT: Record<Side, HealthboxLayout> = {
-  player: { box: [126, 72], name: [16, 3], level: [72, 3], hpBar: [32, 16], hpText: [60, 21], expBar: [32, 32] },
-  opponent: { box: [12, 14], name: [8, 3], level: [64, 3], hpBar: [24, 16] },
+  player: { box: [126, 72], name: [16, 3], level: [72, 3], hpBar: [32, 16], hpText: [60, 21], expBar: [32, 32], status: [16, 24] },
+  opponent: { box: [12, 14], name: [8, 3], level: [64, 3], hpBar: [24, 16], status: [8, 16] },
 };
 
 export const HP_BAR_PIXELS = 48;
@@ -53,6 +58,8 @@ export class Healthbox {
   /** HP value currently shown (animated toward `hp` by the battle UI). */
   shownHp = 1;
   expFraction = 0;
+  /** The status condition's icon, or none. */
+  status: StatusIcon | null = null;
   visible = true;
   /** Offset used by slide-in and the action-menu bounce. */
   offset: [number, number] = [0, 0];
@@ -64,19 +71,23 @@ export class Healthbox {
     private readonly hpbar: Bitmap,
     private readonly hpbarAnim: Bitmap,
     private readonly expbar: Bitmap,
+    private readonly statusIcons: Bitmap,
+    private readonly frameEnd: Bitmap,
     private readonly font: Font,
   ) {
     this.layout = HEALTHBOX_LAYOUT[side];
   }
 
   static async load(side: Side, smallFont: Font): Promise<Healthbox> {
-    const [box, hpbar, hpbarAnim, expbar] = await Promise.all([
+    const [box, hpbar, hpbarAnim, expbar, statusIcons, frameEnd] = await Promise.all([
       loadBitmap(asset(`gba/battle_interface/healthbox_singles_${side}.png`)),
       loadBitmap(asset('gba/battle_interface/hpbar.png')),
       loadBitmap(asset('gba/battle_interface/hpbar_anim.png')),
       loadBitmap(asset('gba/battle_interface/expbar.png')),
+      loadBitmap(asset('gba/battle_interface/status_icons.png')),
+      loadBitmap(asset('gba/battle_interface/misc_frameend.png')),
     ]);
-    return new Healthbox(side, box, hpbar, hpbarAnim, expbar, smallFont);
+    return new Healthbox(side, box, hpbar, hpbarAnim, expbar, statusIcons, frameEnd, smallFont);
   }
 
   private textStyle() {
@@ -111,7 +122,10 @@ export class Healthbox {
   }
 
   drawHpBar(fb: Bitmap, x: number, y: number): void {
-    blit(fb, this.hpbar, 8, 0, 16, 8, x, y); // "H" "P"
+    // The foe's "HP" label gives way to its status icon: the bar's first tile
+    // goes blank (HEALTHBOX_GFX_0) and its second is the frame end (GFX_65).
+    if (this.status && this.side === 'opponent') blit(fb, this.frameEnd, 0, 0, 8, 8, x + 8, y);
+    else blit(fb, this.hpbar, 8, 0, 16, 8, x, y); // "H" "P"
     const filled = barPixels(this.shownHp, this.maxHp, HP_BAR_PIXELS);
     const color = hpBarColor(filled);
     let remaining = filled;
@@ -140,6 +154,7 @@ export class Healthbox {
     blit(fb, this.box, 0, 0, this.box.width, this.box.height, bx, by);
     this.drawName(fb, bx + L.name[0], by + L.name[1]);
     this.drawLevel(fb, bx + L.level[0], by + L.level[1]);
+    if (this.status) blit(fb, this.statusIcons, 0, STATUS_ICONS.indexOf(this.status) * 8, 24, 8, bx + L.status[0], by + L.status[1]);
     this.drawHpBar(fb, bx + L.hpBar[0], by + L.hpBar[1]);
     if (L.hpText) this.drawHpText(fb, bx + L.hpText[0], by + L.hpText[1]);
     if (L.expBar) this.drawExpBar(fb, bx + L.expBar[0], by + L.expBar[1]);

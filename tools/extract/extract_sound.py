@@ -32,12 +32,14 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "public/assets/sound"
 
 # What the playtest plays: the music of the title, the setup (Professor
-# Birch's lab), wild battles, the win and the level-up fanfare, and the
-# battle and menu sound effects.
+# Birch's lab), wild battles, the win and the level-up fanfare, the battle
+# and menu sound effects, and the stock status animations' (a stat rising or
+# falling, a burn).
 SONGS = [
     "mus_title", "mus_birch_lab", "mus_vs_wild", "mus_victory_wild", "mus_level_up",
     "se_select", "se_ball_open", "se_effective", "se_super_effective",
     "se_not_effective", "se_faint", "se_flee", "se_exp", "se_exp_max", "se_low_health",
+    "se_m_stat_increase", "se_m_stat_decrease", "se_m_flame_wheel",
 ]
 
 PLAYERS = {"MUSIC_PLAYER_BGM": 0, "MUSIC_PLAYER_SE1": 1, "MUSIC_PLAYER_SE2": 2, "MUSIC_PLAYER_SE3": 3}

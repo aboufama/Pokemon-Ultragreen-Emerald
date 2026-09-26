@@ -126,6 +126,14 @@ const compositeFrag = /* glsl */ `
   // each pixel of an 8x8 cell fills at, and Ripple's rows shifted up and down
   // (amplitude in pixels, the sine's running angle << 8).
   uniform vec4 fxBlend;
+  // The stat change animation's BG1 layer (StatsChangeAnimation_Step3): color
+  // indices (x 17 in red, 0 transparent) shown only inside one battler (the
+  // OBJ window), scrolled, and blended EVA/16 over it in 5-bit color.
+  uniform sampler2D tStat;
+  uniform vec3 statPalette[16];
+  uniform int statId;
+  uniform ivec2 statScroll;
+  uniform int statEva;
   uniform int barX[8];
   uniform float barY[8];
   uniform int gridStage;
@@ -181,6 +189,13 @@ const compositeFrag = /* glsl */ `
   vec3 toRgb555(vec3 c) {
     vec3 c5 = floor(clamp(c, 0.0, 1.0) * 255.0 / 8.0);
     return (c5 * 8.0 + floor(c5 / 4.0)) / 255.0;
+  }
+
+  /** The GBA pixel an output pixel belongs to (row 0 at the top). */
+  ivec2 screenPixel(ivec2 outPx) {
+    ivec2 outSize = srcSize / ss;
+    int density = outSize.x / 240;
+    return ivec2(outPx.x / density, (outSize.y - 1 - outPx.y) / density);
   }
 
   /** The object an output pixel shows: the majority id among its supersamples. */
@@ -253,6 +268,17 @@ const compositeFrag = /* glsl */ `
       // Blending the palette on the GBA recolors every pixel of the sprite,
       // outline included, so it applies after snapping.
       c = mix(c, blend[slot].rgb, blend[slot].a);
+      if (id == statId && statEva > 0) {
+        ivec2 s = screenPixel(outPx);
+        int k = int(texelFetch(tStat, ivec2((s.x + statScroll.x) & 255, (s.y + statScroll.y) & 255), 0).r * 15.0 + 0.5);
+        if (k > 0) {
+          // The GBA's alpha blend: (A * EVA + B * EVB) >> 4 per 5-bit channel.
+          vec3 a = floor(statPalette[k] * 255.0 / 8.0);
+          vec3 b = floor(clamp(c, 0.0, 1.0) * 255.0 / 8.0);
+          vec3 r = min(vec3(31.0), floor((a * float(statEva) + b * float(16 - statEva)) / 16.0));
+          c = (r * 8.0 + floor(r / 4.0)) / 255.0;
+        }
+      }
     } else if (id == 0) {
       c = mix(c, envTint.rgb, envTint.a);
       c = mix(c, envFlash.rgb, envFlash.a);
@@ -264,8 +290,7 @@ const compositeFrag = /* glsl */ `
     ivec2 outPx = ivec2(gl_FragCoord.xy);
     ivec2 outSize = srcSize / ss;
     int density = outSize.x / 240;
-    // The GBA pixel this output pixel belongs to (row 0 at the top).
-    ivec2 screen = ivec2(outPx.x / density, (outSize.y - 1 - outPx.y) / density);
+    ivec2 screen = screenPixel(outPx);
     if (rippleAmp > 0.0) {
       // Ripple: BGxVOFS per row = Sin(((sin + y * 0x180) >> 8) & 0xFF, amplitude).
       int angle = ((rippleSin + screen.y * 384) >> 8) & 255;
@@ -352,6 +377,11 @@ export class PixelPipeline {
         echoLook: { value: Array.from({ length: MAX_ECHOES }, () => new THREE.Vector4()) },
         // ivec2 goes to WebGL as a flat list.
         fxBlend: { value: new THREE.Vector4(0, 0, 0, 0) },
+        tStat: { value: null },
+        statPalette: { value: Array.from({ length: 16 }, () => new THREE.Vector3()) },
+        statId: { value: 0 },
+        statScroll: { value: new THREE.Vector2() },
+        statEva: { value: 0 },
         barX: { value: new Array(8).fill(240) },
         barY: { value: new Array(8).fill(0) },
         gridStage: { value: 0 },
@@ -426,6 +456,22 @@ export class PixelPipeline {
    */
   setBlend(slot: number, color: RGB, amount: number): void {
     (this.composite.uniforms.blend.value as THREE.Vector4[])[slot].set(color[0] / 255, color[1] / 255, color[2] / 255, Math.max(0, Math.min(1, amount)));
+  }
+
+  /**
+   * The stat change animation's layer over one battler (its pixel id), or
+   * none: `layer` holds color indices (x 17 in red) over 256x256 pixels,
+   * seen at screen pixel + `scroll` (BG1HOFS/VOFS, wrapping), in `palette`,
+   * blended `eva`/16 over the battler.
+   */
+  setStatLayer(layer: { texture: THREE.Texture; palette: RGB[]; id: number; scroll: [number, number]; eva: number } | null): void {
+    const u = this.composite.uniforms;
+    u.statEva.value = layer ? layer.eva : 0;
+    if (!layer) return;
+    u.tStat.value = layer.texture;
+    u.statId.value = layer.id;
+    (u.statScroll.value as THREE.Vector2).set(layer.scroll[0], layer.scroll[1]);
+    layer.palette.forEach((c, i) => (u.statPalette.value as THREE.Vector3[])[i].set(c[0] / 255, c[1] / 255, c[2] / 255));
   }
 
   /**

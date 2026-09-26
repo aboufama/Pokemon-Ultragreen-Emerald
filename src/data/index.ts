@@ -84,6 +84,8 @@ export const GFX_META = gfxMetaJson as unknown as {
   frame1Palette: RGB[];
   /** GridSquares (battle_transition.c): the stage each pixel of an 8x8 cell fills at. */
   gridSquaresFill: number[];
+  /** The stat change animation's palettes by stat (attack ... multiple). */
+  statChangePalettes: Record<string, RGB[]>;
 };
 
 export function species(slug: string): SpeciesData {

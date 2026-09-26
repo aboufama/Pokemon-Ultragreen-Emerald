@@ -119,11 +119,17 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 - **Presentation**:
   - HP drains at 1 HP per frame and the EXP bar fills at 1 px per frame, as in the game;
   - messages print and wait like battle text;
-  - faint, whiteout and escape all play out.
+  - stat changes and burns play the game's own animations, frame for frame
+    (src/battle/status_anims.ts): the stat change layer scrolling over the Pokémon in
+    the stat's colors (gray when a move changes several), and the burn's three flames
+    across its feet; a burned Pokémon's healthbox shows BRN;
+  - a fainting Pokémon curls over and shrinks away, as the 3D games show it;
+  - whiteout and escape play out.
 - **Sound**, where the game plays it: the wild battle theme from the start, the ball's
-  pop, the hit sounds by effectiveness panned toward the target, the low-HP beep, the
-  faint, the victory theme when EXP is given, the EXP bar's fill, the level-up sparkle
-  and fanfare, the flee sound, and the select sound on menus and text.
+  pop, the hit sounds by effectiveness panned toward the target, the low-HP beep, a
+  stat rising or falling, a burn, the faint, the victory theme when EXP is given, the
+  EXP bar's fill, the level-up sparkle and fanfare, the flee sound, and the select
+  sound on menus and text.
 
 ## How it works
 

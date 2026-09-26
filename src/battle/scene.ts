@@ -13,7 +13,6 @@
 // drawn exactly as on the GBA. The music and sound effects play where the
 // game plays them (src/audio/sound.ts; silent unless the page enables sound).
 
-import * as THREE from 'three';
 import { type Bitmap, type RGB, blit, clear, fillRect, loadBitmap } from '../gba/bitmap';
 import { asset } from '../gba/assets';
 import { loadAllFonts, soundCues } from '../gba/font';
@@ -21,14 +20,16 @@ import { panFor, sound } from '../audio/sound';
 import { BattleStage } from '../render3d/stage';
 import { Battler3D } from '../battle3d/battler';
 import { VfxSystem, preloadSheets } from '../battle3d/vfx';
-import { bodyPoint, performMove, towardCamera } from '../battle3d/director';
+import { performMove } from '../battle3d/director';
 import { hasProfile } from '../pokemon/registry';
 import { GbaScreen } from './screen';
 import { type Button, Input } from './input';
 import { FrameClock, gbaSin } from './clock';
 import { BattleTextbox } from './ui/textbox';
 import { Healthbox } from './ui/healthbox';
-import { type Action, BattleEngine, type Side, type Step, calcStats, createMon, expForLevel } from './engine';
+import { type FlameSprite, burnFlameFrames, statLayer, statPalette, statsChangeFrames } from './status_anims';
+import { SLOT_PIXEL_ID } from '../pokemon/instantiate';
+import { type Action, BattleEngine, type Side, type StatKey, type Step, calcStats, createMon, expForLevel } from './engine';
 
 const DT = 1 / 60;
 /** Frames per glyph for the options' text speeds (delay + 1, see RenderText). */
@@ -50,9 +51,6 @@ const SHADOW: RGB = [66, 66, 66];
 /** gBallOpenFadeColors[BALL_POKE] = RGB(31, 22, 30). */
 const BALL_FADE: RGB = [255, 181, 247];
 const GLOW_RED: RGB = [255, 0, 0];
-const STAT_UP: RGB = [115, 173, 255];
-const STAT_DOWN: RGB = [74, 66, 140];
-const BURN: RGB = [255, 99, 41];
 
 /** Brendan's throw (sAnimCmd_Brendan_1): [frame, duration]. */
 const TRAINER_THROW: [number, number][] = [[0, 24], [1, 9], [2, 24], [0, 9], [3, 50]];
@@ -140,6 +138,8 @@ export class BattleScene {
   private trainer = { visible: false, x: 80, y: 80, frame: 3 };
   private ball = { visible: false, x: 0, y: 0, frame: 0, hflip: false, vflip: false };
   private ballParticles: { x: number; y: number; frame: number; list: BallParticle[] } | null = null;
+  /** A status animation's flames (Status_Burn), over the Pokémon and under the healthboxes. */
+  private flames: FlameSprite[] = [];
   private bouncing = false;
   private bounceHb = 0;
   private bounceMon = 0;
@@ -162,6 +162,7 @@ export class BattleScene {
     private readonly trainerSheet: Bitmap,
     private readonly ballSheet: Bitmap,
     private readonly particleSheet: Bitmap,
+    private readonly emberSheet: Bitmap,
     opts: BattleSceneOptions,
   ) {
     this.opts = {
@@ -186,7 +187,7 @@ export class BattleScene {
     const screen = new GbaScreen(parent, opts.scale, opts.fill);
     const stage = new BattleStage(screen.canvas3d);
     const fonts = await loadAllFonts();
-    const [, textbox, hbPlayer, hbEnemy, trainerSheet, ballSheet, particleSheet, player, enemy] = await Promise.all([
+    const [, textbox, hbPlayer, hbEnemy, trainerSheet, ballSheet, particleSheet, emberSheet, player, enemy] = await Promise.all([
       stage.setEnvironment(opts.environment ?? 'grass'),
       BattleTextbox.load(fonts),
       Healthbox.load('player', fonts.small),
@@ -194,12 +195,13 @@ export class BattleScene {
       loadBitmap(asset('gba/trainers/brendan_back.png')),
       loadBitmap(asset('gba/balls/poke.png')),
       loadBitmap(asset('gba/battle_anims/Particles.png')),
+      loadBitmap(asset('gba/battle_anims/SmallEmber.png')),
       Battler3D.create(stage, 'player', opts.player.slug, { shiny: opts.player.shiny }),
       Battler3D.create(stage, 'enemy', opts.opponent.slug, { shiny: opts.opponent.shiny }),
       preloadSheets(),
     ]);
     const vfx = new VfxSystem(stage);
-    return new BattleScene(screen, stage, vfx, player, enemy, textbox, hbPlayer, hbEnemy, trainerSheet, ballSheet, particleSheet, opts);
+    return new BattleScene(screen, stage, vfx, player, enemy, textbox, hbPlayer, hbEnemy, trainerSheet, ballSheet, particleSheet, emberSheet, opts);
   }
 
   // -------------------------------------------------------------------------
@@ -281,6 +283,7 @@ export class BattleScene {
         blit(fb, this.particleSheet, 0, bp.frame * 8, 8, 8, x - 4, y - 4);
       }
     }
+    for (const f of this.flames) blit(fb, this.emberSheet, 0, f.frame * 32, 32, 32, f.x - 16, f.y - 16);
     this.hbEnemy.draw(fb);
     this.hbPlayer.draw(fb);
     this.textbox.draw(fb, this.clock.frame);
@@ -458,8 +461,11 @@ export class BattleScene {
       hb.hp = hb.shownHp = m.hp;
       hb.expFraction = side === 'player' ? this.engine.expFraction() : 0;
       hb.offset = [0, 0];
+      hb.status = null;
       hb.visible = false;
     }
+    this.flames = [];
+    this.stage.pipeline.setStatLayer(null);
     for (const b of [this.player, this.enemy]) {
       b.visible = true;
       b.appear = 1;
@@ -777,11 +783,17 @@ export class BattleScene {
           break;
         }
         case 'hp':
-          if (s.cause === 'burn') await this.burnFx(s.side);
           await this.drainHp(s.side, s.to);
           break;
         case 'stat':
-          await this.statFx(s.side, s.delta);
+          await this.statsChange(s.side, s.stats, s.delta);
+          break;
+        case 'statusAnim':
+          await this.burn(s.side);
+          break;
+        case 'statusIcon':
+          // updatestatusicon
+          this.healthbox(s.side).status = s.status === 'burn' ? 'brn' : null;
           break;
         case 'faint':
           await this.faint(s.side);
@@ -857,47 +869,36 @@ export class BattleScene {
     this.lowHp = on;
   }
 
-  private async statFx(side: Side, delta: number): Promise<void> {
-    const b = this.battler(side);
-    const up = delta > 0;
-    for (let i = 0; i < 10; i++) {
-      this.vfx.after(i * 0.05, () => {
-        const p = bodyPoint(b, up ? 0.05 + (i % 3) * 0.12 : 0.95 - (i % 3) * 0.12);
-        const ang = (i / 10) * Math.PI * 2;
-        p.add(new THREE.Vector3(Math.cos(ang) * 0.3, 0, Math.sin(ang) * 0.3).multiplyScalar(b.height));
-        void this.vfx.sprite('FocusEnergy', p, { px: 16, fps: 16, life: 0.55, velocity: new THREE.Vector3(0, (up ? 1.3 : -1.3) * b.height, 0) });
-      });
-    }
-    // Palette pulse in the stat-change color (coefficient up to 10/16).
-    let t = 0;
-    const color = up ? STAT_UP : STAT_DOWN;
-    await this.clock.until(() => {
-      t++;
-      b.setTint(color, Math.round(Math.sin((t / 48) * Math.PI) * 10) / 16);
-      if (t < 48) return false;
-      b.setTint(color, 0);
-      return true;
+  /**
+   * The stock stat change animation (src/battle/status_anims.ts): the
+   * stat_change layer over the battler, in the stat's colors (gray for
+   * several), rising or falling, sharper for two stages.
+   */
+  private async statsChange(side: Side, stats: StatKey[], delta: number): Promise<void> {
+    const decrease = delta < 0;
+    const texture = await statLayer(decrease);
+    const palette = statPalette(stats);
+    const id = SLOT_PIXEL_ID[this.battler(side).slot];
+    const frames = statsChangeFrames(decrease, Math.abs(delta) >= 2);
+    // StatsChangeAnimation_Step2: PlaySE12WithPanning(SE_M_STAT_INCREASE / _DECREASE, attacker).
+    sound.playSEPanned(decrease ? 'se_m_stat_decrease' : 'se_m_stat_increase', panFor(side));
+    let i = 0;
+    await this.clock.task(() => {
+      const f = frames[i++];
+      this.stage.pipeline.setStatLayer(f ? { texture, palette, id, scroll: f.scroll, eva: f.eva } : null);
+      return !f;
     });
-    await this.clock.until(() => !this.vfx.busy);
   }
 
-  private async burnFx(side: Side): Promise<void> {
-    const b = this.battler(side);
-    for (let i = 0; i < 3; i++) {
-      this.vfx.after(i * 0.2, () => {
-        const p = towardCamera(b, bodyPoint(b, 0.25 + i * 0.2), 0.35);
-        void this.vfx.sprite('SmallEmber', p, { px: 24, fps: 12, velocity: new THREE.Vector3(0, b.height * 0.5, 0) });
-      });
-    }
-    let t = 0;
-    await this.clock.until(() => {
-      t++;
-      b.setTint(BURN, Math.round(Math.sin((t / 40) * Math.PI) * 8) / 16);
-      if (t < 40) return false;
-      b.setTint(BURN, 0);
-      return true;
+  /** The stock burn animation (Status_Burn): three small flames cross the battler's feet. */
+  private async burn(side: Side): Promise<void> {
+    sound.playSEPanned('se_m_flame_wheel', panFor(side));
+    const frames = burnFlameFrames(side);
+    let i = 0;
+    await this.clock.task(() => {
+      this.flames = frames[i++] ?? [];
+      return i > frames.length;
     });
-    await this.clock.until(() => !this.vfx.busy);
   }
 
   /**

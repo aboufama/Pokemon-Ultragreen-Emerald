@@ -137,6 +137,57 @@ function battle(me, mine, foe, theirs, seed = 1) {
   check('Mud Shot always lowers Speed', m.opponent.stages.speed === -1 || has(ms, /missed/), texts(ms).join(' | '));
 }
 
+// Stat changes and burns play the game's animations in the game's order.
+{
+  const kinds = (steps) => steps.filter((s) => s.kind !== 'move').map((s) => (s.kind === 'message' ? s.text.replace(/\n/g, ' ') : s.kind === 'stat' ? `stat:${s.side}:${s.stats.join('+')}:${s.delta}` : `${s.kind}:${s.side}`));
+  const after = (list, anchor) => list.slice(list.findIndex((k) => anchor.test(k)));
+  const b = battle('swampert', ['WATER_GUN'], 'blaziken', ['BULK_UP']);
+  b.player.moves[0].pp = 0;
+  b.player.hp = b.player.stats.hp = 999;
+  let seq = after(kinds(b.engine.runTurn({ kind: 'struggle' })), /used BULK UP/);
+  check('Bulk Up: one gray animation for both stats, then both messages', seq[1] === 'stat:opponent:attack+defense:1' && /ATTACK rose/.test(seq[2]) && /DEFENSE rose/.test(seq[3]), seq.slice(0, 4).join(' | '));
+  b.opponent.stages.attack = 6;
+  seq = after(kinds(b.engine.runTurn({ kind: 'struggle' })), /used BULK UP/);
+  check('Bulk Up at +6 Attack: only Defense animates, and nothing about Attack', seq[1] === 'stat:opponent:defense:1' && !seq.some((t) => /ATTACK/.test(t)), seq.slice(0, 3).join(' | '));
+  b.opponent.stages.defense = 6;
+  seq = after(kinds(b.engine.runTurn({ kind: 'struggle' })), /used BULK UP/);
+  check('Bulk Up at +6 both: "stats won\'t go any higher!", no animation', /stats won't go any higher!/.test(seq[1]) && !seq.some((t) => t.startsWith('stat:')), seq.slice(0, 2).join(' | '));
+  const g = battle('swampert', ['GROWL'], 'blaziken', ['BULK_UP']);
+  seq = after(kinds(g.engine.runTurn({ kind: 'move', index: 0 })), /used GROWL/);
+  check('Growl: the foe\'s Attack animation, then "fell!"', seq[1] === 'stat:opponent:attack:-1' && /ATTACK fell!/.test(seq[2]), seq.slice(0, 3).join(' | '));
+  let burned = null;
+  for (let seed = 1; seed < 400 && !burned; seed++) {
+    const f = battle('blaziken', ['FLAMETHROWER'], 'swampert', ['GROWL'], seed);
+    f.opponent.hp = f.opponent.stats.hp = 999;
+    const list = kinds(f.engine.runTurn({ kind: 'move', index: 0 }));
+    if (list.some((k) => /was burned/.test(k))) burned = { list, f };
+  }
+  check('a burn lands in 400 seeds', !!burned);
+  if (burned) {
+    seq = after(burned.list, /^statusAnim/);
+    check('burned: the burn animation, "was burned!", then the icon', seq[0] === 'statusAnim:opponent' && /was burned!/.test(seq[1]) && seq[2] === 'statusIcon:opponent', seq.slice(0, 3).join(' | '));
+    const end = after(kinds(burned.f.engine.runTurn({ kind: 'move', index: 0 })), /hurt by its burn/);
+    check('burn damage: the message, the animation, then the HP', /hurt by its burn/.test(end[0]) && end[1] === 'statusAnim:opponent' && end[2] === 'hp:opponent', end.slice(0, 3).join(' | '));
+  }
+}
+
+// The stock status animations' timelines (src/battle/status_anims.ts), as the
+// game's code runs them: StatsChangeAnimation_Step3 fades the layer in one
+// step every other frame to 10/16 (13 sharply), holds 20 frames (30), fades
+// out, scrolling 3 px a frame; Status_Burn's three flames cross 48 px of the
+// battler's feet in 20 frames each, 4 frames apart.
+{
+  const A = await importTs('src/battle/status_anims.ts');
+  const up = A.statsChangeFrames(false, false), sharp = A.statsChangeFrames(false, true), down = A.statsChangeFrames(true, false);
+  const peak = (f) => Math.max(...f.map((x) => x.eva));
+  check('stat change: 60 frames, up to 10/16; sharply 82 frames, up to 13/16', up.length === 60 && peak(up) === 10 && sharp.length === 82 && peak(sharp) === 13, `${up.length} / ${peak(up)}, ${sharp.length} / ${peak(sharp)}`);
+  check('stat change: rises 3 px a frame; a drop falls from BG1 x 64', up[9].scroll[1] === 30 && down[0].scroll[0] === 64 && down[9].scroll[1] === 256 - 30, `${up[9].scroll} / ${down[9].scroll}`);
+  const foe = A.burnFlameFrames('opponent'), ours = A.burnFlameFrames('player');
+  const path = (frames) => [frames[0][0], frames[19][0]].map((f) => `${f.x},${f.y}`).join(' -> ');
+  check('burn: three flames, 4 frames apart, 28 frames in all', foe.length === 28 && Math.max(...foe.map((f) => f.length)) === 3 && foe[3].length === 1 && foe[4].length === 2);
+  check('burn: across the foe\'s feet left to right, ours right to left', path(foe) === '154,64 -> 199,64' && path(ours) === '94,104 -> 48,104', `${path(foe)} | ${path(ours)}`);
+}
+
 // Struggle.
 {
   const { engine, player } = battle('swampert', ['WATER_GUN'], 'blaziken', ['BULK_UP']);

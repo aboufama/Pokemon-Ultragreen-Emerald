@@ -5,6 +5,9 @@ Output root: public/assets/gba/
                                         reference for the arenas' art, never drawn
   battle_interface/textbox.png          composed BG0 with the 3 pages (message/action/move), 256x512
   battle_interface/*.png                healthboxes, hp/exp bars, status icons (index 0 transparent)
+  battle_interface/status_icons.png     the healthbox's status icons in their in-game colors
+  battle_anims/*.png                    stock battle animation sprites (indexed)
+  battle_anims/stat_change_*.png        the stat change animation's BG1 layer, color index x 17
   fonts/<font>.png                      glyph sheets, 2-bit index kept in the red channel (see font.ts)
   pokemon/<slug>/{front,back}[_shiny].png, palette.json
   trainers/<name>_back.png
@@ -135,6 +138,50 @@ def extract_interface(decomp: Path, out: Path, meta: dict) -> None:
         p = bi / f"{name}.png"
         if p.exists():
             save(G.to_rgba(G.indexed(p), G.png_palette(p)), out / "battle_interface" / f"{name}.png")
+
+
+def extract_status_icons(decomp: Path, out: Path) -> None:
+    """The healthbox's status icons as the game shows them
+    (UpdateStatusIconInHealthbox): status.png's tiles in the healthbox palette
+    with index 12 filled with the status's color (sStatusIconColors), one row
+    each for PSN, PRZ, SLP, FRZ and BRN. And the HP bar's frame end
+    (misc_frameend.png, HEALTHBOX_GFX_65), which replaces the foe's "HP" label
+    while it shows a status."""
+    bi = decomp / "graphics/battle_interface"
+    src = C.read(decomp / "src/battle_interface.c")
+    colors = {k: tuple((int(v) << 3) | (int(v) >> 2) for v in rgb) for k, *rgb in re.findall(r"\[PAL_STATUS_(\w+)\]\s*=\s*RGB\((\d+),\s*(\d+),\s*(\d+)\)", src)}
+    healthbox_pal = G.png_palette(bi / "ball_status_bar.png")[:16]
+    idx = G.indexed(bi / "status.png") & 0xF
+    rows = []
+    for r, status in enumerate(["PSN", "PAR", "SLP", "FRZ", "BRN"]):
+        pal = list(healthbox_pal)
+        pal[12] = colors[status]
+        rows.append(np.array(G.to_rgba(idx[r * 8 : r * 8 + 8], pal)))
+    save(Image.fromarray(np.concatenate(rows), "RGBA"), out / "battle_interface" / "status_icons.png")
+    healthbar_pal = G.png_palette(bi / "ball_display.png")[:16]
+    save(G.to_rgba(G.indexed(bi / "misc_frameend.png"), healthbar_pal), out / "battle_interface" / "misc_frameend.png")
+
+
+def extract_stat_change(decomp: Path, out: Path, meta: dict) -> None:
+    """The stat change animation's BG1 layer (StatsChangeAnimation_Step2): the
+    increase and decrease tilemaps (32x32 entries) over stat_change/tiles.png,
+    composed into 256x256 maps of color indices (index x 17 as the gray level,
+    0 transparent), and the palette of each stat (attack.pal ... multiple.pal)."""
+    d = decomp / "graphics/battle_anims/stat_change"
+    tiles = G.tiles_of(G.indexed(d / "tiles.png") & 0xF)
+    for which in ("increase", "decrease"):
+        layer = np.zeros((256, 256), np.uint8)
+        for i, entry in enumerate(np.fromfile(d / f"{which}.bin", dtype="<u2")):
+            entry = int(entry)
+            t = tiles[entry & 0x3FF]
+            if entry & 0x400:
+                t = t[:, ::-1]
+            if entry & 0x800:
+                t = t[::-1, :]
+            ty, tx = divmod(i, 32)
+            layer[ty * 8 : ty * 8 + 8, tx * 8 : tx * 8 + 8] = t
+        save(Image.fromarray(layer * 17, "L"), out / "battle_anims" / f"stat_change_{which}.png")
+    meta["statChangePalettes"] = {p.stem: [list(c) for c in G.read_jasc_pal(p)[:16]] for p in sorted(d.glob("*.pal"))}
 
 
 def extract_fonts(decomp: Path, out: Path) -> None:
@@ -362,9 +409,11 @@ def main(decomp: Path, root: Path) -> None:
     extract_environments(decomp, out, meta)
     extract_textbox(decomp, out, meta)
     extract_interface(decomp, out, meta)
+    extract_status_icons(decomp, out)
     extract_fonts(decomp, out)
     extract_trainers_and_balls(decomp, out)
     extract_battle_anim_sprites(decomp, out, meta)
+    extract_stat_change(decomp, out, meta)
     extract_pokemon(decomp, out, species)
     extract_menus(decomp, out, meta)
     extract_title(decomp, out)
