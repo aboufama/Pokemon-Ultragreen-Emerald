@@ -80,6 +80,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 | `loop=0` | stop after one battle |
 | `playerExp=0.9` | start close to a level-up |
 | `sound=1` | Emerald's music and sound effects (from the first key press or tap; the playtest has them on) |
+| `poseRate=12` | stop motion: poses a second the Pokémon are shown in (12 by default, `0` for smooth 60 fps motion) |
 
 ## What's in the battle
 
@@ -97,6 +98,10 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
   damage, Hidden Power, Protect / Detect / Endure, Hyper Beam's recharge, Focus
   Punch, and Struggle. Paralysis, poison, sleep, freeze, confusion, flinching and
   weather are not modelled yet (moves that only cause those are left out of movesets).
+- **Stop motion**: the Pokémon are shown in poses held for several frames (12 a second),
+  while the animation runs on underneath at 60 fps, so timing, springs and hits stay
+  exact (a hit's pose shows on its frame); slides, bounces, blinks and flashes stay smooth,
+  as the GBA moves sprites.
 - **Presentation**:
   - HP drains at 1 HP per frame and the EXP bar fills at 1 px per frame, as in the game;
   - messages print and wait like battle text;

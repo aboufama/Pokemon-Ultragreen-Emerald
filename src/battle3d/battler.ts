@@ -4,6 +4,13 @@
 // On top of the clips it adds what makes the creature feel alive: loose parts
 // on springs, eye blinks and a sprung recoil when hit. It always faces its
 // opponent.
+//
+// Stop motion: the body is shown in poses held for several frames
+// (Battler3D.poseRate a second, 12 by default; ?poseRate=0 for smooth
+// motion, as the motion gates use). The animation runs on underneath at 60
+// fps, so clips keep their timing and springs their feel; a clip event
+// (an impact, a release) shows its pose at once. What the GBA does to
+// sprites stays per frame: slides, bounces, blinks and palette flashes.
 
 import * as THREE from 'three';
 import { Animator } from '../anim/animator';
@@ -17,10 +24,20 @@ import { SLOT_PIXEL_ID, instantiatePokemon, type PokemonInstance } from '../poke
 import { GroundShadow } from '../render3d/shadow';
 
 const DEG = Math.PI / 180;
+
+/** Poses a second from the page's ?poseRate= (0 or 60: every frame), 12 by default. */
+function pagePoseRate(): number {
+  const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('poseRate');
+  const v = q === null ? 12 : Number(q);
+  return Number.isFinite(v) && v > 0 && v < 60 ? v : 0;
+}
 /** Effect origins every species has, by the rig bones they sit on. */
 const BUILTIN_EMITTERS: Record<string, string[]> = { mouth: ['head'], eyes: ['head'], hands: ['handR', 'handL'], feet: ['footR', 'footL'], body: ['chest'] };
 
 export class Battler3D {
+  /** Stop motion: poses shown a second (0 = every frame). */
+  static poseRate = pagePoseRate();
+
   readonly animator: Animator;
   target: Battler3D | null = null;
   /** Scale multiplier for the Poke Ball appear/withdraw effect. */
@@ -60,6 +77,10 @@ export class Battler3D {
   private eyeMap: THREE.Texture | null = null;
   pose: Pose = {};
   onEvent: ((name: string) => void) | null = null;
+  /** Stop motion: time since the shown pose, whether to show the next at once, and the shown pose. */
+  private poseClock = 0;
+  private snapPose = true;
+  private posed: { nodes: THREE.Object3D[]; values: Float32Array; root: THREE.Vector3; rotation: THREE.Euler; scale: number } | null = null;
 
   private constructor(readonly stage: BattleStage, readonly slot: SlotName, readonly inst: PokemonInstance) {
     this.animator = new Animator(inst.rig, inst.profile.clips, inst.profile.overlap);
@@ -74,6 +95,12 @@ export class Battler3D {
     stage.slots[slot].add(this.shadow.mesh);
     this.measureFootprint();
     void this.animator.play('idle');
+    // Every node the pose moves, for holding a pose on screen (stop motion).
+    const nodes: THREE.Object3D[] = [];
+    inst.root.traverse((o) => {
+      if (o !== inst.root && ((o as THREE.Bone).isBone || o.type === 'Object3D')) nodes.push(o);
+    });
+    this.posed = { nodes, values: new Float32Array(nodes.length * 10), root: new THREE.Vector3(), rotation: new THREE.Euler(0, 0, 0, 'YXZ'), scale: 1 };
   }
 
   static async create(stage: BattleStage, slot: SlotName, slug: string, opts: { shiny?: boolean } = {}): Promise<Battler3D> {
@@ -270,7 +297,14 @@ export class Battler3D {
 
   play(clip: string, opts: { fade?: number; speed?: number } = {}): Promise<void> {
     const name = this.animator.has(clip) ? clip : 'idle';
-    return this.animator.play(name, { ...opts, onEvent: (e) => this.onEvent?.(e) });
+    return this.animator.play(name, {
+      ...opts,
+      onEvent: (e) => {
+        // An event's pose shows on the frame it happens.
+        this.snapPose = true;
+        this.onEvent?.(e);
+      },
+    });
   }
 
   /** Play a clip, then return to idle. */
@@ -318,6 +352,14 @@ export class Battler3D {
     return v.applyQuaternion(slot.quaternion.clone().invert());
   }
 
+  /** The root's scale and the per-frame sprite offsets (appear, slide, bounce) on top of the pose's position. */
+  private placeRoot(poseScale: number): void {
+    const root = this.inst.root;
+    root.scale.setScalar(poseScale * this.appear);
+    if (this.appear !== 1) root.position.y += (1 - this.appear) * this.height * this.appearPivot;
+    if (this.screenOffset[0] || this.screenOffset[1]) root.position.add(this.screenOffsetLocal());
+  }
+
   update(dt: number): void {
     this.time += dt;
     const pose = this.animator.update(dt);
@@ -334,12 +376,12 @@ export class Battler3D {
     // root.yaw (spins) on top.
     const yaw = 0;
     const root = this.inst.root;
-    root.scale.setScalar(H * (pose.scale ?? 1) * this.appear);
+    const poseScale = H * (pose.scale ?? 1);
     root.rotation.set(((r.pitch ?? 0) - 7 * recoil) * DEG, yaw + (r.yaw ?? 0) * DEG, (r.roll ?? 0) * DEG, 'YXZ');
     const off = new THREE.Vector3(r.x ?? 0, r.y ?? 0, (r.z ?? 0) - 0.035 * recoil).multiplyScalar(H).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
     root.position.set(cal.dx, cal.lift, cal.dz + (pose.advance ?? 0) * this.approachDistance()).add(off);
-    if (this.appear !== 1) root.position.y += (1 - this.appear) * H * this.appearPivot;
-    if (this.screenOffset[0] || this.screenOffset[1]) root.position.add(this.screenOffsetLocal());
+    const posePosition = root.position.clone();
+    this.placeRoot(poseScale);
 
     // Loose parts follow the body through world space (start from rest when
     // the battler (re)appears) and sway in the arena's wind.
@@ -352,15 +394,12 @@ export class Battler3D {
       else chain.reset();
     }
 
-    // Shadow on the ground: follows the feet, shrinks and fades in the air,
-    // gone when sunk (fainted) or not sent out.
-    const lift = root.position.y - cal.lift;
-    const up = Math.max(0, lift / H);
-    const sunk = Math.min(1, Math.max(0, 1 + (lift / H) * 4));
-    const shadowScale = (this.appear / (1 + up * 1.6)) * H;
-    this.shadow.update(root.position.x, root.position.z, root.rotation.y, this.footprint.x * shadowScale, this.footprint.z * shadowScale, this.visible ? sunk * Math.max(0, 1 - up * 1.4) : 0);
+    // Stop motion: show this pose, or hold the one on screen.
+    this.poseClock += dt;
+    const show = !this.posed || Battler3D.poseRate <= 0 || this.snapPose || this.poseClock >= 1 / Battler3D.poseRate - 1e-6;
 
     // Landing: dust kicked up at the feet when coming down fast.
+    const lift = root.position.y - cal.lift;
     if (dt > 0) this.liftSpeed = (lift - this.lastLift) / dt;
     if (this.visible && this.appear >= 1 && this.lastLift > 0.025 * H && lift <= 0.01 * H && this.liftSpeed < -0.3 * H && ambience) {
       const at = new THREE.Vector3(root.position.x, 0, root.position.z).applyMatrix4(this.stage.slots[this.slot].matrixWorld);
@@ -392,30 +431,66 @@ export class Battler3D {
     const ex = this.profile.expressions;
     if (ex && this.eyeMap) {
       const cell = ex.cells[this.eyeExpression(dt, pose.expression ?? 'open')] ?? ex.cells.open;
-      this.eyeMap.offset.set(cell[0] * ex.cell[0], cell[1] * ex.cell[1]);
+      if (show) this.eyeMap.offset.set(cell[0] * ex.cell[0], cell[1] * ex.cell[1]);
     }
 
     // Effects.
-    for (const [channel, mats] of this.fireMaterials) {
-      const v = pose.fx?.[channel] ?? 0;
-      for (const m of mats) {
-        m.uniforms.intensity.value = v;
-        m.uniforms.time.value = this.time;
+    if (show) {
+      for (const [channel, mats] of this.fireMaterials) {
+        const v = pose.fx?.[channel] ?? 0;
+        for (const m of mats) {
+          m.uniforms.intensity.value = v;
+          m.uniforms.time.value = this.time;
+        }
+      }
+      for (const [key, meshes] of this.inst.toon.effects) {
+        const channel = Object.entries(this.profile.effects).find(([, b]) => b.parts.some((p) => key.includes(p)))?.[0];
+        const v = channel ? pose.fx?.[channel] ?? 0 : 0;
+        for (const m of meshes) m.visible = v > 0.02;
       }
     }
-    for (const [key, meshes] of this.inst.toon.effects) {
-      const channel = Object.entries(this.profile.effects).find(([, b]) => b.parts.some((p) => key.includes(p)))?.[0];
-      const v = channel ? pose.fx?.[channel] ?? 0 : 0;
-      for (const m of meshes) m.visible = v > 0.02;
+
+    // The body on screen: this pose (kept for the frames to come), or the held one.
+    const held = this.posed;
+    if (held && show) {
+      held.nodes.forEach((n, i) => {
+        const o = i * 10;
+        n.position.toArray(held.values, o);
+        n.quaternion.toArray(held.values, o + 3);
+        n.scale.toArray(held.values, o + 7);
+      });
+      held.root.copy(posePosition);
+      held.rotation.copy(root.rotation);
+      held.scale = poseScale;
+      this.poseClock = 0;
+      this.snapPose = false;
+    } else if (held) {
+      held.nodes.forEach((n, i) => {
+        const o = i * 10;
+        n.position.fromArray(held.values, o);
+        n.quaternion.fromArray(held.values, o + 3);
+        n.scale.fromArray(held.values, o + 7);
+      });
+      root.position.copy(held.root);
+      root.rotation.copy(held.rotation);
+      this.placeRoot(held.scale);
     }
 
+    // Shadow on the ground under the body on screen: follows the feet,
+    // shrinks and fades in the air, gone when sunk (fainted) or not sent out.
+    const shownLift = root.position.y - cal.lift;
+    const up = Math.max(0, shownLift / H);
+    const sunk = Math.min(1, Math.max(0, 1 + (shownLift / H) * 4));
+    const shadowScale = (this.appear / (1 + up * 1.6)) * H;
+    this.shadow.update(root.position.x, root.position.z, root.rotation.y, this.footprint.x * shadowScale, this.footprint.z * shadowScale, this.visible ? sunk * Math.max(0, 1 - up * 1.4) : 0);
+
     // Visibility / blink (GBA hit blink toggles every 4 frames).
-    let show = this.visible;
+    let seen = this.visible;
     if (this.blinkTime > 0) {
       this.blinkTime -= dt;
-      show = show && Math.floor(this.blinkTime * 60 / 4) % 2 === 0;
+      seen = seen && Math.floor(this.blinkTime * 60 / 4) % 2 === 0;
     }
-    root.visible = show;
+    root.visible = seen;
   }
 
   /**

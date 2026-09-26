@@ -255,7 +255,7 @@ if (args.render) {
   // turned away at rest (to match a side-on sprite) reads as looking the wrong
   // way, then turning round to attack.
   {
-    const q = new URLSearchParams({ mode: 'clipreview', species: slug, enemy: slug, attacker: 'enemy', clip: 'idle' });
+    const q = new URLSearchParams({ mode: 'clipreview', species: slug, enemy: slug, attacker: 'enemy', clip: 'idle', poseRate: '0' });
     await page.goto(`${base}?${q}`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__ready === true && !!window.__clip, null, { timeout: 180000 });
     const yaw = await page.evaluate(() => {
