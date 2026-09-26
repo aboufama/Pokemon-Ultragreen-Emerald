@@ -19,7 +19,7 @@ Read `src/audio/sound.ts` (the API the game uses), then the header of
 |---|---|
 | the songs: bytecode, voicegroups, keysplits, waves, samples (`bank.json`, `samples.bin`), converted from the decomp; `SONGS` lists what is extracted | `tools/extract/extract_sound.py`, `public/assets/sound/` |
 | the engine: the four music players and their sequencer (MPlayMain), SoundMainRAM's DirectSound mixer and reverb, CgbSound on a model of the GB channels, the GBA's output stage, and what sound.c adds (fanfares, panned effects, a BGM waiting for a fade-out) | `src/audio/m4a.ts` |
-| the page side: an AudioWorklet built from the engine's source, audio unlocked by the first press, `playBGM` / `fadeOutBGM` / `playSE` / `playSEPanned` / `stopSE` / `fanfare`, `{PLAY_SE ...}` in text | `src/audio/sound.ts`, `src/gba/font.ts` |
+| the page side: an AudioWorklet built from the engine's source (a ScriptProcessorNode where a worklet can't load), audio unlocked by the first press or tap (and resumed by any tap after iOS suspends it; iOS plays it through the silent switch), `playBGM` / `fadeOutBGM` / `playSE` / `playSEPanned` / `stopSE` / `fanfare`, `{PLAY_SE ...}` in text | `src/audio/sound.ts`, `src/gba/font.ts` |
 | the cues | `src/battle/scene.ts`, `src/menus/`, `src/demo/playtest.ts`, `src/battle/engine.ts` (text) |
 
 ## Rules
@@ -48,7 +48,10 @@ Read `src/audio/sound.ts` (the API the game uses), then the header of
 7. **Audio starts with a user gesture.** A BGM asked for earlier starts from its
    beginning then; sound effects asked for earlier are dropped. The title
    screen swallows the press that unlocked audio (`takeUnlockPress()`) so the
-   player hears its music.
+   player hears its music. On phones every tap resumes audio a phone
+   suspended (iOS does after a call or the app switcher), and iOS plays it
+   through the silent switch (the playback audio category). A worklet that
+   can't load falls back to a ScriptProcessorNode; `--phone` checks both.
 
 ## Workflow
 
@@ -56,7 +59,8 @@ Read `src/audio/sound.ts` (the API the game uses), then the header of
 2. If the song is new: add it to `SONGS`, `python3 tools/extract/extract_sound.py`.
 3. Add the cue.
 4. `node tools/sound/check.mjs` (the bank, the names in code, every song
-   renders, loops are stopped, the worklet's engine, speed).
+   renders, loops are stopped, the worklet's engine, speed; `--phone` also
+   on an emulated phone, with the dev server running).
    `--wav <song>` writes `build/sound/<song>.wav` to listen to.
 5. In the browser: the playtest, or `/?sound=1&autoplay=1` for a battle; after
    a key press, `window.__sound.history` lists the calls in order and
@@ -70,7 +74,8 @@ Read `src/audio/sound.ts` (the API the game uses), then the header of
 
 | sounds like | fix |
 |---|---|
-| silence in the browser | not enabled on that page, not unlocked yet (press a key), or the load failed (`window.__sound.error`) |
+| silence in the browser | not enabled on that page, not unlocked yet (press a key or tap), or the load failed (`window.__sound.error`; `window.__sound.mode` says whether the worklet or the fallback runs) |
+| silence on a phone | `node tools/sound/check.mjs --phone` (an emulated phone: a tap must start the sound, with and without the worklet); on an iPhone, the silent switch mutes Web Audio unless the page asks for the playback category (`navigator.audioSession`, or a looping silent `<audio>` on older Safari) |
 | a sound effect that never ends | it loops in the game too: add the `stopSE` the decomp has |
 | an effect cut short, or not playing over another | two effects on one music player (the song table's player): a new song replaces the old only if its priority allows (MPlayStart's rule), as in the game |
 | the next song cuts the last one off | fade the old one first (`fadeOutBGM`); `playBGM` then waits for the fade to end |

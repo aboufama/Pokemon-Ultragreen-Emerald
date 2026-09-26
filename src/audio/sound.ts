@@ -14,6 +14,14 @@
 // the first key press or tap. A BGM asked for before then starts from its
 // beginning at that moment; sound effects asked for before then are dropped.
 // The songs are extracted from the decomp by tools/extract/extract_sound.py.
+//
+// Phones: every tap resumes the audio (iOS suspends it when the page is left
+// or a call comes in, and starts it only from a tap's touchend), a silent
+// sound starts inside the tap (older iOS unlocks only on a sound started
+// there), and on iOS the game plays through the ring/silent switch as a video
+// does (navigator.audioSession 'playback'; before Safari 16.4 a looping
+// silent <audio> element does the same). Where an AudioWorklet can't load,
+// the engine runs on the main thread in a ScriptProcessorNode.
 
 import { asset } from '../gba/assets';
 import { M4AEngine, type SoundBank } from './m4a';
@@ -74,7 +82,11 @@ export class Sound {
   private unlockPress = false;
   private analyser: AnalyserNode | null = null;
   private gestured = false;
+  /** Older iOS: a silent <audio> element keeping the page in the playback audio category. */
+  private keepAlive: HTMLAudioElement | null = null;
   error: string | null = null;
+  /** How the engine runs: in an AudioWorklet, or on the main thread (a ScriptProcessorNode). */
+  mode: 'worklet' | 'script' | null = null;
   /** The last calls, newest last (for tests). */
   readonly history: string[] = [];
 
@@ -90,15 +102,30 @@ export class Sound {
     if (!Ctx) return;
     this.ctx = new Ctx({ latencyHint: 'interactive' });
     window.__sound = this;
+    // iOS: sound plays with the ring/silent switch on silent, like a video.
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) {
+      try {
+        session.type = 'playback';
+      } catch {
+        // Not settable here: the silent <audio> fallback below covers it.
+      }
+    }
     this.loading = this.load().catch((e: unknown) => {
       this.error = String(e);
       console.warn('sound:', e);
     });
-    // Browsers start audio only from a user gesture (touchend on iOS).
+    // Browsers start audio only from a user gesture (touchend on iOS); iOS
+    // also suspends it ('interrupted') after a call or the app switcher.
     const gesture = () => {
       if (!this.gestured && this.ctx?.state !== 'running') this.unlockPress = true;
       this.gestured = true;
-      if (!document.hidden) void this.ctx?.resume();
+      if (document.hidden || !this.ctx) return;
+      if (this.ctx.state !== 'running') {
+        void this.ctx.resume();
+        this.startSilence(this.ctx);
+      }
+      if (!session) this.playbackCategory();
     };
     for (const type of ['keydown', 'pointerdown', 'pointerup', 'touchend', 'click']) window.addEventListener(type, gesture, { capture: true });
     // A hidden page pauses the game, and its sound with it.
@@ -106,6 +133,33 @@ export class Sound {
       if (document.hidden) void this.ctx?.suspend();
       else if (this.gestured) void this.ctx?.resume();
     });
+  }
+
+  /** A one-sample silent sound started inside a gesture: older iOS unlocks Web Audio only on one. */
+  private startSilence(ctx: AudioContext): void {
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch {
+      // A closed or failed context: nothing to unlock.
+    }
+  }
+
+  /**
+   * Safari before 16.4 (no navigator.audioSession): a looping silent <audio>
+   * element started in a gesture puts the page in the playback audio category,
+   * so Web Audio plays with the ring/silent switch on silent.
+   */
+  private playbackCategory(): void {
+    if (!/iP(hone|ad|od)|Macintosh.*Mobile/.test(navigator.userAgent) || (this.keepAlive && !this.keepAlive.paused)) return;
+    if (!this.keepAlive) {
+      this.keepAlive = new Audio(silentWav());
+      this.keepAlive.loop = true;
+      this.keepAlive.setAttribute('playsinline', '');
+    }
+    void this.keepAlive.play().catch(() => undefined);
   }
 
   /** The BGM that is playing (or waiting for a fade-out to end). */
@@ -137,28 +191,39 @@ export class Sound {
       fetch(asset('sound/samples.bin')).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`samples.bin: ${r.status}`)))),
     ]);
     if (ctx.audioWorklet) {
-      const url = URL.createObjectURL(new Blob([workletSource()], { type: 'application/javascript' }));
-      await ctx.audioWorklet.addModule(url);
-      URL.revokeObjectURL(url);
-      const node = new AudioWorkletNode(ctx, 'm4a', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-      node.connect(ctx.destination);
-      this.tap(node);
-      await new Promise<void>((resolve, reject) => {
-        node.port.onmessage = (e: MessageEvent<Message>) => {
-          if (e.data.type === 'ready') resolve();
-          else if (e.data.type === 'error') reject(new Error(String(e.data.message)));
-        };
-        node.port.postMessage({ type: 'init', bank, pcm }, [pcm]);
-      });
-      this.post = (m) => node.port.postMessage(m);
-    } else {
-      // No AudioWorklet (an insecure origin, an old browser): run the engine here.
+      let node: AudioWorkletNode | null = null;
+      try {
+        const url = URL.createObjectURL(new Blob([workletSource()], { type: 'application/javascript' }));
+        await ctx.audioWorklet.addModule(url);
+        URL.revokeObjectURL(url);
+        node = new AudioWorkletNode(ctx, 'm4a', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+        const worklet = node;
+        await new Promise<void>((resolve, reject) => {
+          worklet.port.onmessage = (e: MessageEvent<Message>) => {
+            if (e.data.type === 'ready') resolve();
+            else if (e.data.type === 'error') reject(new Error(String(e.data.message)));
+          };
+          worklet.port.postMessage({ type: 'init', bank, pcm: pcm.slice(0) });
+        });
+        worklet.connect(ctx.destination);
+        this.tap(worklet);
+        this.post = (m) => worklet.port.postMessage(m);
+        this.mode = 'worklet';
+      } catch (e) {
+        // Some mobile browsers refuse the worklet's module: fall back below.
+        console.warn('sound: AudioWorklet unavailable, using a ScriptProcessorNode:', e);
+        node?.disconnect();
+      }
+    }
+    if (!this.post) {
+      // No AudioWorklet (an insecure origin, an old browser, a refused module): run the engine here.
       const engine = new M4AEngine(bank, new Int8Array(pcm), ctx.sampleRate);
       const node = ctx.createScriptProcessor(2048, 0, 2);
       node.onaudioprocess = (e) => engine.render(e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1));
       node.connect(ctx.destination);
       this.tap(node);
       this.post = (m) => engine.message(m);
+      this.mode = 'script';
     }
     if (this.bgm) this.post({ type: 'bgm', song: this.bgm });
   }
@@ -224,6 +289,31 @@ export class Sound {
     this.note(`fanfare ${song}`);
     this.post!({ type: 'fanfare', song, frames });
   }
+}
+
+/** Half a second of silence as a WAV data URL (8 kHz, 8-bit mono). */
+function silentWav(): string {
+  const n = 4000;
+  const bytes = new Uint8Array(44 + n);
+  const view = new DataView(bytes.buffer);
+  const text = (at: number, s: string) => [...s].forEach((c, i) => (bytes[at + i] = c.charCodeAt(0)));
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + n, true);
+  text(8, 'WAVE');
+  text(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 8000, true);
+  view.setUint32(28, 8000, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  text(36, 'data');
+  view.setUint32(40, n, true);
+  bytes.fill(128, 44);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return `data:audio/wav;base64,${btoa(bin)}`;
 }
 
 /** The game's sound (silent until enabled). */

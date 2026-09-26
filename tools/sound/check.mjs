@@ -4,6 +4,7 @@
 //
 //   node tools/sound/check.mjs               the checks below
 //   node tools/sound/check.mjs --wav <song>  also write build/sound/<song>.wav (30 s) to listen to
+//   node tools/sound/check.mjs --phone [--base URL]   also on an emulated phone (needs npm run dev)
 //
 //   - the bank is whole: every song's voicegroup, every voice's sample, wave
 //     and keysplit are there, and every sample lies inside samples.bin;
@@ -15,7 +16,11 @@
 //   - the engine, minified as in the production build, runs the same from its
 //     own source in an empty scope, the way the AudioWorklet builds it (no
 //     helpers or globals from the page);
-//   - it renders fast enough for a phone (at least 50x real time here).
+//   - it renders fast enough for a phone (at least 50x real time here);
+//   - with --phone, in the playtest on an emulated touch phone: with the
+//     audio suspended (as before the first tap, or after a call on iOS), a
+//     tap starts it and the title music is heard, with the AudioWorklet and
+//     when it can't load (the main-thread fallback).
 //
 // Exits non-zero if any check fails. When the engine itself changes, also
 // compare it with the game running in mGBA: tools/sound/reference/run.py.
@@ -155,6 +160,42 @@ if (typeof args.wav === 'string') {
   }
   await writeFile(join(out, `${args.wav}.wav`), buf);
   console.log(`wrote build/sound/${args.wav}.wav`);
+}
+
+// 6. On a phone: a tap starts the sound, with or without an AudioWorklet.
+// (Playwright's page.evaluate counts as a user gesture, so the page may start
+// audio by itself; the check suspends it, as iOS does after a call or the app
+// switcher, and requires a tap to bring it back.)
+if (args.phone) {
+  const { chromium, devices } = await import('playwright');
+  const base = typeof args.base === 'string' ? args.base : 'http://127.0.0.1:5173/';
+  const browser = await chromium.launch({ ignoreDefaultArgs: ['--autoplay-policy=no-user-gesture-required'], args: ['--autoplay-policy=user-gesture-required', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  for (const [label, refuseWorklet] of [['AudioWorklet', false], ['no AudioWorklet (main-thread fallback)', true]]) {
+    const context = await browser.newContext({ ...devices['Pixel 7'] });
+    const page = await context.newPage();
+    if (refuseWorklet) await page.addInitScript(() => { AudioWorklet.prototype.addModule = () => Promise.reject(new Error('refused (test)')); });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(`${base}demo.html`, { waitUntil: 'load' });
+    await page.waitForFunction(() => window.__ready === true && !!window.__sound, null, { timeout: 120000 });
+    await page.evaluate(() => window.__sound.ready());
+    const probe = () => page.evaluate(() => ({ level: window.__sound.level(), running: window.__sound.running, mode: window.__sound.mode, bgm: window.__sound.currentBGM, error: window.__sound.error }));
+    // Suspended, as before the first tap.
+    await page.evaluate(() => window.__sound.ctx.suspend());
+    await page.waitForTimeout(300);
+    const before = await probe();
+    const box = await page.locator('canvas').first().boundingBox();
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+    let after = await probe();
+    for (let i = 0; i < 20 && after.level < 0.002; i++) {
+      await page.waitForTimeout(250);
+      after = await probe();
+    }
+    const ok = !before.running && after.running && after.level > 0.002 && !after.error && errors.length === 0 && after.mode === (refuseWorklet ? 'script' : 'worklet');
+    gate(`phone, ${label}: a tap starts the sound`, ok, `suspended: ${before.running ? 'still running' : 'yes'}; after the tap: ${after.bgm ?? 'no song'} at ${after.level.toFixed(3)} RMS, engine: ${after.mode}${after.error ? `; ${after.error}` : ''}${errors.length ? `; ${errors[0]}` : ''}`);
+    await context.close();
+  }
+  await browser.close();
 }
 
 let failed = 0;

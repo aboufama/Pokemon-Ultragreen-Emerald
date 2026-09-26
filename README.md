@@ -51,7 +51,8 @@ the place, whose arena shows live behind the list; then battle, and battle again
 Emerald's own music plays throughout (the title theme, Professor Birch's lab while you
 set up, the wild battle, its victory and the level-up fanfare) with the game's sound
 effects; browsers let sound start with the first key press or tap (on the title screen
-that press starts the music), and `sound=0` turns it off. It plays like an emulator: the GBA screen as large as the window allows, the keyboard on a
+that press starts the music; on an iPhone it plays even with the silent switch on, as a
+video does, and a tap brings it back after a call), and `sound=0` turns it off. It plays like an emulator: the GBA screen as large as the window allows, the keyboard on a
 computer, and on a phone an on-screen D-pad, A/B and START/SELECT (beside the screen when
 the phone is held sideways; "Add to Home Screen" runs it full screen). Shareable setups
 skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY&env=sand&go=1`
