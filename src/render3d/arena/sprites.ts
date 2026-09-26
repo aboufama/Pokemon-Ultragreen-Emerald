@@ -43,7 +43,7 @@ interface Lump {
  * Round clumps shaded as spheres: each clump darkens along its lower-right
  * rim where it overlaps the ones behind, the way Hoenn's trees are drawn.
  */
-function lumps(s: Sprite, list: Lump[], shades: Ramp, seed: number, speckle = 0.07): Int16Array {
+function lumps(s: Sprite, list: Lump[], shades: Ramp, seed: number, speckle = 0.07, soft = 0.3): Int16Array {
   const owner = new Int16Array(s.w * s.h).fill(-1);
   list.forEach((l, i) => {
     for (let y = Math.floor(l.cy - l.r); y <= l.cy + l.r; y++) {
@@ -67,7 +67,7 @@ function lumps(s: Sprite, list: Lump[], shades: Ramp, seed: number, speckle = 0.
       // Leaves: a few specks of the next shade down on the lit side and up on the dark side.
       const h = hash2(x, y, seed);
       if (h < speckle) v += v > top * 0.55 ? -1 : 1;
-      put(s, x, y, band(shades, v, x, y, 0.3));
+      put(s, x, y, band(shades, v, x, y, soft));
     }
   }
   return owner;
@@ -77,6 +77,9 @@ export interface TreePalette {
   leaves: Ramp; // dark .. light (3-4)
   outline: Rgb;
   trunk: Ramp; // dark .. light
+  /** Share of leaf pixels flecked a shade off (default 0.07), and how wide the dither between shades spreads (default 0.3): lower is calmer. */
+  speckle?: number;
+  soft?: number;
 }
 
 /** A Hoenn tree: a pyramid of round leaf clumps on a short trunk. `w` is the canopy width in pixels. */
@@ -106,7 +109,7 @@ export function tree(w: number, pal: TreePalette, seed: number): Sprite {
       put(s, x, y, pal.trunk[t < 0.34 ? pal.trunk.length - 1 : t > 0.7 ? 0 : Math.min(1, pal.trunk.length - 1)]);
     }
   }
-  lumps(s, list, pal.leaves, seed);
+  lumps(s, list, pal.leaves, seed, pal.speckle, pal.soft);
   outline(s, pal.outline);
   return s;
 }
@@ -126,7 +129,7 @@ export function bush(w: number, pal: TreePalette, seed: number): Sprite {
   list.push({ cx: 1 + bw * rng.range(0.4, 0.6), cy: 1 + bh * 0.4, r: bw * 0.3 });
   list.sort((a, b) => a.cy - b.cy);
   // Flat bottom: clumps are cut at the ground.
-  lumps(s, list, pal.leaves, seed);
+  lumps(s, list, pal.leaves, seed, pal.speckle, pal.soft);
   for (let x = 0; x < s.w; x++) for (let y = bh + 1; y < s.h; y++) s.data[(y * s.w + x) * 4 + 3] = 0;
   outline(s, pal.outline, { bottom: false });
   return s;

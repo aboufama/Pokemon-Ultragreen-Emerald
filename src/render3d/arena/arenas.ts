@@ -92,6 +92,8 @@ function bladeTooth(sx: number, ppu: number): number {
 
 /** A mix of each color of a ramp toward another color (for haze and tints). */
 const tint = (r: Ramp, c: Rgb, t: number): Ramp => r.map((k) => mix(k, c, t));
+/** The far bank's trees mirrored in the water, softened toward the water's blue: a quiet band behind the wild Pokémon. */
+const POND_REFLECT = tint(REFLECT, POND[3], 0.45);
 
 /**
  * A Hoenn route meadow: mint grass in patches whose borders are drawn as
@@ -131,11 +133,11 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   const grassTone = (x: number, z: number) => {
     const pool = 1 - smoothstep(0.35, 1.3, Math.hypot((x - cx) / 3.6, (z - cz) / 5.2));
     const shade = smoothstep(line - 2.2, line - 0.6, z);
-    const fleck = shade > 0.25 && fbm(x * 1.1, z * 2, 57) > 0.6 ? 1 : 0;
+    const fleck = shade > 0.25 && fbm(x * 1.1, z * 2, 57) > 0.62 ? 1 : 0;
     const patch = fbm(x * 0.2, z * 0.34, 11);
-    const p = patch > 0.66 ? 1 : patch < 0.38 ? -1 : 0;
-    // Kept within a narrow range of the ramp: the grass is the ground the Pokémon stand on, not the show.
-    return 2.4 + pool * 1.25 + p * 0.5 - shade * 1.25 + fleck * 0.9;
+    const p = patch > 0.69 ? 1 : patch < 0.35 ? -1 : 0;
+    // Kept within a narrow range of the ramp, in few broad patches: the grass is the ground the Pokémon stand on, not the show.
+    return 2.4 + pool * 1.25 + p * 0.5 - shade * 1.1 + fleck * 0.8;
   };
   fill(ctx, (sx, sy, g) => {
     const w = water(g.x, g.z);
@@ -146,21 +148,21 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
         // The far bank's trees mirrored along the far water, scalloped; the sky on the open water, darker toward the banks.
         const farEdge = -pondD(g.x, g.z);
         const inFar = g.z > p.z && farEdge < 0.32 + Math.abs(Math.sin(g.x * 2.3) + Math.sin(g.x * 5.1) * 0.4) * 0.07;
-        if (inFar) return [REFLECT[farEdge < 0.08 ? 0 : farEdge < 0.2 ? 1 : 2], MAT.WATER];
-        // Open water: darker toward the banks, the sky lighter on the near water, in crisp wavy bands with ripple lines.
+        if (inFar) return [POND_REFLECT[farEdge < 0.08 ? 0 : farEdge < 0.2 ? 1 : 2], MAT.WATER];
+        // Open water: a shade darker toward the banks, the sky a shade lighter on the near water, in soft wavy bands, now and then a ripple line.
         const wob = Math.sin(g.x * 2.1 + g.z * 3) * 0.08 + Math.sin(g.x * 5.3) * 0.03;
         const depth = -w + wob;
-        let v = depth < 0.1 ? 2 : depth < 0.3 ? 3 : g.z < p.z ? 5 : 4;
-        if (v >= 4 && Math.abs(Math.sin(g.z * 9 + Math.sin(g.x * 1.7) * 1.5)) > 0.97 && Math.sin(g.x * 3.3 + g.z) > 0) v += 1;
+        let v = depth < 0.18 ? 3 : g.z < p.z ? 5 : 4;
+        if (v === 4 && Math.abs(Math.sin(g.z * 9 + Math.sin(g.x * 1.7) * 1.5)) > 0.985 && Math.sin(g.x * 3.3 + g.z) > 0.3) v += 1;
         return [POND[v], MAT.WATER];
       }
       // A puddle: the grass of its far rim mirrored dark along the top, sky on the rest, a pale streak.
       const d = -puddleD(g.x, g.z);
       const up2 = view.ground(sx, sy - 2), up4 = view.ground(sx, sy - 4);
-      if (up2 && puddleD(up2.x, up2.z) >= 0) return [REFLECT[1], MAT.WATER];
+      if (up2 && puddleD(up2.x, up2.z) >= 0) return [POND_REFLECT[1], MAT.WATER];
       if (up4 && puddleD(up4.x, up4.z) >= 0) return [POND[3], MAT.WATER];
       const streak = Math.abs(((g.x - g.z * 0.6) * 3.1) % 1) < 0.12 && d > 0.25;
-      return [streak ? POND[7] : band(POND, 5 + Math.min(1.4, d * 3), sx, sy, 0.2), MAT.WATER];
+      return [streak ? POND[6] : band(POND, 5 + Math.min(0.9, d * 3), sx, sy, 0.1), MAT.WATER];
     }
     // Blades of the nearer grass poke up over the near edges of the path and the banks.
     const t = bladeTooth(sx, g.ppu);
@@ -180,13 +182,14 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     const v = grassTone(qIsGrass ? q.x : g.x, qIsGrass ? q.z : g.z);
     return [band(G, v, sx, sy, 0.06), MAT.GRASS];
   });
-  // Blade tufts, in clusters: two blades a shade darker than the grass, a light tip near the camera.
+  // Blade tufts, in loose clusters: two blades a shade darker than the grass, a light tip near the camera;
+  // none right around the wild Pokémon.
   scatter(ctx, 9, 3, (x, z, sx, sy, ppu, r) => {
     const f = fbm(x * 0.45, z * 0.75, 51);
-    if (r > (f - 0.5) * 2.2 || ground.material(sx, sy) !== MAT.GRASS) return;
+    if (r > (f - 0.52) * 1.8 || ground.material(sx, sy) !== MAT.GRASS || foeCalm(ctx, sx, sy) > 0.3) return;
     const i = indexIn(G, ground.get(sx, sy));
     if (i < 0) return;
-    const dark = G[Math.max(0, i - 1)], light = r < 0.12 ? G[Math.min(G.length - 1, i + 1)] : null;
+    const dark = G[Math.max(0, i - 1)], light = r < 0.08 ? G[Math.min(G.length - 1, i + 1)] : null;
     if (ppu < 24) ground.set(sx, sy, dark, MAT.GRASS);
     else if (ppu < 44) {
       ground.set(sx - 1, sy - 1, dark, MAT.GRASS);
@@ -197,9 +200,9 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
       if (light) ground.set(sx, sy - 2, light, MAT.GRASS);
     }
   });
-  // Clover in patches near the camera: three round leaves a shade darker than the grass.
+  // Clover in a few patches near the camera: three round leaves a shade darker than the grass.
   scatter(ctx, 11, 17, (x, z, sx, sy, ppu, r) => {
-    if (ppu < 40 || r > 0.3 || fbm(x * 0.6, z * 0.9, 52) < 0.66 || ground.material(sx, sy) !== MAT.GRASS) return;
+    if (ppu < 40 || r > 0.2 || fbm(x * 0.6, z * 0.9, 52) < 0.66 || ground.material(sx, sy) !== MAT.GRASS || foeCalm(ctx, sx, sy) > 0) return;
     const i = indexIn(G, ground.get(sx, sy));
     if (i < 1) return;
     const leaf = G[i - 1];
@@ -208,12 +211,12 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     ground.set(sx, sy - 1, leaf, MAT.GRASS);
     ground.set(sx, sy, leaf, MAT.GRASS);
   });
-  // Pebbles on the path.
+  // A few pebbles on the path, a shade off the sand.
   if (o.path) {
     scatter(ctx, 7, 9, (x, z, sx, sy, ppu, r) => {
-      if (r > 0.3 || onPath(x, z) > -0.15) return;
-      ground.set(sx, sy, PATH[0]);
-      if (ppu > 30) ground.set(sx + 1, sy, PATH[4]);
+      if (r > 0.14 || onPath(x, z) > -0.15 || foeCalm(ctx, sx, sy) > 0) return;
+      ground.set(sx, sy, PATH[1]);
+      if (ppu > 30) ground.set(sx + 1, sy, PATH[3]);
     });
   }
   // Flower beds: loose clusters toward the sides and in the middle distance, clear of the battlers.
@@ -234,26 +237,30 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
       ground.set(px, py + 1, stem, MAT.GRASS);
     } else ground.set(px, py, kind[0], MAT.GRASS);
   };
-  const beds = o.flowers ?? 4;
-  // The first beds where they show (below the wild Pokémon's healthbox, past its right, behind it), then anywhere.
-  const spots = [[20, 62], [238, 100], [124, 46]];
+  const beds = o.flowers ?? 3;
+  // The first beds where they show (below the wild Pokémon's healthbox, past the player's), then anywhere clear.
+  const spots = [[20, 62], [238, 100]];
   for (let b = 0, tries = 0; b < beds && tries < 200; tries++) {
     const spot = spots[b];
-    const c = spot && tries < spots.length ? at(ctx, spot[0], spot[1]) : at(ctx, ctx.rng.range(-200, 440), ctx.rng.range(34, 112));
-    if (Math.hypot(c.x - ctx.enemy.x, (c.z - ctx.enemy.z) * 1.4) < 2.2 || Math.hypot(c.x - ctx.player.x, c.z - ctx.player.z) < 1.6 || c.z > line - 0.6) continue;
+    const c = spot && tries < spots.length ? at(ctx, spot[0], spot[1]) : at(ctx, ctx.rng.range(-30, 270), ctx.rng.range(34, 112));
+    const [bx, by] = view.screen(c.x, 0, c.z);
+    if (Math.hypot(c.x - ctx.enemy.x, (c.z - ctx.enemy.z) * 1.4) < 2.2 || Math.hypot(c.x - ctx.player.x, c.z - ctx.player.z) < 1.6 || c.z > line - 0.6 || foeCalm(ctx, bx, by, 16) > 0) continue;
     b++;
     const kind = FLOWERS[ctx.rng.int(0, FLOWERS.length - 1)];
     const n = ctx.rng.int(4, 8);
     for (let i = 0; i < n; i++) flower(c.x + ctx.rng.range(-0.7, 0.7) * (1 - i / n * 0.5), c.z + ctx.rng.range(-0.4, 0.4), kind);
   }
-  // The tree line: staggered rows of round trees, the far rows hazy; bushes at its foot.
+  // The tree line: staggered rows of round trees, the far rows hazier; bushes at its foot. It stands right
+  // behind the wild Pokémon, so it is a quiet backdrop: every row hazy, no lime highlights, few flecks
+  // and little dither in the leaves, outlines a dark green rather than near-black, olive trunks.
   const dark = darker([G, PATH]);
+  const leaves = o.leaves.slice(0, -1);
+  const trunk = tint(TRUNK, leaves[0], 0.35);
+  const soften = (haze: number) => ({ leaves: tint(leaves, HAZE, haze), outline: mix(mix(TREE_OUTLINE, leaves[0], 0.3), HAZE, haze * 0.8), trunk: tint(trunk, HAZE, haze), speckle: 0.03, soft: 0.15 });
   const trees = [];
   for (let row = 0; row < 3; row++) {
     const z0 = line + row * 1.7;
-    // Every row a little hazy and its outline softened, the far ones more: a quiet backdrop.
-    const haze = 0.1 + row * 0.16;
-    const pal = { leaves: tint(o.leaves, HAZE, haze), outline: mix(TREE_OUTLINE, HAZE, haze + 0.12), trunk: TRUNK };
+    const pal = soften(0.17 + row * 0.15);
     for (let x = -24 + row * 0.9; x < 24; x += ctx.rng.range(1.6, 2.2)) {
       const z = z0 + ctx.rng.range(-0.35, 0.35);
       const ppu = view.ppu(view.depth(x, 0, z));
@@ -261,34 +268,36 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
       trees.push({ sprite: tree(w, pal, ctx.rng.int(1, 1e6)), x, z });
     }
   }
-  const bushPal = { leaves: tint(o.leaves, HAZE, 0.1), outline: mix(TREE_OUTLINE, HAZE, 0.22), trunk: TRUNK };
+  const bushPal = soften(0.17);
   for (let i = 0; i < 14; i++) {
     const x = ctx.rng.range(-20, 20), z = line - ctx.rng.range(0.5, 1.6);
-    if (water(x, z) < 0.3) continue;
     const ppu = view.ppu(view.depth(x, 0, z));
     const w = ppu * ctx.rng.range(0.9, 1.5);
-    trees.push({ sprite: bush(w, bushPal, ctx.rng.int(1, 1e6)), x, z });
+    const sprite = bush(w, bushPal, ctx.rng.int(1, 1e6));
+    if (water(x, z) < 0.3 || i % 3 === 2) continue;
+    trees.push({ sprite, x, z });
   }
   stand(ctx, trees, dark);
   // Framing the left: big tufts of grass in the foreground, cropped by the frame, with red flowers
   // (Route 101), grown taller (Route 120), or around a mossy boulder and reeds (Route 102).
-  // Tall grass is drawn a little toward the meadow's own green, its outline softened: framing, not a feature.
-  const blades = tint(o.blades, G[2], 0.3);
-  const bladeOutline = mix(TREE_OUTLINE, G[1], 0.3);
+  // Tall grass is drawn toward the meadow's own green, its outline a soft dark green: framing, not a feature.
+  const blades = tint(o.blades, G[2], 0.45);
+  const bladeOutline = mix(TREE_OUTLINE, G[1], 0.5);
+  const softOutline = mix(TREE_OUTLINE, G[1], 0.35);
   const tall = o.tallGrassHeight ?? 1;
   const tufts: { sprite: Sprite; x: number; z: number; mat: number }[] = [];
   const tuftSpots = o.pond ? [[22, 106, 0.8], [36, 112, 0.7], [-8, 90, 0.8]] : [[2, 110, 1], [22, 104, 0.8], [-6, 92, 0.9], [34, 112, 0.7], [10, 84, 0.6]];
   for (const [sx, sy, s] of tuftSpots) {
     const g = view.ground(sx, sy)!;
-    const w = g.ppu * 0.55 * s, h = g.ppu * 0.42 * s * Math.min(1.3, tall);
+    const w = g.ppu * 0.55 * s, h = g.ppu * 0.42 * s * Math.min(1.2, tall);
     tufts.push({ sprite: tallGrass(w, h, { blades, outline: bladeOutline }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z, mat: MAT.GRASS });
   }
   if (o.pond) {
     const g = view.ground(2, 104)!;
-    tufts.push({ sprite: rock(g.ppu * 0.7, g.ppu * 0.45, { shades: ramp('#4a5a31', '#6a7b41', '#8b946a', '#b4ac8b', '#d5cdac'), outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z, mat: MAT.SOLID });
+    tufts.push({ sprite: rock(g.ppu * 0.7, g.ppu * 0.45, { shades: ramp('#4a5a31', '#6a7b41', '#8b946a', '#b4ac8b', '#d5cdac'), outline: softOutline }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z, mat: MAT.SOLID });
     for (const [sx, sy] of [[14, 96], [-2, 88]]) {
       const r = view.ground(sx, sy)!;
-      tufts.push({ sprite: reeds(r.ppu * 0.35, r.ppu * 0.7, REED_STEM, REED_HEAD, TREE_OUTLINE, ctx.rng.int(1, 1e6)), x: r.x, z: r.z, mat: MAT.GRASS });
+      tufts.push({ sprite: reeds(r.ppu * 0.35, r.ppu * 0.7, REED_STEM, REED_HEAD, softOutline, ctx.rng.int(1, 1e6)), x: r.x, z: r.z, mat: MAT.GRASS });
     }
   }
   tufts.sort((a, b) => b.z - a.z);
@@ -302,39 +311,42 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
       flower(g.x, g.z, FLOWERS[0]);
     }
   }
-  // Tall grass swaying at the edges of the view and around the sides (props: it can hide the Pokémon's feet).
+  // Tall grass swaying at the edges of the view (props: it can hide the Pokémon's feet), a few clumps
+  // more along the sides where the view shows them, none around the wild Pokémon.
   const clump = (ppu: number) => {
     const w = ppu * ctx.rng.range(0.4, 0.62), h = ppu * ctx.rng.range(0.3, 0.4) * (o.tallGrassHeight ?? 1);
     return { sprite: tallGrass(w, h, { blades, outline: bladeOutline }, ctx.rng.int(1, 1e6)), sway: Math.max(1, h * 0.12) };
   };
   frameProp(ctx, 3, 70, -1, clump);
-  frameProp(ctx, 236, 64, 1, clump);
-  frameProp(ctx, 232, 40, 1, clump);
-  const clumps = o.tallGrass ?? 10;
+  frameProp(ctx, 238, 104, 1, clump);
+  const clumps = Math.round((o.tallGrass ?? 10) / 8);
   for (let i = 0, tries = 0; i < clumps && tries < 400; tries++) {
-    // Around the sides and the back, not in the middle of the field.
-    const side = ctx.rng.chance(0.5) ? ctx.rng.range(-220, 30) : ctx.rng.range(210, 460);
-    const p = at(ctx, ctx.rng.chance(0.25) ? ctx.rng.range(40, 200) : side, ctx.rng.range(24, 112));
-    if (onPath(p.x, p.z) < 0.3 || water(p.x, p.z) < 0.25 || p.z > line - 0.4) continue;
+    const [sx, sy] = ctx.rng.chance(0.7) ? [ctx.rng.range(-24, 16), ctx.rng.range(40, 112)] : [ctx.rng.range(16, 124), ctx.rng.range(26, 44)];
+    const p = at(ctx, sx, sy);
+    if (onPath(p.x, p.z) < 0.3 || water(p.x, p.z) < 0.25 || p.z > line - 0.4 || foeCalm(ctx, sx, sy, 16) > 0) continue;
     const ppu = view.ppu(view.depth(p.x, 0, p.z));
     if (addProp(ctx, { ...clump(ppu), x: p.x, z: p.z })) i++;
   }
-  // Reeds along the pond's shore, lily pads in a few clusters on it.
+  // Reeds along the pond's shore, lily pads in a couple of clusters on it, none right behind the wild Pokémon.
   if (o.pond) {
     const p = o.pond;
     for (let i = 0; i < 18; i++) {
       const a = ctx.rng.range(0, Math.PI * 2);
-      if (Math.sin(a) < -0.3 && ctx.rng.chance(0.7)) continue; // fewer on the near shore
       const x = p.x + Math.cos(a) * p.rx * 1.03, z = p.z + Math.sin(a) * p.rz * 1.03;
       const ppu = view.ppu(view.depth(x, 0, z));
       const w = ppu * ctx.rng.range(0.25, 0.45), h = ppu * ctx.rng.range(0.45, 0.8);
-      addProp(ctx, { sprite: reeds(w, h, REED_STEM, REED_HEAD, TREE_OUTLINE, ctx.rng.int(1, 1e6)), x, z, sway: Math.max(1, h * 0.08) });
+      const sprite = reeds(w, h, REED_STEM, REED_HEAD, softOutline, ctx.rng.int(1, 1e6));
+      const [rx, ry] = view.screen(x, 0, z);
+      if (Math.sin(a) < -0.3 || i % 2 || foeCalm(ctx, rx, ry, 10) > 0) continue; // none on the near shore
+      addProp(ctx, { sprite, x, z, sway: Math.max(1, h * 0.08) });
     }
     for (let k = 0; k < 4; k++) {
       const cxp = p.x + ctx.rng.range(-0.7, 0.7) * p.rx, czp = p.z + ctx.rng.range(-0.5, 0.2) * p.rz;
+      const [kx, ky] = view.screen(cxp, 0, czp);
+      const skip = k % 2 === 1 || foeCalm(ctx, kx, ky, 24) > 0;
       for (let i = ctx.rng.int(4, 8); i > 0; i--) {
         const x = cxp + ctx.rng.range(-0.6, 0.6), z = czp + ctx.rng.range(-0.3, 0.3);
-        if (pondD(x, z) > -0.2) continue;
+        if (skip || pondD(x, z) > -0.2) continue;
         const [fx, fy] = view.screen(x, 0, z);
         const ppu = view.ppu(view.depth(x, 0, z));
         const w = Math.max(2, Math.round(ppu * 0.2)), h = Math.max(1, Math.round(w * 0.4));
@@ -1245,7 +1257,7 @@ export const ARENAS: Record<string, ArenaDesign> = {
         leaves: ramp('#17491b', '#2e7a2b', '#4c963c', '#6db353', '#9be070'),
         tallGrass: 30,
         tallGrassHeight: 1.5,
-        puddles: [{ x: 2.45, z: 9.4, r: 0.8 }, { x: -3.6, z: 11.4, r: 0.9 }, { x: 3.6, z: 12.2, r: 0.8 }, { x: -6, z: 9, r: 1 }, { x: 6.5, z: 10.5, r: 0.9 }],
+        puddles: [{ x: 2.45, z: 9.4, r: 0.8 }, { x: 3.6, z: 12.2, r: 0.8 }],
         flowers: 2,
         treeLine: 14.2,
       }),
@@ -1263,7 +1275,7 @@ export const ARENAS: Record<string, ArenaDesign> = {
     name: 'ROUTE 102',
     about: 'A calm pond hidden among the trees.',
     ambience: 'pond',
-    look: { waveLight: [166, 218, 248], waveDark: [63, 103, 168], waveDensity: 0.12 },
+    look: { waveLight: [166, 218, 248], waveDark: [63, 103, 168], waveDensity: 0.07 },
     ripples: 0,
     paint: (ctx) => meadow(ctx, { grass: MEADOW, blades: BLADES, leaves: LEAVES, pond: { x: -0.8, z: 12.5, rx: 4.2, rz: 1.8 }, tallGrass: 8, treeLine: 16.2 }),
   },
