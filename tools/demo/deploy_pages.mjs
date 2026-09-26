@@ -3,7 +3,10 @@
 // (tools/demo/build_demo.mjs) and push it as the only commit of the gh-pages
 // branch, which GitHub serves at https://<owner>.github.io/<repo>/.
 //
-//   node tools/demo/deploy_pages.mjs [--no-build] [--remote origin] [--branch gh-pages] [--dry]
+//   node tools/demo/deploy_pages.mjs [--no-build] [--no-smoke] [--remote origin] [--branch gh-pages] [--dry]
+//
+// Before publishing it opens a battle in every place on the built site
+// (tools/demo/smoke_pages.mjs) and stops if a file is missing or a page errs.
 //
 // The branch holds nothing but the built site and is replaced on every
 // deploy (no history to grow). --dry builds and commits in a temporary
@@ -35,6 +38,10 @@ function git(cwd, ...a) {
 if (!args['no-build']) {
   const b = spawnSync(process.execPath, [join(ROOT, 'tools/demo/build_demo.mjs')], { cwd: ROOT, stdio: 'inherit' });
   if (b.status !== 0) process.exit(b.status ?? 1);
+}
+if (!args['no-smoke']) {
+  const s = spawnSync(process.execPath, [join(ROOT, 'tools/demo/smoke_pages.mjs')], { cwd: ROOT, stdio: 'inherit' });
+  if (s.status !== 0) process.exit(s.status ?? 1);
 }
 
 const url = git(ROOT, 'remote', 'get-url', remote);

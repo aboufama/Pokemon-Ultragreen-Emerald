@@ -59,8 +59,9 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 
 - `npm run demo` builds the static site into `build/demo/pages/`
   (`--embed`, with `npm run dev` running, adds single-file builds with every asset inlined).
-- `node tools/demo/deploy_pages.mjs` builds it and publishes it to the `gh-pages` branch,
-  which GitHub Pages serves at the link above.
+- `node tools/demo/deploy_pages.mjs` builds it, opens a battle in every place on the built
+  site (`tools/demo/smoke_pages.mjs`: no missing file, no page error) and publishes it to
+  the `gh-pages` branch, which GitHub Pages serves at the link above.
 - `node tools/battle/engine_check.mjs` checks the engine's move effects against the Gen 3
   rules (Protect, recharge, Focus Punch, multi-hit, recoil, drain, Struggle...) and that
   random movesets only hold moves it plays.
