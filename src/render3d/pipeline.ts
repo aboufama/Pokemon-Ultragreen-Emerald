@@ -120,12 +120,6 @@ const compositeFrag = /* glsl */ `
   uniform vec2 echoAlpha[${MAX_ECHOES}];
   // The copy's palette blended toward rgb by a (Double Team darkens them).
   uniform vec4 echoLook[${MAX_ECHOES}];
-  // The battle intro's entry layer: a 256x256 GBA background over the scene.
-  uniform sampler2D tEntry;
-  uniform bool entryOn;
-  uniform ivec2 entryScroll;
-  // x = the layer's weight (EVA / 16), y = the arena's behind it (EVB / 16).
-  uniform vec2 entryAlpha;
   // Battle transitions over the whole screen (battle_transition.c): a palette
   // blend (rgb, a), WhiteBarsFade's 8 bars of 20 rows (lightened by BLDY/16
   // right of x), GridSquares' shrinking-box stage (0 = off) with the stage
@@ -281,14 +275,6 @@ const compositeFrag = /* glsl */ `
     int id = majorityId(outPx);
     vec3 c = objectColor(outPx, id);
 
-    // The entry layer is the nearest thing to the camera (the grass or waves
-    // a wild Pokémon comes out of): over the arena, the Pokémon and effects,
-    // wrapping like a GBA background as it moves.
-    if (entryOn) {
-      vec4 e = texelFetch(tEntry, (screen + entryScroll) & 255, 0);
-      if (e.a > 0.5) c = min(vec3(1.0), e.rgb * entryAlpha.x + c * entryAlpha.y);
-    }
-
     // Afterimages go behind their Pokémon and effects, over everything else.
     for (int e = 0; e < ${MAX_ECHOES}; e++) {
       int eid = echoId[e];
@@ -364,11 +350,7 @@ export class PixelPipeline {
         echoOffset: { value: new Int32Array(MAX_ECHOES * 2) },
         echoAlpha: { value: Array.from({ length: MAX_ECHOES }, () => new THREE.Vector2()) },
         echoLook: { value: Array.from({ length: MAX_ECHOES }, () => new THREE.Vector4()) },
-        tEntry: { value: null },
-        entryOn: { value: false },
         // ivec2 goes to WebGL as a flat list.
-        entryScroll: { value: new Int32Array(2) },
-        entryAlpha: { value: new THREE.Vector2(1, 0) },
         fxBlend: { value: new THREE.Vector4(0, 0, 0, 0) },
         barX: { value: new Array(8).fill(240) },
         barY: { value: new Array(8).fill(0) },
@@ -470,22 +452,6 @@ export class PixelPipeline {
     (u.echoOffset.value as Int32Array).set([Math.round(dx) * d, -Math.round(dy) * d], index * 2);
     (u.echoAlpha.value as THREE.Vector2[])[index].set(eva, evb);
     (u.echoLook.value as THREE.Vector4[])[index].set(look.color[0] / 255, look.color[1] / 255, look.color[2] / 255, look.amount);
-  }
-
-  /**
-   * The battle intro's entry layer (BG1 of battle_intro.c: tall grass, dunes,
-   * waves, rocks...): a 256x256 GBA background with transparency, drawn in
-   * front of everything 3D (the cover a wild Pokémon comes out of), showing
-   * BG pixel (x + scrollX, y + scrollY) at screen pixel (x, y), wrapping.
-   * `eva` / `evb` blend it with what is behind as BLDALPHA does (1 / 0:
-   * opaque). Null hides it.
-   */
-  setEntry(texture: THREE.Texture | null, scrollX = 0, scrollY = 0, eva = 1, evb = 0): void {
-    const u = this.composite.uniforms;
-    u.entryOn.value = !!texture;
-    u.tEntry.value = texture;
-    (u.entryScroll.value as Int32Array).set([Math.round(scrollX), Math.round(scrollY)]);
-    (u.entryAlpha.value as THREE.Vector2).set(eva, evb);
   }
 
   /**

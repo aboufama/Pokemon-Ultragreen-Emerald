@@ -47,7 +47,7 @@ for (const place of Object.keys(ARENAS)) {
   page.on('response', (r) => r.status() >= 400 && problems.push(`${place}: ${r.status()} ${r.url().replace(base, '')}`));
   page.on('pageerror', (e) => problems.push(`${place}: ${e.message}`));
   await page.goto(`${base}?go=1&env=${place}`, { waitUntil: 'load' });
-  // The arena, its entry layer and both Pokémon load before the intro starts.
+  // The arena and both Pokémon load before the intro starts.
   const ok = await page.waitForFunction(() => window.__battle?.state().phase === 'intro', null, { timeout: 120000 }).then(() => true, () => false);
   if (!ok) problems.push(`${place}: the battle never reached its intro`);
   await page.waitForTimeout(1500);

@@ -4,7 +4,7 @@ import { type MovePartsFile, type SpeciesProfile, movePartsOf } from './profile'
 import { makeGenericClips } from './generic/clips';
 
 /** The clips every battle plays for every species (the rest are chosen per move). */
-export const MOMENT_CLIPS = ['idle', 'intro', 'entrance', 'hit', 'faint'] as const;
+export const MOMENT_CLIPS = ['idle', 'intro', 'hit', 'faint'] as const;
 
 type ProfileFactory = (palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }) => Promise<SpeciesProfile>;
 

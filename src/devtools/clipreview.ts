@@ -3,7 +3,6 @@
 //
 //   /?mode=clipreview&move=BLAZE_KICK&attacker=player[&species=blaziken&enemy=blaziken][&ui=0]
 //   /?mode=clipreview&clip=intro&attacker=enemy
-//   /?mode=clipreview&clip=entrance&attacker=enemy&env=cave (the place's path)
 //   &density=3 renders 3 output pixels per GBA pixel (finer pixels, for
 //   inspecting motion; the game uses 1)
 //   &mark=mouth (or any emitter: cannons, flower, hands...) marks where the
@@ -30,7 +29,6 @@ import { BattleStage } from '../render3d/stage';
 import { Battler3D } from '../battle3d/battler';
 import { VfxSystem, preloadSheets } from '../battle3d/vfx';
 import { clipFor, performMove, towardCamera } from '../battle3d/director';
-import { entranceFor, entranceFx } from '../battle3d/entrance';
 import { move as moveData } from '../data';
 
 declare global {
@@ -91,8 +89,7 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
   root.appendChild(holder);
   const screen = new GbaScreen(holder, 3);
   const stage = new BattleStage(screen.canvas3d, undefined, { density });
-  const env = params.get('env') ?? 'grass';
-  await stage.setEnvironment(env);
+  await stage.setEnvironment(params.get('env') ?? 'grass');
   const vfx = new VfxSystem(stage);
   await preloadSheets();
   const [player, enemy] = await Promise.all([Battler3D.create(stage, 'player', species), Battler3D.create(stage, 'enemy', enemySlug)]);
@@ -184,12 +181,6 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
       };
       if (moveName) void performMove(attacker, defender, moveData(moveName), vfx, { onHit }).then(finish);
       else if (clipName === 'idle') finish();
-      else if (clipName === 'entrance') {
-        // Along this place's path, with what it throws up (the battle adds the cover and the shadow).
-        const entrance = entranceFor(env);
-        attacker.onEvent = (e) => entranceFx(attacker, entrance, e, vfx);
-        void attacker.enter(entrance).then(finish);
-      }
       else {
         // A hit plays with the knock-back the move director adds in battle,
         // a faint with the scene's shake as the body hits the ground.
@@ -241,8 +232,7 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
     play(clip: string) {
       api.done = false;
       if (clip === 'hit') attacker.recoil(1);
-      const run = clip === 'entrance' ? attacker.enter(entranceFor(env)) : attacker.play(clip, { fade: 0.15 });
-      void run.then(() => (api.done = true));
+      void attacker.play(clip, { fade: 0.15 }).then(() => (api.done = true));
     },
     boxMask(side: 'player' | 'enemy') {
       const fb = createBitmap(240, 160);

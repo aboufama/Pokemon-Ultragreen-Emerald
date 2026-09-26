@@ -195,64 +195,6 @@ const intro: Clip = {
   events: [{ t: 0.48, name: 'cry' }],
 };
 
-/** Both knees drawn up under the body (a jump straight up or down, not forward). */
-const KNEES_UP: Pose = {
-  plantFeet: 0,
-  aim: {
-    thighR: { dir: [-0.3, -0.42, 0.86] }, shinR: { dir: [-0.12, -0.9, -0.42] },
-    thighL: { dir: [0.3, -0.42, 0.86] }, shinL: { dir: [0.12, -0.9, -0.42] },
-  },
-};
-
-/** Legs straight down: the push of a spring, or reaching for the ground. */
-const LEGS_DOWN: Pose = {
-  plantFeet: 0,
-  aim: {
-    thighR: { dir: [-0.26, -0.95, 0.18] }, shinR: { dir: [-0.16, -0.98, -0.06] },
-    thighL: { dir: [0.26, -0.95, 0.18] }, shinL: { dir: [0.16, -0.98, -0.06] },
-  },
-};
-
-/** Arms out to the sides, a little low: balance in the air and on landing. */
-const ARMS_OUT: Pose = {
-  aim: {
-    armR: { dir: [-0.88, -0.3, 0.36] },
-    forearmR: { dir: [-0.62, 0.12, 0.78] },
-    armL: { dir: [0.88, -0.3, 0.36] },
-    forearmL: { dir: [0.62, 0.12, 0.78] },
-  },
-};
-
-/**
- * A wild Blaziken comes into the battle: coiled low, it springs (launch),
- * draws its knees and claws in at the top, reaches down with its talons,
- * lands deep in its knees with the wrist flames flaring (land) and rises
- * into its stance glaring at the foe. The path (bursting up out of the tall
- * grass, leaping in, drifting down) is the place's: src/battle3d/entrance.ts.
- */
-const entrance: Clip = {
-  name: 'entrance',
-  duration: 1.5,
-  keys: [
-    key(0, pelvis(0, -0.08), bend(24, 8, 0, 16), CHAMBER, FISTS, SHUT),
-    key(0.22, pelvis(0, -0.11), bend(30, 10, 2, 20), CHAMBER, FISTS, SHUT),
-    // The spring: legs drive straight, the body stretches up, arms swept down.
-    snap(0.32, LEGS_DOWN, pelvis(0, 0.03), bend(-6, -4, -2, -12), BRACED, FISTS, ANGRY),
-    key(0.42, LEGS_DOWN, pelvis(0, 0.03), bend(-2, -2, -2, -10), BRACED, FISTS, ANGRY),
-    // Tucked at the top: knees up, claws drawn in.
-    key(0.6, KNEES_UP, bend(14, 6, 0, -8), CROSSED, FISTS, ANGRY),
-    // Reaching down for the ground, arms out for balance.
-    key(0.74, LEGS_DOWN, bend(8, 3, 0, -8), ARMS_OUT, ANGRY),
-    // Down: the knees take it, head low, flames flaring.
-    snap(0.82, LAND, pelvis(0, -0.06), bend(24, 8, 0, 4), ARMS_OUT, ANGRY, flames(0.8)),
-    key(0.98, LAND, pelvis(0, -0.07), bend(26, 8, 0, 6), ARMS_OUT, ANGRY, flames(0.6)),
-    // Rise into the stance, eyes on the foe.
-    key(1.22, pelvis(0, -0.015), bend(4, 2, 0, -4), GUARD, ANGRY, flames(0.2)),
-    key(1.5, flames(0), OPEN_EYES),
-  ],
-  events: [{ t: 0.32, name: 'launch' }, { t: 0.82, name: 'land' }],
-};
-
 /** Weak contact move (Scratch, Slash, Quick Attack...): leap in, claw slash, hop back. */
 const physicalWeak: Clip = {
   name: 'physical_weak',
@@ -759,7 +701,7 @@ const faint: Clip = {
 };
 
 export const BLAZIKEN_CLIPS: Record<string, Clip> = Object.fromEntries(
-  [idle, intro, entrance, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, peck, toss, burrow, fling, afterimage, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
+  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, peck, toss, burrow, fling, afterimage, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
 );
 
 /** Eye atlas (pm0257_00_Eye1): 2 columns x 4 rows of 128x64 cells. */

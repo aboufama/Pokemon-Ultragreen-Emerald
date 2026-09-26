@@ -89,13 +89,11 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
   - picking a place starts the battle like a wild encounter: the battle theme and
     the place's transition over its arena (three gray flashes, then White Bars Fade,
     Grid Squares in the cave, Ripple on water);
-  - the window opening from the middle row onto the field, the trainer already there;
-    the camera holds still, so the wild Pokémon comes into its spot itself, in shadow
-    (`src/battle3d/entrance.ts`): it bursts up out of the tall grass, the sand or the
-    sea it was hiding in (the game's own entry layer, lifted in front of it, rustling
-    or trembling first), leaps down into the pond, the mountain and the hall, drops
-    off the cave's ceiling, or drifts down to the seabed; once it lands the cover sinks
-    or fades away, its healthbox slides in and its colors come back;
+  - the window opening from the middle row (WIN0, 1 px then 4 px a frame) onto the
+    field, with the wild Pokémon already standing in its spot in the game's shadow
+    palette (RGB(8, 8, 8) at 10/16) and the trainer already there: the camera holds
+    still, so nothing slides in; then the wild Pokémon's healthbox slides in while its
+    colors come back, and it cries (SpriteCB_WildMonShowHealthbox);
   - the trainer's throw, the Poké Ball arc and the white flash;
   - the Pokémon emerging in the ball's color, then Blaziken's red-glow send-out.
 - **Menus**: action and move selection with the controller's cursor rules, the
@@ -134,7 +132,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 | Pixel-exact 2D layer (text box, menus, healthboxes, trainer, ball) drawn into a software framebuffer | `src/gba/`, `src/battle/ui/` |
 | 3D stage: camera calibrated so both battlers land where the stock sprites are drawn | `src/render3d/stage.ts`, `src/data/battle_camera.json` |
 | Arenas, designed from scratch for the remake in Hoenn's overworld colors, with no platforms under the Pokémon: each place is painted pixel by pixel for the battle camera (ground, paths, ponds, dunes, ridges, walls, a tree line) and projected onto the ground, props stand at their depth one sprite pixel per screen pixel (trees, tall grass, reeds, rocks, kelp, coral, lamp posts) and sway, and the ground lives per pixel (wind in the grass, waves and glints, ripples at the battlers' feet, lava, caustics, cloud shadows) | `src/render3d/arena/`, `environment.ts`, `ambience.ts` |
-| Viewport pixel pass: object IDs, majority downsampling, snap to the species' stock palette, outline policy from the sprites, palette blends (fades, glows) and the arena's fades (the ball's white flash, move tints), the intro's entry layer, afterimages (sprite clones in blend mode), the battle transitions, RGB555 | `src/render3d/pipeline.ts` |
+| Viewport pixel pass: object IDs, majority downsampling, snap to the species' stock palette, outline policy from the sprites, palette blends (fades, glows) and the arena's fades (the ball's white flash, move tints), afterimages (sprite clones in blend mode), the battle transitions, RGB555 | `src/render3d/pipeline.ts` |
 | Screens and menus drawn like Emerald's: the title screen (title_screen.c's layers, blends, shines and timings), window frames, text and the keypad icons, messages with the waiting arrow, YES/NO, list menus with scroll arrows, Birch's bag, the move relearner | `src/menus/`, `src/gba/font.ts` |
 | Rig and animation: semantic bone map, model-space rotations, aim constraints, foot IK, keyframed clips on smooth curves with events and crossfades, overlapping action, springs for loose parts (mane, tail, feathers), and a life layer (breathing, weight shifts, blinks, sprung turns and hit recoil) | `src/anim/`, `src/pokemon/`, `src/battle3d/battler.ts` |
 | Moves: animation category from move data, per-type effects from the stock battle-animation sprites, rendered in 3D through the pixel pass | `src/battle3d/` |

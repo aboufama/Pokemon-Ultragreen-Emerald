@@ -1,5 +1,5 @@
 // Sceptile's battle animation set: one clip per attack category (+ idle, intro,
-// entrance, hit, faint) and the motif clips its moves need. Keys are STANCE +
+// hit, faint) and the motif clips its moves need. Keys are STANCE +
 // deltas (see compose()); the structure follows src/pokemon/blaziken/clips.ts.
 //
 // Channels used here:
@@ -11,9 +11,7 @@
 //   expression      eye atlas cell (open, angry, focus, half, happy, closed, hurt)
 // Events: impact (contact lands), release (projectile/beam starts),
 // releaseEnd, charge, cry, aura, emit, thud; grab and throw (a toss carries
-// the foe between them), dig (a burrow goes under); launch and land (the
-// entrance leaves the ground and touches down: the battle adds the place's
-// path between them, src/battle3d/entrance.ts).
+// the foe between them), dig (a burrow goes under).
 //
 // The healthboxes are drawn over the Pokémon, so clips at home stay clear of
 // them (tools/gauntlet/uiclear.mjs): from our side the foe's box is a few
@@ -202,78 +200,6 @@ const intro: Clip = {
     key(1.5, OPEN_EYES),
   ],
   events: [{ t: 0.44, name: 'cry' }],
-};
-
-/** Legs driven straight down: the push of the spring. */
-const LEGS_DOWN: Pose = {
-  plantFeet: 0,
-  aim: {
-    thighR: { dir: [-0.3, -0.95, 0.08] }, shinR: { dir: [0.08, -0.98, -0.18] },
-    thighL: { dir: [0.3, -0.95, 0.08] }, shinL: { dir: [-0.08, -0.98, -0.18] },
-  },
-};
-/** Knees drawn up and splayed wide, frog-legged, the feet tucked under (a jump straight up or down). */
-const KNEES_UP: Pose = {
-  plantFeet: 0,
-  aim: {
-    thighR: { dir: [-0.7, -0.15, 0.7] }, shinR: { dir: [0.25, -0.85, -0.45] },
-    thighL: { dir: [0.7, -0.15, 0.7] }, shinL: { dir: [-0.25, -0.85, -0.45] },
-  },
-};
-/** Legs splayed and reaching down for the ground, like a gecko's. */
-const LEGS_REACH: Pose = {
-  plantFeet: 0,
-  aim: {
-    thighR: { dir: [-0.5, -0.83, 0.25] }, shinR: { dir: [0.1, -0.96, -0.25] },
-    thighL: { dir: [0.5, -0.83, 0.25] }, shinL: { dir: [-0.1, -0.96, -0.25] },
-  },
-};
-/** Arms swept back along the body, the blades trailing (the spring). */
-const SWEPT = both([[-0.4, -0.62, -0.67], [-0.25, -0.5, -0.83], [-0.15, -0.45, -0.88]]);
-/** Arms flung out wide to the sides, claws open: a leaping gecko, splayed. */
-const SPLAYED_ARMS = both([[-0.9, 0.05, 0.42], [-0.75, 0.25, 0.6], [-0.6, 0.35, 0.72]]);
-/** Claws reaching forward and down for the ground, like a gecko's front feet. */
-const PAWS = both([[-0.45, -0.4, 0.8], [-0.25, -0.65, 0.72], [-0.15, -0.75, 0.64]]);
-/** Claws down on the ground in front: on all fours. */
-const ON_ALL_FOURS = both([[-0.35, -0.82, 0.45], [-0.12, -0.93, 0.35], [-0.05, -0.92, 0.38]]);
-
-/**
- * A wild Sceptile comes into the battle: a gecko's quick coil, then it
- * springs (launch) with the arms swept back so the head and crest lead up out
- * of the grass, splays at the top like a leaping gecko (knees drawn up wide,
- * arms flung out, claws open) while the tail whips up for balance, reaches
- * down with its legs and its claws like front feet, touches down on its toes
- * (land) and keeps sinking, low onto all fours, the tail swinging out as a
- * counterweight, and rears up into its stance. The path (bursting up out of
- * the grass, dropping off the cave's ceiling, drifting down to the seabed) is
- * the place's: src/battle3d/entrance.ts. Only the wild Pokémon enters, and it
- * is in shadow while it does: the splayed shape at the top of the jump is
- * what reads (a tight tuck read as a dark knot).
- */
-const entrance: Clip = {
-  name: 'entrance',
-  duration: 1.42,
-  keys: [
-    key(0, pelvis(0, -0.08), bend(24, 8, -4, 10), CROSSED_LOW, FOCUS, tail(-6, 8)),
-    key(0.16, pelvis(0, -0.11), bend(30, 10, -4, 12), CROSSED_LOW, FOCUS, tail(-10, 12)),
-    // The spring: the legs drive straight with the feet still down, the body stretches up, arms swept back.
-    snap(0.24, pelvis(0, 0.03), bend(-8, -5, -6, -14), SWEPT, ANGRY, tail(-18)),
-    // Off the ground, the legs trailing.
-    key(0.34, LEGS_DOWN, pelvis(0, 0.03), bend(-5, -4, -4, -12), SWEPT, ANGRY, tail(-6)),
-    // Splayed at the top: knees up wide, arms flung out, the tail whipping up.
-    key(0.52, KNEES_UP, bend(12, 6, 0, -10), SPLAYED_ARMS, SPLAYED, ANGRY, tail(40, 12)),
-    // Reaching down: legs splayed, claws out in front like front feet.
-    key(0.63, LEGS_REACH, bend(10, 4, 0, -10), PAWS, SPLAYED, ANGRY, tail(14, -8)),
-    // Touch down lightly on the toes...
-    key(0.7, pelvis(0, -0.02), bend(16, 6, -4, -12), PAWS, SPLAYED, FOCUS, tail(20, -18)),
-    // ... and keep sinking, low on all fours: the knees and claws take it, the head level, the tail out.
-    key(0.8, LAND, pelvis(0, -0.055), bend(28, 10, -8, -16), ON_ALL_FOURS, SPLAYED, FOCUS, tail(28, -26)),
-    key(0.94, LAND, pelvis(0, -0.065), bend(30, 10, -8, -17), ON_ALL_FOURS, SPLAYED, FOCUS, tail(10, 12)),
-    // Rear up into the stance, eyes on the foe.
-    key(1.14, pelvis(0, -0.02), bend(8, 2, 0, -2), ANGRY, tail(6, -6)),
-    key(1.42, OPEN_EYES),
-  ],
-  events: [{ t: 0.24, name: 'launch' }, { t: 0.7, name: 'land' }],
 };
 
 /**
@@ -924,7 +850,7 @@ const faint: Clip = {
 
 export const SCEPTILE_CLIPS: Record<string, Clip> = Object.fromEntries(
   [
-    idle, intro, entrance, hit, faint,
+    idle, intro, hit, faint,
     physicalWeak, physicalStrong, specialWeak, specialStrong, statusSelf, statusTarget,
     physicalWeakTackle, physicalStrongPunch, physicalStrongStrike, physicalStrongQuake,
     specialWeakThrow, specialWeakDrain, statusSelfShield, statusSelfHeal, statusTargetGlare,

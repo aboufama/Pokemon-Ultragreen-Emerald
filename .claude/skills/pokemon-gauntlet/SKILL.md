@@ -194,8 +194,7 @@ Jev's motif for moves the motif table doesn't name. It needs
 ## 7. Clips
 
 Follow the **pokemon-animation** skill. Required: `idle` (loop), `intro`,
-`entrance` (the wild Pokémon coming into its spot: events `launch` and
-`land`), `hit`, `faint`, the six category clips (`physical_weak`, `physical_strong`,
+`hit`, `faint`, the six category clips (`physical_weak`, `physical_strong`,
 `special_weak`, `special_strong`, `status_self`, `status_target`), plus the
 motif clips you chose in step 1 (named after the motif, e.g. `bite`, `jet`,
 `jet_strong`, or mapped in `motifClips`). Replace every generic placeholder.
@@ -228,14 +227,9 @@ For every clip, from **both** sides:
 node tools/shots/move_sheet.mjs --species <slug> --moves <MOVE,...> --attacker enemy  --density 3 --every 4 --frames 24 --out build/sheets/<slug>-enemy.png
 node tools/shots/move_sheet.mjs --species <slug> --moves <MOVE,...> --attacker player --density 3 --every 4 --frames 24 --out build/sheets/<slug>-player.png
 node tools/shots/move_sheet.mjs --species <slug> --clips idle,intro,hit,faint --attacker enemy --density 3 --out build/sheets/<slug>-moments.png
-node tools/shots/move_sheet.mjs --species <slug> --clips entrance --attacker enemy --env grass --density 2 --every 4 --frames 24 --out build/sheets/<slug>-entrance-grass.png
-node tools/shots/move_sheet.mjs --species <slug> --clips entrance --attacker enemy --env cave --density 2 --every 4 --frames 24 --out build/sheets/<slug>-entrance-cave.png
 node tools/gauntlet/uiclear.mjs --species <slug> --shots build/sheets/uiclear
 ```
 
-The entrance plays each place's path (`env=grass` bursts up out of the
-ground, `env=cave` drops from above; in battle the grass hides where it comes
-up); watch the whole battle intro too: `/?player=blaziken&enemy=<slug>&env=grass`.
 `uiclear.mjs` plays every clip that stays at home from both sides and fails
 any that goes under a healthbox: from our side the foe's box is only a few
 pixels above our Pokémon's head and ours is to its right (see the

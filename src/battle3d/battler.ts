@@ -28,7 +28,6 @@ import type { BattleStage, SlotName } from '../render3d/stage';
 import type { RGB } from '../gba/bitmap';
 import { SLOT_PIXEL_ID, instantiatePokemon, type PokemonInstance } from '../pokemon/instantiate';
 import { GroundShadow } from '../render3d/shadow';
-import { type Entrance, entranceOffset } from './entrance';
 
 const DEG = Math.PI / 180;
 /** Lying on its side (a thrown body lands so): rolled about its forward axis. */
@@ -59,14 +58,6 @@ export class Battler3D {
    * used for the intro slide, the action-menu bounce and shakes.
    */
   screenOffset: [number, number] = [0, 0];
-  /**
-   * Extra root offset in body heights, in the slot's frame (y up, z toward
-   * the foe): the path of an entrance (see enter()). Unlike screenOffset it
-   * moves the body in the world, pose by pose.
-   */
-  readonly rootOffset = new THREE.Vector3();
-  /** The entrance playing: its path, and when its clip leaves the ground and lands. */
-  private entering: { entrance: Entrance; launch: number; land: number } | null = null;
   /** Seconds of remaining blink (GBA hit blink). */
   private blinkTime = 0;
   private time = 0;
@@ -423,28 +414,6 @@ export class Battler3D {
     });
   }
 
-  /**
-   * Come into the battle along a place's path (src/battle3d/entrance.ts),
-   * acted out by the `entrance` clip; resolves once it has landed and
-   * settled. The clip's `launch` and `land` events time the path.
-   */
-  async enter(entrance: Entrance): Promise<void> {
-    const clip = this.profile.clips.entrance;
-    if (!clip) {
-      // Nothing to act it out with: it is simply there.
-      this.onEvent?.('launch');
-      this.onEvent?.('land');
-      return;
-    }
-    const at = (name: string) => clip.events?.find((e) => e.name === name)?.t;
-    this.entering = { entrance, launch: at('launch') ?? 0, land: at('land') ?? clip.duration };
-    entranceOffset(entrance, this.entering.launch, this.entering.land, 0, this.rootOffset);
-    this.snapPose = true;
-    await this.perform('entrance', { fade: 0, speed: entrance.speed });
-    this.entering = null;
-    this.rootOffset.set(0, 0, 0);
-  }
-
   /** Play a clip, then return to idle. */
   async perform(clip: string, opts: { fade?: number; speed?: number } = {}): Promise<void> {
     await this.play(clip, opts);
@@ -517,9 +486,7 @@ export class Battler3D {
     const poseScale = H * (pose.scale ?? 1);
     root.rotation.set(((r.pitch ?? 0) - 7 * recoil) * DEG, yaw + (r.yaw ?? 0) * DEG, (r.roll ?? 0) * DEG, 'YXZ');
     const off = new THREE.Vector3(r.x ?? 0, r.y ?? 0, (r.z ?? 0) - 0.035 * recoil).multiplyScalar(H).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-    const e = this.entering;
-    if (e && this.animator.currentClip === 'entrance') entranceOffset(e.entrance, e.launch, e.land, this.animator.time, this.rootOffset);
-    root.position.set(cal.dx, cal.lift, cal.dz + (pose.advance ?? 0) * this.approachDistance()).add(off).addScaledVector(this.rootOffset, H);
+    root.position.set(cal.dx, cal.lift, cal.dz + (pose.advance ?? 0) * this.approachDistance()).add(off);
     const posePosition = root.position.clone();
     this.placeRoot(poseScale);
 
