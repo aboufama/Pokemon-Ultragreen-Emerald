@@ -215,8 +215,8 @@ export interface Shaft {
   lift?: number;
   /**
    * Banded instead of dithered: the core lifted `lift` shades and the sides
-   * one, solid, a one-pixel checkered rim, and the foot narrowing to nothing
-   * instead of thinning out in dither (calm, where it lands near a battler).
+   * one, both solid, and the foot narrowing to nothing instead of thinning
+   * out in dither (calm, where it lands near a battler).
    */
   banded?: boolean;
 }
@@ -265,12 +265,10 @@ function bandedShaft(ctx: ArenaContext, s: Shaft, ramps: Ramp[], only?: (sx: num
     const x0 = mid - w / 2, x1 = mid + w / 2;
     for (let sx = Math.floor(x0); sx < x1; sx++) {
       if (sx + 0.5 < x0 || sx + 0.5 > x1) continue;
-      const rim = sx + 0.5 - x0 < 1 || x1 - sx - 0.5 < 1;
-      if (rim && bayer(sx, sy) > 0.5) continue;
       if (only && !only(sx, sy)) continue;
       const c = ground.get(sx, sy);
       const u = (sx + 0.5 - x0) / w;
-      const lift = !rim && u > 0.25 && u < 0.75 ? s.lift ?? 1 : 1;
+      const lift = u > 0.25 && u < 0.75 ? s.lift ?? 1 : 1;
       if (c) ground.set(sx, sy, shift(ramps, c, lift), ground.material(sx, sy));
     }
   }
