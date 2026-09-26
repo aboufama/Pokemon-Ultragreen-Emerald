@@ -1,8 +1,10 @@
 // The battle arenas, one per kind of place, painted in Hoenn's colors (the
 // overworld tilesets' palettes: mint route grass, round trees, pink-brown
-// rock, desert sand, sea blues, cave browns, Mt. Chimney's ash and lava, the
-// Battle Tower's yellow grid floor). No platforms: the Pokémon stand on the
-// ground itself, with their shadows.
+// rock, desert sand, sea blues, the underwater lavender, cave browns, Mt.
+// Chimney's ash and lava, the Battle Tower's yellow grid floor). Each is
+// composed for the one battle camera: a far view across the top, the arena
+// lit brightest around the battlers, framing at the edges of the view. No
+// platforms: the Pokémon stand on the ground itself, with their shadows.
 
 import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, cells, fbm, hash2, hex, mix, noise, ramp, smoothstep } from './art';
 import { type ArenaContext, type ArenaDesign, addProp, at, darker, dunes, fill, frameProp, hills, onLine, scatter, shafts, shift, stand } from './design';
@@ -588,7 +590,7 @@ function sea(ctx: ArenaContext): void {
 
 // Emerald's underwater tileset: lavender sand lit from above, fading through
 // violet into the blue of deep water; teal-blue seaweed; violet-grey rock;
-// coral in pinks, oranges and purples.
+// coral in pinks, oranges, yellows and sea greens.
 const UW = ramp('#18186a', '#26268f', '#3434b0', '#4a4ade', '#5f4fd6', '#734acd', '#9473de', '#b494ff', '#c5a4ff', '#d5d5ff');
 const UW_WEED = ramp('#142050', '#20316a', '#395283', '#52739c', '#7394bd');
 const UW_ROCK = ramp('#1c1450', '#2c226c', '#40348a', '#5a4ca6', '#7a6cc6', '#9c90e0', '#bcb4f4');
