@@ -3,7 +3,7 @@
   "slots": {
     "enemy": {
       "dx": -0.038,
-      "dz": 0,
+      "dz": -0.3,
       "lift": 0
     },
     "player": {
@@ -28,8 +28,8 @@
   },
   "fit": {
     "enemy": {
-      "iou": 0.5916,
-      "boxIou": 0.8215
+      "iou": 0.5711,
+      "boxIou": 0.8321
     },
     "player": {
       "iou": 0.5822,
