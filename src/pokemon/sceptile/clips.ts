@@ -8,7 +8,8 @@
 //   plantFeet       foot IK weight (0 = the legs are free: airborne)
 //   expression      eye atlas cell (open, angry, focus, half, happy, closed, hurt)
 // Events: impact (contact lands), release (projectile/beam starts),
-// releaseEnd, charge, cry, aura, emit, thud.
+// releaseEnd, charge, cry, aura, emit, thud; grab and throw (a toss carries
+// the foe between them), dig (a burrow goes under).
 //
 // Sceptile is light and fast: timings run ~0.85x Blaziken's, strikes snap in
 // 3-5 frames and it is back in guard quickly. Its weapons are the leaf blades
@@ -20,8 +21,9 @@
 // breathing, blinks and the springs (see index.ts).
 //
 // Motif clips keep a category prefix (physical_weak_tackle...); index.ts maps
-// motifs to clips. The stance faces the foe, as the battler always does: no
-// clip turns to look at it.
+// motifs to clips. The later ones (toss, burrow, fling, afterimage, flash) are
+// named after their motifs, which the director finds by name. The stance
+// faces the foe, as the battler always does: no clip turns to look at it.
 
 import type { Clip, Keyframe } from '../../anim/clip';
 import { compose } from '../../anim/animator';
@@ -211,11 +213,10 @@ const physicalWeak: Clip = {
 };
 
 /**
- * Slam (strong contact with the tail; Body Slam, Iron Tail, and Seismic Toss
- * and Mega Kick by fallback): coils with the tail up, springs in and turns
- * its back to the foe, hangs at the top of the arc with the tail reared high
- * over its head, whips it down on the foe, lands, and spins back round on the
- * hop home.
+ * Slam (strong contact with the tail; Body Slam, Iron Tail, and Mega Kick by
+ * fallback): coils with the tail up, springs in and turns its back to the
+ * foe, hangs at the top of the arc with the tail reared high over its head,
+ * whips it down on the foe, lands, and spins back round on the hop home.
  */
 const physicalStrong: Clip = {
   name: 'physical_strong',
@@ -243,8 +244,8 @@ const physicalStrong: Clip = {
 };
 
 /**
- * Bullet Seed (weak ranged from the mouth; Mud-Slap, and Snore by
- * fallback): a quick breath, then three pecks of the head, a seed each.
+ * Bullet Seed (weak ranged from the mouth; Snore by fallback): a quick
+ * breath, then three pecks of the head, a seed each.
  */
 const specialWeak: Clip = {
   name: 'special_weak',
@@ -298,10 +299,11 @@ const specialStrong: Clip = {
 };
 
 /**
- * Agility (self status; Double Team, Swords Dance): blurs from side to side
- * in three quick hops, leaning into each, lands centred and snaps its blades
- * up with an aura. Each hop peaks halfway across, so the body keeps flowing
- * through the air and only stops where it lands.
+ * Swords Dance (self status; Sleep Talk; Agility and Double Team have
+ * `afterimage`): blurs from side to side in three quick hops, leaning into
+ * each, lands centred and snaps its blades up with an aura. Each hop peaks
+ * halfway across, so the body keeps flowing through the air and only stops
+ * where it lands.
  */
 const statusSelf: Clip = {
   name: 'status_self',
@@ -493,7 +495,7 @@ const specialWeakDrain: Clip = {
   events: [{ t: 0.3, name: 'release' }],
 };
 
-/** Leer (glare; Swagger, Attract, Flash, Mimic): leans in, head low and forward, and stares the foe down with narrowed eyes. */
+/** Leer (glare; Swagger, Attract, Mimic): leans in, head low and forward, and stares the foe down with narrowed eyes. */
 const statusTargetGlare: Clip = {
   name: 'status_target_glare',
   duration: 1.3,
@@ -530,6 +532,216 @@ const physicalStrongQuake: Clip = {
     key(1.6, OPEN_EYES),
   ],
   events: [{ t: 0.62, name: 'impact' }],
+};
+
+// Motif clips named after their motifs (the director finds `<motif>` clips by name).
+
+/** Landing home from a hop: LAND with the torso upright, so the settle to the stance is small. */
+const LIGHT: Pose = bend(-3, 0, 0, 3);
+/** The right arm alone (the left keeps the stance's low guard). */
+const rightArm = (r: Arm, twistR = 0): Pose => ({ aim: { armR: { dir: r[0] }, forearmR: { dir: r[1], twist: twistR }, handR: { dir: r[2] } } });
+
+/** Claws flung open wide for the foe (the toss's rush). */
+const GRAB_WIDE = both([[-0.62, 0.02, 0.78], [-0.25, 0.12, 0.96], [-0.12, 0.2, 0.97]]);
+/** Forearms clamped round what it holds, low in front, blades out. */
+const CLAMP = both([[-0.3, -0.45, 0.84], [0.45, -0.1, 0.89], [0.45, 0.02, 0.89]]);
+/** Carrying it hugged low in front (not overhead: our Pokémon is near the camera and would leave the screen). */
+const CARRY = both([[-0.3, -0.3, 0.9], [0.45, 0.05, 0.89], [0.45, 0.1, 0.88]]);
+/** Heaving it up to chest height to hurl it. */
+const HOIST = both([[-0.3, 0.1, 0.95], [0.3, 0.45, 0.84], [0.35, 0.4, 0.85]]);
+/** Driving it down into the ground in front. */
+const HURL = both([[-0.15, -0.5, 0.85], [0.12, -0.78, 0.62], [0.1, -0.85, 0.5]]);
+/** ... and following through, the arms pressing on down. */
+const HURL_LOW = both([[-0.18, -0.62, 0.76], [0.1, -0.88, 0.46], [0.08, -0.92, 0.38]]);
+
+/**
+ * Seismic Toss (toss): a springy dash in with the claws flung open, it clamps
+ * on the foe (grab) and presses its tail down to spring off it, leaping up and
+ * back toward mid-field with the foe hugged low in front (never overhead: our
+ * Pokémon is near the camera), spinning round with it while the tail streams
+ * out; then its whole body whips forward and down to hurl the foe back into
+ * its own place (throw), where it crashes (impact) in both views while
+ * Sceptile lands straight down at advance 0.4 and watches, the tail swishing.
+ * Hands trail the hips by ~0.08 s.
+ */
+const toss: Clip = {
+  name: 'toss',
+  duration: 2.02,
+  keys: [
+    key(0),
+    // Wind up: a quick crouch, forearms drawn back, tail lifting behind.
+    key(0.12, pelvis(0, -0.06), bend(18, 5, 0, -8), ELBOWS_BACK, SPLAYED, FOCUS, tail(14)),
+    // Spring in low, pitched forward, claws flung open.
+    key(0.26, advance(0.65), root({ y: 0.07, pitch: 12 }), TUCK, bend(16, 4, 0, -12), GRAB_WIDE, SPLAYED, ANGRY, tail(26)),
+    // Land at the foe, claws on it.
+    key(0.34, advance(1), LAND, bend(16, 4, 0, -10), GRAB_WIDE, SPLAYED, ANGRY, tail(20)),
+    // Clamp on low (grab), the claws closing.
+    key(0.44, advance(1), pelvis(0, -0.07), bend(22, 6, 0, -12), CLAMP, FISTS, ANGRY, tail(0)),
+    // Load: sink deep with it, the tail pressed down to spring off it.
+    key(0.54, advance(1), pelvis(0, -0.1), bend(20, 6, 0, -14), CLAMP, FISTS, ANGRY, tail(-20)),
+    // Spring up and back, hugging the foe low in front, starting to spin.
+    key(0.68, advance(0.84), root({ y: 0.17, yaw: 60 }), HOP, pelvis(0, -0.02), bend(-2, -2, -2, -12), CARRY, FISTS, ANGRY, tail(30)),
+    // Spinning round with it at the top, the tail streaming out.
+    key(0.81, advance(0.62), root({ y: 0.21, yaw: 228 }), HOP, pelvis(0, -0.02), bend(-4, -3, -2, -14), CARRY, FISTS, ANGRY, tail(36, -16)),
+    // Facing its place again, leaning back and heaving it up to hurl.
+    key(0.91, advance(0.44), root({ y: 0.21, yaw: 360 }), HOP, pelvis(0, 0), bend(-10, -6, -6, -18), HOIST, FISTS, ANGRY, tail(40, 0)),
+    // The hurl: the whole body whips forward and down with it, the tail flicking up.
+    snap(0.99, advance(0.4), root({ y: 0.04, yaw: 360 }), DROP, pelvis(0, -0.02), bend(34, 16, 4, 4), HURL, ANGRY, tail(46, 14)),
+    // Land deep where it is, arms still down; watch it crash from the crouch, the tail swishing.
+    key(1.1, advance(0.4), root({ yaw: 360 }), LAND, pelvis(0, -0.08), bend(30, 12, 2, 2), HURL, ANGRY, tail(14, 10)),
+    key(1.32, advance(0.4), root({ yaw: 360 }), LAND, pelvis(0, -0.085), bend(28, 11, 2, 0), HURL_LOW, ANGRY, tail(8, -10)),
+    // Straighten into its stance, then hop home.
+    key(1.47, advance(0.4), root({ yaw: 360 }), pelvis(0, -0.03), bend(10, 2, 0, 0), ANGRY, tail(4, 6)),
+    key(1.6, advance(0.18), root({ y: 0.065, yaw: 360 }), HOP, bend(8, 0, 0, 0), ANGRY, tail(10)),
+    key(1.72, advance(0), root({ yaw: 360 }), LAND, LIGHT, ANGRY, tail(2)),
+    key(2.02, root({ yaw: 360 }), OPEN_EYES),
+  ],
+  events: [{ t: 0.4, name: 'grab' }, { t: 1.02, name: 'throw' }, { t: 1.22, name: 'impact' }],
+};
+
+/** Both arms stretched overhead along the body, blades together (a diver's entry). */
+const DIVE = both([[-0.15, 0.9, 0.4], [0.1, 0.95, 0.3], [0.12, 0.95, 0.2]]);
+/** Right blade driven up through the foe from below, left forearm guarding low. */
+const RISING_BLADE = arms([[-0.4, 0.82, 0.42], [-0.2, 0.97, 0.15], [-0.1, 0.95, -0.3]], [[0.45, -0.55, 0.7], [-0.1, 0.4, 0.91], [-0.1, 0.75, 0.65]]);
+/** Right blade cocked low for the rising cut, left forearm guarding. */
+const BLADE_LOW = arms([[-0.45, -0.75, -0.48], [-0.2, -0.3, 0.93], [-0.1, -0.1, 0.99]], [[0.4, -0.5, 0.77], [-0.2, 0.75, 0.63], [-0.15, 0.95, 0.25]]);
+/** Airborne coming up out of the ground: right knee up, left leg trailing. */
+const RISING_LEGS: Pose = {
+  plantFeet: 0,
+  aim: {
+    thighR: { dir: [-0.2, 0.2, 0.96] }, shinR: { dir: [-0.12, -0.9, 0.42] },
+    thighL: { dir: [0.3, -0.9, -0.3] }, shinL: { dir: [0.15, -0.6, -0.78] },
+  },
+};
+
+/**
+ * Dig (burrow): a springy hop and a head-first dive into the ground, arms
+ * overhead and blades together (dig: the dirt flies as it goes in, the tail
+ * last), a trail of heaving dirt runs to the foe, then it bursts up under it
+ * with a rising cut of the right blade, the tail trailing out of the ground
+ * (impact as it breaks the surface), drops straight down in front of it, holds
+ * the crouch and hops home.
+ */
+const burrow: Clip = {
+  name: 'burrow',
+  duration: 2.04,
+  keys: [
+    key(0),
+    // Crouch, eyes on the ground ahead, forearms drawn back, the tail loading.
+    key(0.12, pelvis(0, -0.09), bend(24, 7, 2, 18), ELBOWS_BACK, FOCUS, tail(16)),
+    // Spring up and tip forward, the arms swinging overhead.
+    key(0.22, advance(0.04), root({ y: 0.14, pitch: 35 }), TUCK, bend(4, 0, 0, 4), DIVE, ANGRY, tail(24)),
+    key(0.3, advance(0.06), root({ y: 0.16, pitch: 75 }), DROP, bend(0, 0, 0, 2), DIVE, ANGRY, tail(20)),
+    // Head and arms into the ground (dig), the body following, gathering speed.
+    key(0.38, advance(0.07), root({ y: -0.05, pitch: 108 }), DROP, bend(0, 0, 0, 2), DIVE, ANGRY, tail(10)),
+    fall(0.54, advance(0.1), root({ y: -1.3, pitch: 125 }), DROP, bend(0, 0, 0, 2), DIVE, ANGRY, tail(4)),
+    // Underground (nothing to stand on): tunnel over to the foe, righting itself on the way,
+    // and start up under it.
+    key(0.7, advance(0.7), root({ y: -1.32, pitch: 60 }), DROP, bend(10, 3, 0, -2), BLADE_LOW, ANGRY, tail(-2)),
+    key(0.8, advance(1), root({ y: -1.12, pitch: 20 }), DROP, pelvis(0, -0.06), bend(20, 6, 0, -8), BLADE_LOW, ANGRY, tail(-6)),
+    // Burst up under the foe, the right blade cutting up through it, the tail trailing.
+    snap(0.92, advance(1), root({ y: 0.24 }), RISING_LEGS, pelvis(0, 0.02), bend(-8, -6, -4, -16), twist(10), RISING_BLADE, ANGRY, tail(-40, 25)),
+    key(1.04, advance(0.9), root({ y: 0.28 }), RISING_LEGS, pelvis(0, 0.02), bend(-10, -6, -4, -18), twist(12), RISING_BLADE, ANGRY, tail(-30, 15)),
+    // Drop straight down in front of it and hold the crouch, the tail swishing.
+    fall(1.2, advance(0.88), LAND, pelvis(0, -0.06), bend(20, 4, 0, -6), GUARD, ANGRY, tail(8, 10)),
+    key(1.5, advance(0.88), pelvis(0, -0.03), bend(10, 2, 0, 0), GUARD, ANGRY, tail(4, -8)),
+    // Hop home.
+    key(1.62, advance(0.44), root({ y: 0.07 }), HOP, bend(8, 0, 0, 0), GUARD, ANGRY, tail(10)),
+    key(1.74, advance(0), LAND, LIGHT, GUARD, ANGRY, tail(2)),
+    key(2.04, OPEN_EYES),
+  ],
+  events: [{ t: 0.32, name: 'dig' }, { t: 0.85, name: 'impact' }],
+};
+
+/**
+ * Mud-Slap (fling): it stoops and rakes the ground with its right claws,
+ * drags a handful of mud back past its hip, swings it through low and slings
+ * it underhand at the foe (release from the right hand, which trails the hips
+ * by ~0.08 s), following through with the claws open; the left forearm keeps
+ * its guard.
+ */
+const fling: Clip = {
+  name: 'fling',
+  duration: 1.1,
+  keys: [
+    key(0),
+    // Stoop: the right claws rake into the ground in front, the tail lifts.
+    key(0.14, pelvis(0, -0.1, 0.01), twist(12), bend(38, 10, 0, 14), FOCUS, tail(20),
+      rightArm([[-0.35, -0.8, 0.5], [-0.1, -0.92, 0.38], [0, -0.92, 0.4]]), SPLAYED),
+    // Scoop: the claws drag back along the ground past the right hip, weight back.
+    key(0.24, pelvis(0.01, -0.08, -0.012), twist(-16), bend(28, 7, 0, 4, 6), ANGRY, tail(10),
+      rightArm([[-0.4, -0.82, -0.4], [-0.2, -0.88, -0.43], [-0.1, -0.82, -0.56]]), FISTS),
+    // Swing: the arm comes through low beside the hip as the torso unwinds.
+    key(0.3, pelvis(0, -0.06, 0.004), twist(4), bend(20, 6, 0, 0, 3), ANGRY, tail(6, 6),
+      rightArm([[-0.42, -0.85, 0.3], [-0.25, -0.6, 0.76], [-0.15, -0.45, 0.88]]), FISTS),
+    // Sling it: the arm whips forward and up underhand, the claws opening.
+    snap(0.36, pelvis(-0.005, -0.035, 0.02), twist(22), bend(8, 4, 0, -8, -4), ANGRY, tail(4, 14),
+      rightArm([[-0.35, 0.4, 0.85], [-0.2, 0.66, 0.72], [-0.15, 0.72, 0.68]]), SPLAYED),
+    // Follow-through: the claws open high and out at the foe, hanging a moment.
+    key(0.5, pelvis(-0.006, -0.034, 0.022), twist(25), bend(9, 4, 0, -8, -5), ANGRY, tail(4, 18),
+      rightArm([[-0.42, 0.52, 0.74], [-0.26, 0.78, 0.57], [-0.2, 0.84, 0.5]]), SPLAYED),
+    key(0.62, pelvis(-0.005, -0.033, 0.02), twist(24), bend(8, 4, 0, -7, -4), ANGRY, tail(4, 16),
+      rightArm([[-0.44, 0.5, 0.74], [-0.28, 0.76, 0.58], [-0.22, 0.82, 0.52]]), SPLAYED),
+    key(0.86, pelvis(0, -0.02), twist(6), bend(4, 1, 0, -2), ANGRY, tail(4, 4)),
+    key(1.1, OPEN_EYES),
+  ],
+  events: [{ t: 0.41, name: 'release' }],
+};
+
+/**
+ * Double Team, Agility (afterimage): low, springy darts from side to side,
+ * leaning into each with the tail swinging out as a counterweight, in its
+ * fighting stance (right claw raised, left forearm guarding); the afterimages
+ * start at the aura and run 1.4 s (Agility's trail follows the darts).
+ */
+const afterimage: Clip = {
+  name: 'afterimage',
+  duration: 1.6,
+  keys: [
+    key(0),
+    // Load onto its left foot to push off to the right.
+    key(0.1, pelvis(0.02, -0.055), twist(0, -5), bend(12, 3, 0, -4), FOCUS, tail(6, 8)),
+    key(0.2, root({ x: -0.15, y: 0.05 }), HOP, twist(0, 12), bend(10, 2, 0, -4), ANGRY, tail(12, -22)),
+    key(0.3, root({ x: -0.3 }), LAND, twist(0, 5), ANGRY, tail(6, -16)),
+    key(0.41, root({ x: 0, y: 0.055 }), HOP, twist(0, -12), bend(10, 2, 0, -4), ANGRY, tail(12, 22)),
+    key(0.52, root({ x: 0.3 }), LAND, twist(0, -5), ANGRY, tail(6, 16)),
+    key(0.63, root({ x: 0, y: 0.055 }), HOP, twist(0, 12), bend(10, 2, 0, -4), ANGRY, tail(12, -22)),
+    key(0.74, root({ x: -0.28 }), LAND, twist(0, 5), ANGRY, tail(6, -16)),
+    key(0.85, root({ x: 0, y: 0.05 }), HOP, twist(0, -12), bend(10, 2, 0, -4), ANGRY, tail(12, 22)),
+    key(0.96, root({ x: 0.26 }), LAND, twist(0, -5), ANGRY, tail(6, 16)),
+    key(1.06, root({ x: 0.12, y: 0.045 }), HOP, twist(0, 8), bend(8, 2, 0, -2), ANGRY, tail(10, -14)),
+    key(1.16, LAND, ANGRY, tail(4, -6)),
+    key(1.6, OPEN_EYES),
+  ],
+  events: [{ t: 0.15, name: 'aura' }],
+};
+
+/** Both arms flung open high and wide toward the foe, claws spread (Flash's flare). */
+const FLARE = both([[-0.86, 0.4, 0.32], [-0.64, 0.68, 0.36], [-0.5, 0.8, 0.33]]);
+
+/**
+ * Flash (flash): it curls in over its crossed forearms, eyes shut, gathering
+ * the sunlight, then flares up tall and throws its arms and blades open at
+ * the foe with the tail fanned high (emit: the screen turns white and both
+ * Pokémon black, so the flare is a silhouette), holds the flare and relaxes.
+ */
+const flash: Clip = {
+  name: 'flash',
+  duration: 1.25,
+  keys: [
+    key(0),
+    // Gather: curl in over the crossed forearms, eyes shut, the tail drawn in low.
+    key(0.18, pelvis(0, -0.06), bend(22, 7, 2, 16), CROSSED_LOW, FISTS, SHUT, tail(-8)),
+    key(0.34, pelvis(0, -0.07), bend(25, 8, 2, 18, 0, 2), CROSSED_LOW, FISTS, SHUT, tail(-10)),
+    // Flare: up tall, chest thrown open, arms and blades flung wide at the foe.
+    snap(0.44, pelvis(0, 0.02, 0.012), bend(-16, -9, -6, -16), FLARE, SPLAYED, jaw(18), ANGRY, tail(40)),
+    key(0.6, pelvis(0, 0.018, 0.012), bend(-17, -9, -6, -17, 0, 2), FLARE, SPLAYED, jaw(16), ANGRY, tail(38)),
+    key(0.78, pelvis(0, 0.014, 0.01), bend(-15, -9, -6, -15, 0, -2), FLARE, SPLAYED, jaw(10), ANGRY, tail(34)),
+    // Relax back into the crouch.
+    key(0.98, pelvis(0, -0.015), bend(4, 1, 0, 0), GUARD, ANGRY, tail(6)),
+    key(1.25, OPEN_EYES),
+  ],
+  events: [{ t: 0.46, name: 'emit' }],
 };
 
 /** Taking a hit: snaps back and winces (the battler adds a sprung recoil), then shakes it off. */
@@ -569,6 +781,7 @@ export const SCEPTILE_CLIPS: Record<string, Clip> = Object.fromEntries(
     physicalWeak, physicalStrong, specialWeak, specialStrong, statusSelf, statusTarget,
     physicalWeakTackle, physicalStrongPunch, physicalStrongStrike, physicalStrongQuake,
     specialWeakThrow, specialWeakDrain, statusSelfShield, statusSelfHeal, statusTargetGlare,
+    toss, burrow, fling, afterimage, flash,
   ].map((c) => [c.name, c]),
 );
 

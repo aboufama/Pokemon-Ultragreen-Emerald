@@ -64,7 +64,8 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     // Sceptile's own versions of its showcase moves; this maps the motifs
     // they perform, plus motifs whose moves read right on a shared clip.
     // Motif clips are named after the category they stand in for
-    // (physical_strong_punch...).
+    // (physical_strong_punch...); toss, burrow, fling, afterimage and flash
+    // are named after their motifs and need no entry here.
     // Where two motifs share a clip, the level-up one is listed last
     // (tools/gauntlet/check.mjs records one motif per clip).
     motifClips: {
