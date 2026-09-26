@@ -4,9 +4,9 @@
 // Battle Tower's yellow grid floor). No platforms: the Pokémon stand on the
 // ground itself, with their shadows.
 
-import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, fbm, hash2, hex, noise, ramp, smoothstep } from './art';
+import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, cells, fbm, hash2, hex, noise, ramp, smoothstep } from './art';
 import { type ArenaContext, type ArenaDesign, addProp, at, darker, fill, frameProp, hills, scatter, shafts, shift, stand } from './design';
-import { anemone, bush, coralHead, lampPost, seaFan, staghorn, reeds, rock, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
+import { anemone, bush, coralHead, crag, lampPost, wisp, seaFan, staghorn, reeds, rock, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
 
 // Hoenn's greens (general tileset): route grass, tall grass and tree leaves.
 const MEADOW = ramp('#287a54', '#3c9f72', '#56b98b', '#73c5a4', '#8dd3b4', '#a9e0c8');
@@ -542,54 +542,119 @@ function seafloor(ctx: ArenaContext): void {
 
 // --- MT. CHIMNEY --------------------------------------------------------------
 
-const ASH = ramp('#9c6252', '#bd8373', '#cd9282', '#d59c8b', '#e4b5a6', '#eecdc5');
-const VOLCANIC = ramp('#3d0c02', '#621000', '#833120', '#9c6252', '#bd8373');
-const LAVA = ramp('#8a1a00', '#cd3100', '#e65a1a', '#f08a3a');
+// Lavaridge's tileset: pink-beige ash, red-brown volcanic rock, the crater's
+// orange lava; the ash warms toward orange in the lava's light.
+const ASH = ramp('#9c6252', '#bd8373', '#d59c8b', '#deb4a4', '#eebdac', '#eed5cd', '#f6e6de');
+const WARM = ramp('#ac6231', '#c5834a', '#e69452', '#eeb48b', '#f6d0b0');
+const BASALT = ramp('#2c1220', '#411418', '#623931', '#833120', '#9c6252');
+const LAVA = ramp('#621000', '#943100', '#cd3100', '#e65a1a', '#ff7341', '#f69400', '#ffd573');
+const WALL = ramp('#623931', '#734a42', '#835a52', '#9c7373', '#bd8373');
+const STEAM = ramp('#b49c9c', '#d5c5c5', '#eee2de');
 
+/**
+ * Mt. Chimney: an ash slope running up to a river of lava below the crater's
+ * wall. The lava churns (crusted plates on a glowing flow), its light warms
+ * the ash and glows in the cracks of the basalt near it; steam rises off it.
+ * Ash lies in soft drifts between patches of bare dark rock; basalt boulders
+ * frame the sides.
+ */
 function chimney(ctx: ArenaContext): void {
-  const A = ASH;
-  const crack = (x: number, z: number) => Math.abs(fbm(x * 0.3, z * 0.5, 19) - 0.5);
-  const lava = { x: -3.6, z: 15.2, rx: 4.4, rz: 1.9 };
-  const lavaD = (x: number, z: number) => Math.hypot((x - lava.x) / lava.rx, (z - lava.z) / lava.rz) - 1 - Math.sin(Math.atan2(z - lava.z, x - lava.x) * 4) * 0.08;
+  const { view, ground } = ctx;
+  const cx = (ctx.player.x + ctx.enemy.x) / 2, cz = (ctx.player.z + ctx.enemy.z) / 2 + 1;
+  // The lava river winding across the back.
+  const riverZ = (x: number) => 15.4 + Math.sin(x * 0.33 + 0.8) * 0.9 + Math.sin(x * 0.9 + 2) * 0.3;
+  const riverW = (x: number) => 1.25 + Math.sin(x * 0.5 + 2) * 0.35;
+  const river = (x: number, z: number) => Math.abs(z - riverZ(x)) - riverW(x);
+  // Bare basalt showing through the ash, in patches, cracked into columns.
+  const rockyAt = (x: number, z: number) => fbm(x * 0.32 + 7, z * 0.55, 21) + smoothstep(3, 6, Math.abs(x - cx)) * 0.12;
+  const plate = (x: number, z: number) => cells(x / 0.75, z / 0.5, 41).id;
+  const joint = (x: number, z: number) => cells(x / 0.42, z / 0.3, 42).id;
   fill(ctx, (sx, sy, g) => {
-    const l = lavaD(g.x, g.z);
-    if (l < 0) return [band(LAVA, 1 + Math.min(1.8, -l * 5) + (fbm(g.x, g.z * 2, 3) - 0.5), sx, sy, 0.3), MAT.LAVA];
-    if (l < 0.06) return [VOLCANIC[1], MAT.SOLID];
-    if (l < 0.14) return [VOLCANIC[2], MAT.SOLID];
-    // Ash, warmer and darker toward the lava's glow.
-    const v = 3 + (fbm(g.x * 0.18, g.z * 0.3, 7) - 0.5) * 2 + smoothstep(12, 24, g.z) * 0.4 - smoothstep(0.9, 0.14, l) * 1.2;
-    let c = band(A, v, sx, sy, 0.3);
-    if (g.ppu > 20 && crack(g.x, g.z) < 0.35 / g.ppu) c = A[Math.max(0, indexIn(A, c) - 2)];
-    return [c, MAT.SOLID];
+    const gr = view.ground(sx + 1, sy)!, gd = view.ground(sx, sy + 1)!;
+    const d = river(g.x, g.z);
+    if (d < 0) {
+      // The flow: molten down its middle in streaks; toward the banks it crusts into dark plates with glowing seams.
+      const depth = Math.min(1, -d / riverW(g.x));
+      const crusted = depth + (fbm(g.x * 0.8, g.z * 1.6, 3) - 0.5) * 0.7 < 0.45;
+      if (crusted) {
+        const id = plate(g.x, g.z);
+        const seam = plate(gr.x, gr.z) !== id || plate(gd.x, gd.z) !== id;
+        if (seam) return [LAVA[4], MAT.LAVA];
+        return [LAVA[id < 0.3 ? 0 : 1], MAT.LAVA];
+      }
+      const streak = Math.sin(g.x * 1.3 + Math.sin(g.z * 2.3) * 1.2 + g.z * 0.6);
+      const v = 3.2 + depth * 1.5 + (streak > 0.82 ? 1 : 0);
+      return [band(LAVA, v, sx, sy, 0.1), MAT.LAVA];
+    }
+    // The bank: a lip of black rock, glowing where the lava licks it.
+    if (d < 0.06 + 1.1 / g.ppu) return [d < 0.05 ? LAVA[3] : BASALT[0], d < 0.05 ? MAT.LAVA : MAT.SOLID];
+    const glow = 1 - smoothstep(0, 2.4, d);
+    const rocky = rockyAt(g.x, g.z);
+    if (rocky > 0.6) {
+      // Basalt: columns of dark rock, each a shade of its own, their joints dark or glowing near the lava; a lit rim along the patch.
+      const id = joint(g.x, g.z);
+      const seam = joint(gr.x, gr.z) !== id || joint(gd.x, gd.z) !== id;
+      if (seam) return glow > 0.45 ? [LAVA[glow > 0.75 ? 4 : 3], MAT.LAVA] : [BASALT[0], MAT.SOLID];
+      if (rocky < 0.62) return [BASALT[4], MAT.SOLID];
+      return [BASALT[1 + Math.floor(id * 2.99)], MAT.SOLID];
+    }
+    // Ash: lit over the battle, darker toward the sides; drifts a shade lighter; warmed by the lava.
+    const light = 1 - smoothstep(0.5, 1.3, Math.hypot((g.x - cx) / 3.3, (g.z - cz) / 4.5));
+    // Drifts: long banks of lighter ash, a crisp shadow along their lee (near) side.
+    const drift = (x: number, z: number) => fbm(x * 0.17, z * 0.8, 23);
+    const inDrift = drift(g.x, g.z) > 0.56;
+    let v = 2.6 + light * 1.6 + (inDrift ? 1 : 0) + (fbm(g.x * 0.9, g.z * 1.2, 24) - 0.5) * 0.5;
+    if (inDrift && drift(gd.x, gd.z) <= 0.56) v -= 1.6;
+    if (rocky > 0.54) v -= 1; // thin ash over the rock
+    if (glow > 0.12 && glow * 1.4 > bayer(sx, sy) + 0.25) return [band(WARM, v - 1.6 + glow * 1.4, sx, sy, 0.2), MAT.SOLID];
+    return [band(ASH, v, sx, sy, 0.12), MAT.SOLID];
   });
-  scatter(ctx, 13, 29, (_x, _z, sx, sy, ppu, r) => {
-    if (r > 0.2 || ctx.ground.material(sx, sy) !== MAT.SOLID) return;
-    ctx.ground.set(sx, sy, VOLCANIC[3]);
-    if (ppu > 34) ctx.ground.set(sx + 1, sy, VOLCANIC[2]);
+  // Drifts' soft ripples and pebbles of cinder on the ash.
+  scatter(ctx, 8, 29, (x, z, sx, sy, ppu, r) => {
+    if (ground.material(sx, sy) !== MAT.SOLID || indexIn(ASH, ground.get(sx, sy)) < 0) return;
+    if (r < 0.22 && fbm(x * 0.17, z * 0.8, 23) > 0.5) rippleMark(ctx, sx, sy, ppu > 50 ? 5 : ppu > 34 ? 4 : 3, [ASH]);
+    else if (r > 0.95) {
+      ground.set(sx, sy, BASALT[2]);
+      if (ppu > 34) ground.set(sx + 1, sy, BASALT[3]);
+    }
   });
-  // The crater's rim behind: craggy ridges of dark rock.
+  // The crater's wall rising behind the lava: dark rock, lit along its crests, the far rim hazier.
   hills(ctx, [
-    { z: 21, height: 3.2, shades: ramp('#4a1206', '#621a0a', '#7a2a14', '#93402a', '#a85a40'), crest: hex('#bd8373'), freq: 0.35, rough: 0.9, seed: 13 },
-    { z: 18.2, height: 1.8, shades: VOLCANIC, crest: hex('#bd8373'), freq: 0.55, rough: 1, seed: 17 },
+    { z: 26, height: 5.5, shades: WALL, crest: hex('#bd948b'), freq: 0.22, rough: 0.7, seed: 13 },
+    { z: 18.6, height: 2.6, shades: BASALT, crest: ASH[1], freq: 0.42, rough: 0.9, seed: 17 },
   ]);
-  const far = [];
-  for (let i = 0; i < 9; i++) {
-    const x = ctx.rng.range(-16, 16), z = ctx.rng.range(12, 16);
-    if (lavaD(x, z) < 0.3) continue;
-    const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    const w = ppu * ctx.rng.range(0.5, 1.3);
-    far.push({ sprite: rock(w, w * 0.75, { shades: VOLCANIC, outline: VOLCANIC[0] }, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: w * 0.6, ry: w * 0.14 } });
+  // Steam rising off the lava, drifting right, before the crater wall.
+  const steam = [];
+  for (let x = -14; x < 14; x += ctx.rng.range(0.9, 2.2)) {
+    const z = riverZ(x) + ctx.rng.range(-0.4, 0.6);
+    const ppu = view.ppu(view.depth(x, 0, z));
+    steam.push({ sprite: wisp(ppu * ctx.rng.range(0.1, 0.16), ppu * ctx.rng.range(0.8, 1.5), STEAM, ctx.rng.int(1, 1e6), ctx.rng.range(0.1, 0.3)), x, z });
   }
-  stand(ctx, far, darker([A, VOLCANIC]));
-  place(ctx, {
-    region: [-40, 280, 34, 112],
-    count: 5,
-    avoid: (x, z) => lavaD(x, z) < 0.3,
-    make: (ppu) => {
-      const w = ppu * ctx.rng.range(0.35, 0.8);
-      return { sprite: rock(w, w * 0.75, { shades: VOLCANIC, outline: VOLCANIC[0] }, ctx.rng.int(1, 1e6)), sink: 1 };
-    },
-  });
+  // The lava's glow on the foot of the crater wall.
+  for (let sx = ground.ox; sx < ground.ox + ground.width; sx++) {
+    let top = -1;
+    for (let sy = ground.oy; sy < ground.oy + ground.height; sy++) if (ground.material(sx, sy) === MAT.LAVA) { top = sy; break; }
+    if (top < 0) continue;
+    for (let k = 1; k <= 7; k++) {
+      const y = top - k;
+      if (ground.material(sx, y) !== MAT.BACKDROP || (1 - k / 8) * 0.9 <= bayer(sx, y)) continue;
+      ground.set(sx, y, shift([WALL, BASALT], ground.get(sx, y)!, 1), MAT.BACKDROP);
+    }
+  }
+  stand(ctx, steam, (c) => c);
+  // Basalt boulders and spires at the sides, the biggest framing the foreground at the left.
+  const pal = { shades: BASALT, outline: BASALT[0] };
+  const lit = { shades: ramp('#411418', '#623931', '#833120', '#9c6252', '#bd8373'), outline: BASALT[0] };
+  const standing = [];
+  for (const [x, z, w, h] of [[2.45, 7.2, 1.2, 0.75], [2.05, 6.3, 0.6, 0.4], [3.0, 9.8, 1.1, 0.8], [2.6, 12.4, 0.8, 0.5], [-3.3, 11.2, 1.2, 0.85], [-2.7, 12.6, 0.7, 0.45], [-3.2, 9.2, 0.8, 0.5]] as const) {
+    const ppu = view.ppu(view.depth(x, 0, z));
+    standing.push({ sprite: crag(ppu * w, ppu * h, x > 0 ? pal : lit, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * w * 0.6, ry: ppu * w * 0.13 } });
+  }
+  for (const [x, z, s] of [[2.3, 11.6, 0.9], [-2.4, 13.2, 0.7]] as const) {
+    const ppu = view.ppu(view.depth(x, 0, z));
+    standing.push({ sprite: stalagmite(ppu * s * 0.5, ppu * s * 1.3, lit, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * s * 0.35, ry: ppu * 0.07 } });
+  }
+  stand(ctx, standing, darker([ASH, BASALT, WARM]));
 }
 
 // --- GRANITE CAVE -------------------------------------------------------------
