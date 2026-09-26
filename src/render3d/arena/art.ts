@@ -94,28 +94,6 @@ export function fbm(x: number, y: number, seed = 0, octaves = 3): number {
   return sum / norm;
 }
 
-/**
- * Cellular noise: which of a scatter of points (one per unit cell, jittered)
- * is nearest (`id`, in [0, 1)), and the distances to it and to the next
- * nearest. Crusted lava plates, basalt joints, crazed mud.
- */
-export function cells(x: number, y: number, seed = 0): { id: number; d1: number; d2: number } {
-  const ix = Math.floor(x), iy = Math.floor(y);
-  let d1 = 9, d2 = 9, id = 0;
-  for (let j = -1; j <= 1; j++) {
-    for (let i = -1; i <= 1; i++) {
-      const cx = ix + i, cy = iy + j;
-      const d = Math.hypot(cx + 0.15 + hash2(cx, cy, seed) * 0.7 - x, cy + 0.15 + hash2(cx, cy, seed + 1) * 0.7 - y);
-      if (d < d1) {
-        d2 = d1;
-        d1 = d;
-        id = hash2(cx, cy, seed + 2);
-      } else if (d < d2) d2 = d;
-    }
-  }
-  return { id, d1, d2 };
-}
-
 export const smoothstep = (a: number, b: number, v: number): number => {
   const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -131,10 +109,6 @@ export const MAT = {
   GRASS: 1,
   /** Water: moving wave lines, glints, ripples at the battlers' feet. */
   WATER: 2,
-  /** Shallow water over sand: the same, lighter. */
-  SHALLOW: 3,
-  /** Lava: glowing, slowly churning. */
-  LAVA: 4,
   /** Standing things painted in the far view (trees, walls): no ground effects. */
   BACKDROP: 5,
 } as const;

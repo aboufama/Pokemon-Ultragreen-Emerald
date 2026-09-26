@@ -5,9 +5,8 @@
 //
 // The ground's life is computed per GBA pixel (at the pixel's own ground
 // point) so it stays crisp: grass leaning and rippling in the wind, waves
-// drifting across water with glints and ripples at the battlers' feet,
-// churning lava, caustics on the sea floor, heat haze over the far view,
-// and cloud shadows.
+// drifting across water with glints and ripples at the battlers' feet, and
+// cloud shadows.
 
 import * as THREE from 'three';
 import { MAT, type Paint } from './art';
@@ -33,33 +32,14 @@ const fragmentShader = /* glsl */ `
   uniform float grassWaves;
   uniform float clouds;
   uniform float glints;
-  uniform float caustics;
-  uniform float haze;
   uniform vec3 arena;
   uniform vec3 waveLight;
   uniform vec3 waveDark;
-  uniform vec3 lavaHot;
   uniform float waveDensity;
   uniform vec4 feet[2];
   varying vec3 vWorld;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  // Distance between the nearest two points of a drifting cellular scatter (small on cell edges).
-  float causticEdge(vec2 p, float t) {
-    p += vec2(sin(p.y * 1.3 + t * 0.7), cos(p.x * 1.1 - t * 0.6)) * 0.3;
-    vec2 i = floor(p), f = fract(p);
-    float d1 = 8.0, d2 = 8.0;
-    for (int y = -1; y <= 1; y++) {
-      for (int x = -1; x <= 1; x++) {
-        vec2 g = vec2(float(x), float(y));
-        vec2 o = vec2(hash(i + g), hash(i + g + 17.3));
-        o = 0.5 + 0.4 * sin(t * 0.6 + 6.2831 * o);
-        float d = length(g + o - f);
-        if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
-      }
-    }
-    return d2 - d1;
-  }
   float noise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -136,13 +116,12 @@ const fragmentShader = /* glsl */ `
       float wv = sin(w.x * 2.2 + w.z * 0.8 - time * 2.6) * sin(w.x * 0.7 - time * 0.9);
       if (wv * (0.5 + gust) > 0.55 && bayer(screen) < 0.5) c = min(c * 1.08 + 0.02, 1.0);
     }
-    if (mat == ${MAT.WATER} || mat == ${MAT.SHALLOW}) {
-      float shallow = mat == ${MAT.SHALLOW} ? 1.0 : 0.0;
+    if (mat == ${MAT.WATER}) {
       if (waveDash(screen, w, 0.9, 0.45, 0.22, 0.34, 0.0) > 0.0) c = waveLight;
       else if (waveDash(screen + vec2(0.0, -1.0), w, 0.9, 0.45, 0.22, 0.34, 0.0) > 0.0) c = mix(c, waveDark, 0.6);
       if (glints > 0.0) {
         float h = hash(floor(screen / 2.0) + floor(time * 6.0) * 7.13);
-        if (h > 0.9965 - shallow * 0.001) c = mix(c, vec3(1.0), 0.85);
+        if (h > 0.9965) c = mix(c, vec3(1.0), 0.85);
       }
       // Rings spreading from the battlers' feet now and then.
       for (int i = 0; i < 2; i++) {
@@ -155,29 +134,6 @@ const fragmentShader = /* glsl */ `
         vec3 wn = groundAt(screen + vec2(0.0, 1.0));
         float stp = max(0.004, length(wn.xz - w.xz));
         if (abs(dist - r) < stp * 0.75 && cyc < 0.8 && bayer(screen) < (1.0 - cyc) * 1.1) c = mix(c, waveLight, 0.75);
-      }
-    }
-    if (mat == ${MAT.LAVA}) {
-      float n = noise(w.xz * 1.3 + vec2(time * 0.15, -time * 0.1)) * 0.6 + noise(w.xz * 3.1 - vec2(time * 0.25, 0.0)) * 0.4;
-      float pulse = 0.5 + 0.5 * sin(time * 1.7 + w.x * 0.6);
-      float hot = smoothstep(0.55, 0.8, n) * (0.6 + 0.4 * pulse);
-      if (hot > bayer(screen)) c = mix(c, lavaHot, 0.85);
-    }
-    if (caustics > 0.0 && mat != ${MAT.BACKDROP}) {
-      // Light rippling across the sea floor: the bright edges of a slowly
-      // swimming net of cells (stretched along z so they look round on
-      // screen), a pixel thin, fading away from the battle.
-      vec2 wn = groundAt(screen + vec2(0.0, 1.0)).xz;
-      float stp = max(0.02, length(wn - w.xz) * 0.7);
-      float k = causticEdge(w.xz * vec2(1.5, 0.7), time);
-      if (k < stp * 0.9 && near > bayer(screen) * 0.9) c = min(c + vec3(0.07, 0.09, 0.11), 1.0);
-    }
-    if (haze > 0.0 && mat == ${MAT.BACKDROP}) {
-      // Heat haze: rows of the far view wobble a pixel, in bands drifting up.
-      float wob = sin(screen.y * 1.7 + time * 5.0) * sin(screen.y * 0.31 - time * 1.3 + screen.x * 0.02);
-      if (abs(wob) > 0.55) {
-        vec4 n = painted(screen + vec2(wob > 0.0 ? 1.0 : -1.0, 0.0));
-        if (materialOf(n) == ${MAT.BACKDROP}) c = n.rgb;
       }
     }
     if (clouds > 0.0 && mat != ${MAT.BACKDROP}) {
@@ -194,7 +150,6 @@ export interface GroundLook {
   /** Wave crest and trough colors on water. */
   waveLight?: readonly [number, number, number];
   waveDark?: readonly [number, number, number];
-  lavaHot?: readonly [number, number, number];
   /** Share of the water's cells that carry a drifting wave (0..1). */
   waveDensity?: number;
 }
@@ -225,12 +180,9 @@ export class ArenaGround {
         grassWaves: { value: 0 },
         clouds: { value: 0 },
         glints: { value: 0 },
-        caustics: { value: 0 },
-        haze: { value: 0 },
         arena: { value: new THREE.Vector3(0, 0, 1000) },
         waveLight: { value: rgb(look.waveLight, [240, 248, 255]) },
         waveDark: { value: rgb(look.waveDark, [40, 80, 160]) },
-        lavaHot: { value: rgb(look.lavaHot, [255, 200, 90]) },
         waveDensity: { value: look.waveDensity ?? 0.2 },
         feet: { value: [new THREE.Vector4(), new THREE.Vector4()] },
       },

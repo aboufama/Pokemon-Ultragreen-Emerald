@@ -8,7 +8,7 @@
 // wild battle theme and its victory (sound=0 turns it off).
 //
 //   demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY
-//            &enemyMoves=SURF,EARTHQUAKE&env=sand&go=1
+//            &enemyMoves=SURF,EARTHQUAKE&env=cave&go=1
 //   (optional; go=1 skips the menus and battles at once, title=0 skips the title)
 
 import { MOVES, SPECIES } from '../data';

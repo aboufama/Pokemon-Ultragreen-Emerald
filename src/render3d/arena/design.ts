@@ -4,7 +4,7 @@
 // far view with their shadows, and place props around the battlers without
 // covering them.
 
-import { MAT, Paint, Rng, type Ramp, type Rgb, type Sprite, band, bayer, fbm, hash2, noise } from './art';
+import { MAT, Paint, Rng, type Ramp, type Rgb, type Sprite, bayer, hash2 } from './art';
 import type { GroundLook } from './ground';
 import { type PropSpec, propRect } from './props';
 import type { ArenaView, GroundPoint } from './view';
@@ -134,73 +134,6 @@ export function onLine(ctx: ArenaContext, sx: number, sy: number, phase: (x: num
   if (!r) return false;
   const s = phase(r.x, r.z);
   return Math.abs(s - p) < maxStep && Math.floor(s) !== Math.floor(p);
-}
-
-export interface DuneRow {
-  /** Where the dunes' feet are (world z), how tall they rise (world units), crests per world unit. */
-  z: number;
-  height: number;
-  freq: number;
-  seed: number;
-  /** Lit faces (windward, facing the light at the left), darkest first; the shadowed slip faces; the crest line. */
-  lit: Ramp;
-  shade: Ramp;
-  crest: Rgb;
-  /** How wide the dither between shades spreads (band softness, default 0.3): lower is calmer. */
-  soft?: number;
-}
-
-/**
- * Dunes standing along the back, farthest row first: sharp crests, a long
- * lit windward face rising from the left and a short steep slip face falling
- * away on the right in shadow, a bright line along each crest.
- */
-export function dunes(ctx: ArenaContext, rows: DuneRow[]): void {
-  const { view, ground } = ctx;
-  for (const r of [...rows].sort((a, b) => b.z - a.z)) {
-    const [, footY] = view.screen(0, 0, r.z);
-    const ppu = view.ppu(view.depth(0, 0, r.z));
-    // Screen-right is world -x: u grows to the right. Each dune: a long convex
-    // windward rise to its crest, then a short concave slip face; a smaller
-    // dune rides on the back of the bigger ones, and the crests wander.
-    const one = (u: number, seed: number) => {
-      const k = Math.floor(u), t = u - k;
-      const peak = 0.7 + (hash2(k, seed, 5) - 0.5) * 0.16;
-      const amp = 0.45 + hash2(k, seed, 6) * 0.55;
-      const up = t < peak;
-      const p = up ? Math.sin((t / peak) * Math.PI * 0.5) ** 1.6 : ((1 - t) / (1 - peak)) ** 2.2;
-      return { h: p * amp, up, t: up ? t / peak : (t - peak) / (1 - peak) };
-    };
-    const shape = (x: number) => {
-      const u = -x * r.freq + (noise(x * r.freq * 0.3, r.seed, r.seed) - 0.5) * 0.8;
-      const a = one(u, r.seed), b = one(u * 2.3 + 0.37, r.seed + 1);
-      const hb = b.h * 0.45;
-      const top = hb > a.h ? b : a;
-      return { h: 0.08 + Math.max(a.h, hb) * 0.92, up: top.up, t: top.t };
-    };
-    for (let sx = ground.ox; sx < ground.ox + ground.width; sx++) {
-      const g = view.groundAt(sx + 0.5, footY);
-      if (!g) continue;
-      const d = shape(g.x);
-      const h = r.height * ppu * d.h;
-      const y0 = Math.round(footY - h), y1 = Math.floor(footY);
-      for (let sy = Math.max(ground.oy, y0); sy <= y1; sy++) {
-        const down = (sy - y0) / Math.max(1, y1 - y0);
-        let c: Rgb;
-        if (d.up) {
-          // The windward face: brightest just under the crest, a little darker toward the trough.
-          const v = (r.lit.length - 1) * (0.45 + d.t * 0.55) - down * 1.2;
-          c = band(r.lit, v, sx, sy, r.soft ?? 0.3);
-        } else {
-          const v = (r.shade.length - 1) * (0.12 + (1 - d.t) * 0.55) - down * 0.5;
-          c = band(r.shade, v, sx, sy, r.soft ?? 0.3);
-        }
-        // The crest line along the lit face's top.
-        if (sy === y0 && d.up && d.t > 0.25) c = r.crest;
-        ground.set(sx, sy, c, MAT.BACKDROP);
-      }
-    }
-  }
 }
 
 export interface Shaft {
@@ -353,60 +286,4 @@ export function at(ctx: ArenaContext, sx: number, sy: number): { x: number; z: n
 
 export function newPaint(): Paint {
   return new Paint(PAINT_W, PAINT_H, PAINT_X0, PAINT_Y0);
-}
-
-export interface HillRow {
-  /** Where the hills' feet are (world z) and how tall they rise (world units). */
-  z: number;
-  height: number;
-  /** Shades, darkest first: the shadowed flanks use the low end, the lit flanks the high end. */
-  shades: Ramp;
-  /** Ridge color along the tops. */
-  crest?: Rgb;
-  /** Bumps per world unit, and roughness (0 smooth dunes .. 1 craggy rock). */
-  freq: number;
-  rough?: number;
-  seed: number;
-  /** How wide the dither between shades spreads (band softness, default 0.35), and how much darker rock's layer lines are (shades, default 0.7): lower is calmer. */
-  soft?: number;
-  layers?: number;
-}
-
-/**
- * Far hills, dunes or ridges standing along the back, painted farthest row
- * first: each column rises from the row's foot to a smooth or craggy skyline,
- * flanks facing the light (left) lit, the others in shadow, the tops lined.
- */
-export function hills(ctx: ArenaContext, rows: HillRow[]): void {
-  const { view, ground } = ctx;
-  for (const r of [...rows].sort((a, b) => b.z - a.z)) {
-    const [, footY] = view.screen(0, 0, r.z);
-    const ppu = view.ppu(view.depth(0, 0, r.z));
-    const rough = r.rough ?? 0;
-    const profile = (x: number) => {
-      const f = r.freq;
-      let p = 0.55 + 0.28 * Math.sin(x * f + r.seed) + 0.17 * Math.sin(x * f * 2.3 + r.seed * 1.7);
-      p += (fbm(x * f * 2.2, r.seed, r.seed, 3) - 0.5) * 0.55 * rough;
-      return Math.max(0.05, p);
-    };
-    const top = r.shades.length - 1;
-    const slopeAt = (x: number) => (profile(x - 5 / ppu) - profile(x + 5 / ppu)) * r.height * ppu / 10;
-    for (let sx = ground.ox; sx < ground.ox + ground.width; sx++) {
-      const g = view.groundAt(sx + 0.5, footY);
-      if (!g) continue;
-      const x = g.x;
-      const h = r.height * ppu * profile(x);
-      // Screen right is world -x: a flank rising toward screen-right faces the light.
-      const lit = Math.max(-1, Math.min(1, -slopeAt(x) * 5));
-      const y0 = Math.round(footY - h), y1 = Math.floor(footY);
-      for (let sy = Math.max(ground.oy, y0); sy <= y1; sy++) {
-        const depthIn = (sy - y0) / Math.max(1, y1 - y0); // 0 at the top .. 1 at the foot
-        let v = top * 0.5 + lit * top * 0.42 - depthIn * 0.8;
-        // Rock shows its layers.
-        if (rough > 0.5 && (sy + Math.round(noise(x * 0.8, r.seed) * 3)) % 5 === 0) v -= r.layers ?? 0.7;
-        const c = sy === y0 && r.crest ? r.crest : band(r.shades, v, sx, sy, r.soft ?? 0.35);
-        ground.set(sx, sy, c, MAT.BACKDROP);
-      }
-    }
-  }
 }
