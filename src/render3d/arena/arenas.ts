@@ -144,8 +144,12 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
         const farEdge = -pondD(g.x, g.z);
         const inFar = g.z > p.z && farEdge < 0.32 + Math.abs(Math.sin(g.x * 2.3) + Math.sin(g.x * 5.1) * 0.4) * 0.07;
         if (inFar) return [REFLECT[farEdge < 0.08 ? 0 : farEdge < 0.2 ? 1 : 2], MAT.WATER];
-        const v = 3 + Math.min(2.4, -w * 5) + (fbm(g.x * 0.6, g.z * 1.4, 31) - 0.5) * 0.9;
-        return [band(POND, v, sx, sy, 0.15), MAT.WATER];
+        // Open water: darker toward the banks, the sky lighter on the near water, in crisp wavy bands with ripple lines.
+        const wob = Math.sin(g.x * 2.1 + g.z * 3) * 0.08 + Math.sin(g.x * 5.3) * 0.03;
+        const depth = -w + wob;
+        let v = depth < 0.1 ? 2 : depth < 0.3 ? 3 : g.z < p.z ? 5 : 4;
+        if (v >= 4 && Math.abs(Math.sin(g.z * 9 + Math.sin(g.x * 1.7) * 1.5)) > 0.97 && Math.sin(g.x * 3.3 + g.z) > 0) v += 1;
+        return [POND[v], MAT.WATER];
       }
       // A puddle: the grass of its far rim mirrored dark along the top, sky on the rest, a pale streak.
       const d = -puddleD(g.x, g.z);
@@ -229,8 +233,11 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     } else ground.set(px, py, kind[0], MAT.GRASS);
   };
   const beds = o.flowers ?? 7;
+  // The first beds where they show (below the wild Pokémon's healthbox, past its right, behind it), then anywhere.
+  const spots = [[20, 62], [238, 100], [124, 46]];
   for (let b = 0, tries = 0; b < beds && tries < 200; tries++) {
-    const c = at(ctx, ctx.rng.range(-200, 440), ctx.rng.range(34, 112));
+    const spot = spots[b];
+    const c = spot && tries < spots.length ? at(ctx, spot[0], spot[1]) : at(ctx, ctx.rng.range(-200, 440), ctx.rng.range(34, 112));
     if (Math.hypot(c.x - ctx.enemy.x, (c.z - ctx.enemy.z) * 1.4) < 2.2 || Math.hypot(c.x - ctx.player.x, c.z - ctx.player.z) < 1.6 || c.z > line - 0.6) continue;
     b++;
     const kind = FLOWERS[ctx.rng.int(0, FLOWERS.length - 1)];
