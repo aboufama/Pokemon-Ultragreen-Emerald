@@ -329,25 +329,57 @@ export function stalagmite(w: number, h: number, pal: RockPalette, seed: number)
   return s;
 }
 
-/** The Battle Tower's lamp posts: a round pillar with a glowing glass top. */
-export function lampPost(w: number, h: number, metal: Ramp, glass: Ramp, outlineColor: Rgb): Sprite {
-  const pw = Math.max(4, Math.round(w)), ph = Math.max(8, Math.round(h));
-  const s = createSprite(pw + 2, ph + 2);
-  const lampH = Math.max(3, Math.round(ph * 0.3));
-  for (let y = 1; y <= ph; y++) {
-    const isLamp = y <= lampH;
-    const isCap = y === lampH + 1 || y === 1;
-    const r = isLamp ? pw / 2 : pw / 2 - (y > ph - 2 ? 0 : 1);
-    for (let x = 1; x <= pw; x++) {
-      const dx = (x - 0.5 - pw / 2) / r;
-      if (Math.abs(dx) > 1) continue;
-      const lit = 1 - (dx + 1) / 2; // left lit
-      const ramp = isLamp && !isCap ? glass : metal;
-      const v = lit * (ramp.length - 0.5) + (isCap ? 0.5 : 0);
-      put(s, x, y, band(ramp, v, x, y, 0.2));
+/**
+ * The Battle Tower's lamp posts (the battle room's corner lamps): a round
+ * column on a wider foot, a glowing teal ring under a yellow glass globe, and
+ * a soft dithered halo of light around the globe. `w` is the column's width.
+ */
+export function lampPost(w: number, h: number, metal: Ramp, glass: Ramp, ring: Ramp, outlineColor: Rgb, halo?: Rgb): Sprite {
+  const pw = Math.max(5, Math.round(w)), ph = Math.max(10, Math.round(h));
+  const pad = halo ? Math.max(2, Math.round(pw * 0.45)) : 1;
+  const s = createSprite(pw + 2 * pad, ph + pad + 1);
+  const cx = pad + pw / 2;
+  const globeR = pw * 0.5;
+  const globeCy = pad + globeR;
+  const ringY0 = Math.round(globeCy + globeR * 0.55), ringY1 = ringY0 + Math.max(1, Math.round(ph * 0.05));
+  const top = metal.length - 1;
+  for (let y = 0; y < s.h - 1; y++) {
+    for (let x = 0; x < s.w; x++) {
+      const px = x + 0.5 - cx;
+      // The globe: lit from the upper left, a white glint.
+      if (y + 0.5 < ringY0) {
+        const d = Math.hypot(px, y + 0.5 - globeCy) / globeR;
+        if (d > 1) continue;
+        const l = sphereLight(x, y, cx, globeCy, globeR);
+        put(s, x, y, band(glass, l * (glass.length - 0.2) + 0.3, x, y, 0.25));
+        continue;
+      }
+      // The column (wider at the foot and under the ring), shaded as a cylinder.
+      const foot = y >= s.h - 1 - Math.max(2, Math.round(ph * 0.1));
+      const r = foot || (y >= ringY0 && y < ringY1 + 1) ? pw / 2 : pw / 2 - 1;
+      const u = px / r;
+      if (Math.abs(u) > 1) continue;
+      if (y >= ringY0 && y < ringY1) {
+        put(s, x, y, ring[u < -0.2 ? 2 : u < 0.5 ? 1 : 0]);
+        continue;
+      }
+      let v = (0.62 - u * 0.55) * (top + 0.4);
+      if (y === ringY1 || (foot && y === s.h - 1 - Math.max(2, Math.round(ph * 0.1)))) v += 0.8; // lips catch the light
+      put(s, x, y, band(metal, v, x, y, 0.2));
     }
   }
   outline(s, outlineColor, { bottom: false });
+  // A halo of light around the globe, dithered, on the empty pixels only.
+  if (halo) {
+    const hr = globeR + pad + 0.5;
+    for (let y = 0; y < ringY1 + 2; y++) {
+      for (let x = 0; x < s.w; x++) {
+        if (opaque(s, x, y)) continue;
+        const d = Math.hypot(x + 0.5 - cx, (y + 0.5 - globeCy) * 1.1) / hr;
+        if (d < 1 && (1 - d) * 0.9 > bayer(x, y) + 0.12) put(s, x, y, halo);
+      }
+    }
+  }
   return s;
 }
 

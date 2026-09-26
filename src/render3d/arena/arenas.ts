@@ -550,54 +550,194 @@ function cave(ctx: ArenaContext): void {
 
 // --- BATTLE TOWER -------------------------------------------------------------
 
-const FLOOR = ramp('#a4834a', '#c9a95e', '#d5b46a', '#ffde83', '#ffffac');
-const COURT = ramp('#737383', '#9494a4', '#cdbdc5', '#ded5e6');
-const WALL = ramp('#52526a', '#737383', '#9494a4', '#cdbdc5', '#ded5e6');
-const TRIM = ramp('#a02808', '#cd3910', '#ff6231');
+// The Battle Frontier tileset's colors: lavender greys, the yellow grid
+// floor, the red trim, the lamps' yellow glass and teal rings.
+const BT_GREY = ramp('#3a3a52', '#52526a', '#737383', '#9494a4', '#bdacb4', '#cdbdc5', '#ded5e6', '#ffffff');
+const BT_FLOOR = ramp('#6a4a39', '#8b624a', '#a4834a', '#bd9431', '#d5b46a', '#ffd573', '#ffffac');
+const BT_RED = ramp('#7b2010', '#bd2910', '#de4a20', '#ff6231');
+const BT_GOLD = ramp('#bd9431', '#ffd573', '#ffffac');
+const BT_TEAL = ramp('#00bd8b', '#52ffff', '#bdffff');
 
+/**
+ * The Battle Tower's battle room: a hall of lavender-grey walls (pillars with
+ * glowing sconces, raised panels, a rail, niches, red banners hanging from
+ * above), the yellow grid floor receding to it, lit from above (tile by tile
+ * brightest down the middle, dimmer toward the sides and under the wall), a
+ * polished slate court with white lines between the battlers, and the pillars
+ * and lights mirrored in the polish.
+ */
 function tower(ctx: ArenaContext): void {
-  const tile = 0.62;
-  const wallZ = 15.6;
-  const court = { x0: -3.1, x1: 3.1, z0: 2.4, z1: 11.4 };
-  const mid = (ctx.player.z + ctx.enemy.z) / 2;
-  const cam = ctx.view.camera.position;
+  const { view, ground } = ctx;
+  const cam = view.camera.position;
+  const G = BT_GREY, F = BT_FLOOR;
+  const WZ = 14.2;
+  const PIL = 2.6, PHW = 0.21, PX0 = 0.2;
+  const T = 0.75;
+  const court = { x0: -2.7, x1: 1.8, z0: 1.9, z1: WZ - 4 * T };
+  const mid = (ctx.player.x + ctx.enemy.x) / 2;
+
+  // --- the wall (x along it, height y) ---
+  const pillarK = (x: number) => Math.round((x - PX0) / PIL);
+  const pillarU = (x: number, y: number) => (x - PX0 - pillarK(x) * PIL) / (y < 0.2 ? PHW * 1.3 : PHW);
+  const bayK = (x: number) => Math.round((x - PX0 - PIL / 2) / PIL);
+  const bannerU = (x: number) => (x - PX0 - PIL / 2 - bayK(x) * PIL) / 0.3;
+  const bannerBottom = (u: number) => 0.42 + Math.abs(u) * 0.14;
+  const SCONCE_Y = 0.74, SCONCE_R = 0.085;
+  const sconce = (x: number, y: number) => Math.hypot((x - PX0 - pillarK(x) * PIL) / SCONCE_R, (y - SCONCE_Y) / (SCONCE_R * 1.15));
+  /** A zone id per wall point; outlines and bevels are drawn where it changes. */
+  const zone = (x: number, y: number): number => {
+    const b = bannerU(x);
+    if (Math.abs(b) <= 1 && y > bannerBottom(b)) {
+      if (Math.abs(b) * 0.3 / 0.09 + Math.abs(y - 0.72) / 0.12 < 1) return 21; // the emblem
+      return y < bannerBottom(b) + 0.04 ? 22 : 20; // the gold hem, the cloth
+    }
+    if (sconce(x, y) < 1) return 30;
+    if (Math.abs(pillarU(x, y)) <= 1) return 10;
+    if (y < 0.03) return 0;
+    if (y < 0.15) return 1;
+    if (y < 0.5) {
+      // Two raised panels between pillars, a stile between them (behind the banner).
+      const gx = Math.abs(x - PX0 - PIL / 2 - bayK(x) * PIL);
+      return gx > 0.1 && gx < PIL / 2 - PHW - 0.12 && y > 0.21 && y < 0.44 ? 4 : 3;
+    }
+    if (y < 0.57) return 5;
+    if (y > 1.62) return 9;
+    if (y > 1.55) return 8;
+    // Niches in the upper wall, either side of the banner.
+    const c = PX0 + PIL / 2 + bayK(x) * PIL;
+    for (const ox of [c - PIL * 0.29, c + PIL * 0.29]) if (((x - ox) / 0.08) ** 2 + ((y - 0.86) / 0.16) ** 2 < 1) return 7;
+    return 6;
+  };
+  const wallPt = (sx: number, sy: number) => {
+    const g = view.ground(sx, sy);
+    if (!g || g.z <= WZ) return null;
+    const t = (WZ - cam.z) / (g.z - cam.z);
+    return { x: cam.x + (g.x - cam.x) * t, y: cam.y * (1 - t) };
+  };
+  /** Light across the hall: brightest down the middle, dimmer toward the sides. */
+  const sideLight = (x: number) => 1 - smoothstep(1.2, 4.2, Math.abs(x - mid));
+  const wallColor = (sx: number, sy: number, w: { x: number; y: number }): Rgb => {
+    const z = zone(w.x, w.y);
+    const at = (dx: number, dy: number, dflt: number) => {
+      const p = wallPt(sx + dx, sy + dy);
+      return p ? zone(p.x, p.y) : dflt;
+    };
+    const zr = at(1, 0, z), zl = at(-1, 0, z), zd = at(0, 1, -1), zu = at(0, -1, z);
+    const dim = sideLight(w.x) < 0.25 ? 1 : 0;
+    if (z === 30) {
+      // A sconce: a glowing globe with a highlight at its upper left.
+      if (zr !== 30 || zd !== 30) return BT_GOLD[0];
+      return BT_GOLD[zu !== 30 || zl !== 30 ? 1 : 2];
+    }
+    if (z >= 20) {
+      const u = bannerU(w.x);
+      if (zr < 20 || zl < 20 || (zd >= 0 && zd < 20)) return z === 20 ? BT_RED[0] : BT_GOLD[0];
+      if (z === 21) return BT_GOLD[u > 0 && w.y > 0.72 ? 2 : 1];
+      if (z === 22) return BT_GOLD[1];
+      if (Math.abs(u) > 0.9) return BT_GOLD[1]; // gold edging
+      return BT_RED[u > 0.5 ? 3 : u < -0.45 || Math.abs(u + 0.02) < 0.09 ? 1 : 2];
+    }
+    if (z === 10) {
+      const u = pillarU(w.x, w.y);
+      if (zr !== 10 && zr !== 30) return G[1];
+      if (w.y < 0.2 && zu !== 10) return G[7]; // the foot's top edge
+      let v = u > 0.5 ? 7 : u > 0.05 ? 6 : u > -0.45 ? 5 : u > -0.8 ? 3 : 2;
+      if (sconce(w.x, w.y) < 2 && v > 2 && v < 7) v += 1; // the sconce's light on the pillar
+      return G[Math.max(0, v - dim)];
+    }
+    if (z === 9) return BT_RED[w.y > 1.7 ? 3 : w.y > 1.66 ? 2 : 1];
+    // Pillars and banners shade the wall to their right.
+    const pu = pillarU(w.x, w.y), bu = bannerU(w.x);
+    const shade = (pu < -1 && pu > -1.7) || (bu < -1 && bu > -1.25 && w.y > bannerBottom(1) - 0.05) ? 1 : 0;
+    let c = [0, 1, -1, 5, 4, 6, 5, 4, 1][z] ?? 5;
+    if (z === 4 && (zr !== 4 || zd !== 4)) c = 3; // panels: shadowed bottom-right edges
+    else if (z === 3 && (zr === 4 || zd === 4)) c = 7; // lit top-left edges
+    if (z === 5 && zu !== 5) c = 7; // the rail's lip
+    if (z === 3 && zu === 5) c = 3; // the rail's shadow
+    if (z === 1 && zu !== 1) c = 2; // the skirting's top
+    if (z === 7) c = zu !== 7 || zl !== 7 ? 3 : zd !== 7 || zr !== 7 ? 6 : 4; // niches: shadowed at the top left, lit at the bottom right
+    if ((z === 6 || z === 5) && sconce(w.x, w.y) < 2.4 && bayer(sx, sy) < 0.5) c = Math.min(7, c + 1);
+    return G[Math.max(0, c - shade - (dim && c > 1 ? 1 : 0))];
+  };
+
+  // --- the floor ---
+  const inCourt = (x: number, z: number) => x > court.x0 && x < court.x1 && z > court.z0 && z < court.z1;
+  /** Each tile's light (a whole tile one shade, so the falloff steps cleanly along the grout). */
+  const tileLight = (i: number, j: number) => {
+    const x = court.x1 + (i + 0.5) * T, z = court.z1 + (j + 0.5) * T;
+    const L = sideLight(x);
+    return (L > 0.55 ? 4 : L > 0.15 ? 3 : 2) - (z > WZ - T ? 1 : 0);
+  };
+  /** The court's polished slabs: three across, six along. */
+  const SLAB_X = (court.x1 - court.x0) / 3, SLAB_Z = (court.z1 - court.z0) / 6;
+  const slab = (x: number, z: number) => Math.floor((x - court.x0) / SLAB_X) * 16 + Math.floor((z - court.z0) / SLAB_Z);
   fill(ctx, (sx, sy, g) => {
-    if (g.z > wallZ) {
-      // The back wall: where the ray meets the plane z = wallZ.
-      const f = (wallZ - cam.z) / (g.z - cam.z);
-      const y = cam.y * (1 - f), x = cam.x + (g.x - cam.x) * f;
-      if (y < 0.28) return [WALL[0], MAT.BACKDROP];
-      if (y < 0.34) return [WALL[1], MAT.BACKDROP];
-      if (Math.abs(x) < 1.1 && y < 2.2) return [y > 2.1 ? WALL[1] : WALL[0], MAT.BACKDROP]; // doorway
-      if (y > 2.55) return [band(TRIM, y > 2.75 ? 2 : 1, sx, sy, 0.2), MAT.BACKDROP];
-      if (y > 2.45) return [WALL[1], MAT.BACKDROP];
-      const panel = ((x % 1.3) + 1.3) % 1.3;
-      if (panel < 0.06) return [WALL[1], MAT.BACKDROP];
-      if (panel < 0.12) return [WALL[4], MAT.BACKDROP];
-      if (Math.abs(y - 1.2) < 0.05) return [WALL[2], MAT.BACKDROP];
-      return [WALL[3], MAT.BACKDROP];
+    const w = wallPt(sx, sy);
+    if (w) return [wallColor(sx, sy, w), MAT.BACKDROP];
+    const gr = view.ground(sx + 1, sy)!, gd = view.ground(sx, sy + 1)!;
+    if (inCourt(g.x, g.z)) {
+      // White lines around the court (wider near the camera).
+      const lw = Math.max(0.06, 1.05 / g.ppu), lz = Math.max(0.03, 0.55 / g.ppu);
+      if (Math.min(g.x - court.x0, court.x1 - g.x) < lw || Math.min(g.z - court.z0, court.z1 - g.z) < lz) return [G[7], MAT.SOLID];
+      // Polished slate slabs, a darker seam between them.
+      const k = slab(g.x, g.z);
+      const seam = (inCourt(gr.x, gr.z) && slab(gr.x, gr.z) !== k) || (inCourt(gd.x, gd.z) && slab(gd.x, gd.z) !== k);
+      // The far slabs catch the light at a glancing angle.
+      const far = g.z > court.z1 - SLAB_Z ? 1 : 0;
+      return [G[(seam ? 2 : 3) + far], MAT.SOLID];
     }
-    const px = 1 / g.ppu;
-    const inCourt = g.x > court.x0 && g.x < court.x1 && g.z > court.z0 && g.z < court.z1;
-    if (inCourt) {
-      const edge = Math.min(g.x - court.x0, court.x1 - g.x, g.z - court.z0, court.z1 - g.z);
-      if (edge < px * 1.5 + 0.02) return [hex('#ffffff'), MAT.SOLID];
-      if (Math.abs(g.z - mid) < px * 1.6) return [hex('#ffffff'), MAT.SOLID];
-      if (edge < 0.3) return [COURT[3], MAT.SOLID];
-      return [band(COURT, 2 + (fbm(g.x * 0.5, g.z * 0.5, 3) - 0.5) * 0.6, sx, sy, 0.3), MAT.SOLID];
-    }
-    // Yellow floor tiles: grout lines, a light bevel on the upper-left of each tile.
-    const tx = g.x / tile, tz = g.z / tile;
-    const fx = tx - Math.floor(tx), fz = tz - Math.floor(tz);
-    const lx = px / tile, lz = (px * 3.2) / tile;
-    if (fx < lx || fz < lz * 0.5) return [FLOOR[0], MAT.SOLID];
-    if (fx > 1 - lx * 1.2 || fz > 1 - lz * 0.6) return [FLOOR[4], MAT.SOLID];
-    return [((Math.floor(tx) + Math.floor(tz)) & 1) ? FLOOR[2] : FLOOR[3], MAT.SOLID];
+    // A dark inlay around the court.
+    if (inCourt(gr.x, gr.z) || inCourt(gd.x, gd.z)) return [G[1], MAT.SOLID];
+    // Tiles aligned with the court and the wall, light grout on each tile's left and far sides.
+    const tx = (g.x - court.x1) / T, tz = (g.z - court.z1) / T, tzd = (gd.z - court.z1) / T;
+    const rowsPx = 1 / Math.max(1e-6, tz - tzd);
+    // Far away the rows crowd together: keep every other grout line.
+    const step = rowsPx < 3 ? 2 : 1;
+    const lineX = Math.floor(tx) !== Math.floor((gr.x - court.x1) / T);
+    const lineZ = Math.floor(tz / step) !== Math.floor(tzd / step);
+    const v = tileLight(Math.floor(tx), Math.floor(tz)) + (lineX || lineZ ? 1 : 0);
+    if (g.z > WZ - 0.04) return [F[1], MAT.SOLID];
+    return [F[Math.max(0, Math.min(F.length - 1, v))], MAT.SOLID];
   });
-  // Lamp posts at the court's far corners and along the sides.
-  for (const [x, z] of [[court.x0 - 0.5, court.z1 + 0.4], [court.x1 + 0.5, court.z1 + 0.4], [court.x0 - 0.5, 7.2], [court.x1 + 0.5, 7.2]]) {
-    const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    addProp(ctx, { sprite: lampPost(ppu * 0.38, ppu * 1.25, WALL, ramp('#d59c20', '#ffd573', '#ffffac'), WALL[0]), x, z });
+
+  // Reflections in the polish: a streak under each bright thing, a shade lighter,
+  // solid near its foot and breaking into lines as it fades.
+  const streak = (x0: number, x1: number, y0: number, len: number, lift: number) => {
+    for (let r = 0; r < len; r++) {
+      const f = r / len;
+      if ((f > 0.4 && r % 2) || (f > 0.7 && r % 4)) continue;
+      const yy = Math.floor(y0) + r;
+      for (let xx = Math.round(x0); xx <= Math.round(x1); xx++) {
+        const c = ground.get(xx, yy);
+        if (!c || ground.material(xx, yy) === MAT.BACKDROP) continue;
+        const i = indexIn(F, c), j = indexIn(G, c);
+        if (i >= 0) ground.set(xx, yy, F[Math.min(F.length - 1, i + lift)]);
+        else if (j >= 0 && j < 7) ground.set(xx, yy, G[Math.min(6, j + lift)]);
+      }
+    }
+  };
+  for (let k = pillarK(-40); k <= pillarK(40); k++) {
+    const px = PX0 + k * PIL;
+    const [, base] = view.screen(px, 0, WZ);
+    const [la] = view.screen(px + PHW * 0.9, 0, WZ), [ra] = view.screen(px - PHW * 0.2, 0, WZ);
+    const [, top] = view.screen(px, -1.2, WZ);
+    streak(la, ra, base + 1, top - base, 1);
+    // The sconce's glow, brighter, where the mirror shows it.
+    const [cx] = view.screen(px, 0, WZ);
+    const [, s0] = view.screen(px, -(SCONCE_Y - SCONCE_R), WZ), [, s1] = view.screen(px, -(SCONCE_Y + SCONCE_R * 2.5), WZ);
+    streak(cx - 1, cx, s0, s1 - s0, 1);
+  }
+
+  // The lamp posts at the edges of the view (and beyond, for the intro's slide), mirrored below them.
+  const metal = ramp('#52526a', '#737383', '#9494a4', '#cdbdc5', '#ded5e6', '#ffffff');
+  for (const [x, z] of [[3.0, 9.4], [-3.45, 11.6], [court.x0 - 0.5, 7.4], [court.x1 + 0.7, 6.4], [court.x1 + 1.4, 12.2], [court.x0 - 1.4, 12.4]] as const) {
+    const ppu = view.ppu(view.depth(x, 0, z));
+    const w = ppu * 0.36, h = ppu * 1.2;
+    if (!addProp(ctx, { sprite: lampPost(w, h, metal, BT_GOLD, BT_TEAL, G[1], BT_GOLD[2]), x, z })) continue;
+    const [lx, ly] = view.screen(x, 0, z);
+    streak(lx - w * 0.35, lx + w * 0.1, ly + 1, h * 0.75, 1);
+    const [, gy] = view.screen(x, -h / ppu * 0.8, z);
+    streak(lx - w * 0.25, lx + w * 0.05, gy, w * 0.9, 1);
   }
 }
 
