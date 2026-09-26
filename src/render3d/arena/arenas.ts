@@ -5,8 +5,8 @@
 // ground itself, with their shadows.
 
 import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, cells, fbm, hash2, hex, noise, ramp, smoothstep } from './art';
-import { type ArenaContext, type ArenaDesign, addProp, at, darker, fill, frameProp, hills, scatter, shafts, shift, stand } from './design';
-import { anemone, bush, coralHead, crag, lampPost, wisp, seaFan, staghorn, reeds, rock, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
+import { type ArenaContext, type ArenaDesign, addProp, at, darker, dunes, fill, frameProp, hills, onLine, scatter, shafts, shift, stand } from './design';
+import { anemone, bush, coralHead, crag, lampPost, shrub, wisp, seaFan, staghorn, reeds, rock, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
 
 // Hoenn's greens (general tileset): route grass, tall grass and tree leaves.
 const MEADOW = ramp('#287a54', '#3c9f72', '#56b98b', '#73c5a4', '#8dd3b4', '#a9e0c8');
@@ -304,53 +304,83 @@ function linePattern(ctx: ArenaContext, phase: (x: number, z: number) => number,
 
 // --- ROUTE 111: the desert ------------------------------------------------
 
-const SAND = ramp('#b98f4c', '#cda462', '#d5b46a', '#decd83', '#eee6a4', '#f6f0c4');
+// Route 111's sand (the general tileset's desert yellows) with shadows cooling
+// toward mauve, dry scrub and straw, pink-brown rock.
+const SAND = ramp('#a47b41', '#bd9452', '#cd9c52', '#d5b46a', '#decd83', '#eee6a4', '#f6f0c4');
+const SAND_SHADE = ramp('#8b6a5a', '#a4836a', '#b49473', '#c5a47b');
+const SCRUB = ramp('#4a4a20', '#6a6a29', '#8b8b39', '#aca45a');
+const STRAW = ramp('#8b6a31', '#b49452', '#dec583');
 
+/**
+ * Route 111's desert: dunes with sharp crests rolling away behind (lit on
+ * their windward faces, their slip faces in shade, hazier the farther),
+ * the heat shimmering over them; the floor heaped in low drifts combed by
+ * the wind into rows of little ripples; pointed pink-brown rocks, dry scrub
+ * and straw at the edges.
+ */
 function desert(ctx: ArenaContext): void {
+  const { view, ground } = ctx;
   const S = SAND;
+  const cx = (ctx.player.x + ctx.enemy.x) / 2, cz = (ctx.player.z + ctx.enemy.z) / 2 + 1;
+  // Low drifts on the floor: a height field lit from the upper left and front.
+  const height = (x: number, z: number) => fbm(x * 0.24, z * 0.42, 7) + fbm(x * 0.6, z * 0.9, 8) * 0.25;
+  const lightOn = (x: number, z: number) => {
+    const e = 0.06;
+    const hx = (height(x + e, z) - height(x - e, z)) / (2 * e), hz = (height(x, z + e) - height(x, z - e)) / (2 * e);
+    return -hx * 0.9 + hz * 0.7;
+  };
+  // Ripples: Emerald's rows of little zigzags, in patches, wandering with the drifts.
+  const rippled = (x: number, z: number) => fbm(x * 0.22 + 4, z * 0.5, 12);
+  const ripple = (x: number, z: number) => z * 3.1 + Math.sin(x * 38) * 0.28 + Math.sin(x * 0.45 + z * 0.6) * 0.8 + height(x, z) * 3;
   fill(ctx, (sx, sy, g) => {
-    const v = 3.1 + (fbm(g.x * 0.13, g.z * 0.22, 7) - 0.5) * 1.8 + smoothstep(12, 22, g.z) * 0.7;
-    return [band(S, v, sx, sy, 0.3), MAT.SOLID];
+    const far = smoothstep(12, 22, g.z);
+    const light = 1 - smoothstep(0.55, 1.35, Math.hypot((g.x - cx) / 3.4, (g.z - cz) / 5));
+    const slope = lightOn(g.x, g.z) * (1 - far);
+    let v = 3.3 + light * 1.2 + slope * 1.1 + far * 0.9;
+    if (g.z < 13 && rippled(g.x, g.z) > 0.47 && onLine(ctx, sx, sy, ripple, 0.34)) v += 1;
+    if (slope < -0.75) return [band(SAND_SHADE, 3.4 + (slope + 0.75) * 3, sx, sy, 0.25), MAT.SOLID];
+    return [band(S, v, sx, sy, 0.14), MAT.SOLID];
   });
-  // Rows of little wind ripples (light zigzags), in drifts; darker edges where drifts rise.
-  const drift = (x: number, z: number) => fbm(x * 0.22, z * 0.5, 12);
-  linePattern(ctx, (x, z) => z * 3.2 + Math.sin(x * 38) * 0.28 + Math.sin(x * 0.6 + z) * 0.4, (base, sx, sy) => {
-    const g = ctx.view.ground(sx, sy)!;
-    if (drift(g.x, g.z) < 0.47) return null;
-    const i = indexIn(S, base);
-    return i < 0 ? null : S[Math.min(S.length - 1, i + 1)];
-  }, 0.34);
-  linePattern(ctx, (x, z) => drift(x, z) * 9, (base) => {
-    const i = indexIn(S, base);
-    return i < 0 ? null : S[Math.max(0, i - 1)];
-  }, 0.5);
-  scatter(ctx, 14, 5, (_x, _z, sx, sy, ppu, r) => {
-    if (r > 0.18) return;
-    ctx.ground.set(sx, sy, ROCK[1]);
-    if (ppu > 30) ctx.ground.set(sx + 1, sy, ROCK[3]);
+  // Pebbles, few.
+  scatter(ctx, 16, 5, (_x, z, sx, sy, ppu, r) => {
+    if (r > 0.12 || z > 14 || indexIn(S, ground.get(sx, sy)) < 0) return;
+    ground.set(sx, sy, ROCK[1]);
+    if (ppu > 30) ground.set(sx + 1, sy, ROCK[3]);
   });
-  // Dunes rolling away behind: hazier the farther they are.
-  hills(ctx, [
-    { z: 22, height: 1.6, shades: ramp('#d5b46a', '#e0c884', '#eadb9c', '#f2e8b4', '#f8f2cc'), freq: 0.22, seed: 3 },
-    { z: 18.5, height: 1.4, shades: ramp('#c9a45a', '#d5b46a', '#decd83', '#eee6a4', '#f6f0c4'), freq: 0.3, seed: 7 },
-    { z: 15.6, height: 0.9, shades: ramp('#b98f4c', '#cda462', '#d5b46a', '#decd83', '#eee6a4'), crest: hex('#f6f0c4'), freq: 0.42, seed: 11 },
+  // Dunes rolling away behind, hazier the farther they are; the heat shimmering in a pale band over the farthest.
+  dunes(ctx, [
+    { z: 30, height: 2.4, freq: 0.13, seed: 3, lit: ramp('#e6d59c', '#eee6b4', '#f6eecd', '#fff6de'), shade: ramp('#cdb494', '#d5c5a4', '#decdac'), crest: hex('#ffffee') },
+    { z: 21, height: 1.9, freq: 0.2, seed: 7, lit: ramp('#d5b46a', '#decd83', '#eee6a4', '#f6f0c4'), shade: ramp('#b49473', '#c5a47b', '#d5b48b'), crest: hex('#fff8d8') },
+    { z: 16.4, height: 1.55, freq: 0.19, seed: 11, lit: ramp('#cd9c52', '#d5b46a', '#decd83', '#eee6a4'), shade: SAND_SHADE, crest: hex('#f6f0c4') },
   ]);
-  const far = [];
-  for (let i = 0; i < 8; i++) {
-    const x = ctx.rng.range(-16, 16), z = ctx.rng.range(12, 15);
-    const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    const w = ppu * ctx.rng.range(0.5, 1.2);
-    far.push({ sprite: rock(w, w * 0.7, { shades: ROCK, outline: ROCK_OUTLINE }, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: w * 0.6, ry: w * 0.15 } });
+  // Pointed rocks standing in the sand (Route 111's), far and near, clear of the battlers.
+  const rockPal = { shades: ROCK, outline: ROCK_OUTLINE };
+  const standing = [];
+  for (let i = 0; i < 9; i++) {
+    const x = ctx.rng.range(-16, 16), z = ctx.rng.range(13, 16);
+    if (Math.abs(x - ctx.enemy.x) < 2.2) continue;
+    const ppu = view.ppu(view.depth(x, 0, z));
+    const w = ppu * ctx.rng.range(0.45, 1);
+    standing.push({ sprite: crag(w, w * ctx.rng.range(0.6, 0.9), rockPal, ctx.rng.int(1, 1e6), 5), x, z, shadow: { rx: w * 0.6, ry: w * 0.15 } });
   }
-  stand(ctx, far, darker([S, ROCK]));
-  place(ctx, {
-    region: [-40, 280, 34, 112],
-    count: 6,
-    make: (ppu) => {
-      const w = ppu * ctx.rng.range(0.35, 0.8);
-      return { sprite: rock(w, w * ctx.rng.range(0.55, 0.8), { shades: ROCK, outline: ROCK_OUTLINE }, ctx.rng.int(1, 1e6)), sink: 1 };
-    },
-  });
+  for (const [x, z, s] of [[2.6, 7.2, 1.1], [2.9, 10.6, 0.8], [-3.2, 11.4, 0.9], [-2.9, 9.2, 0.6]] as const) {
+    const ppu = view.ppu(view.depth(x, 0, z));
+    const w = ppu * s;
+    standing.push({ sprite: crag(w, w * 0.75, rockPal, ctx.rng.int(1, 1e6), 6), x, z, shadow: { rx: w * 0.62, ry: w * 0.15 } });
+  }
+  stand(ctx, standing, darker([S, SAND_SHADE, ROCK]));
+  // Dry scrub and straw at the edges of the view, swaying in the wind.
+  const scrub = (ppu: number) => ({ sprite: shrub(ppu * ctx.rng.range(0.45, 0.7), ppu * ctx.rng.range(0.35, 0.55), ramp('#5a4221', '#8b6a39'), SCRUB, ctx.rng.int(1, 1e6)), sway: 1 });
+  const straw = (ppu: number) => {
+    const h = ppu * ctx.rng.range(0.25, 0.4);
+    return { sprite: tallGrass(ppu * ctx.rng.range(0.4, 0.6), h, { blades: STRAW, outline: hex('#5a4221') }, ctx.rng.int(1, 1e6)), sway: Math.max(1, h * 0.12) };
+  };
+  frameProp(ctx, 4, 96, -1, scrub);
+  frameProp(ctx, 8, 70, -1, straw);
+  frameProp(ctx, 232, 66, 1, straw);
+  frameProp(ctx, 236, 48, 1, scrub);
+  place(ctx, { region: [-240, -20, 40, 112], count: 8, make: (ppu) => (ctx.rng.chance(0.5) ? scrub(ppu) : straw(ppu)) });
+  place(ctx, { region: [260, 480, 40, 112], count: 8, make: (ppu) => (ctx.rng.chance(0.5) ? scrub(ppu) : straw(ppu)) });
 }
 
 // --- ROUTE 124: the open sea ------------------------------------------------

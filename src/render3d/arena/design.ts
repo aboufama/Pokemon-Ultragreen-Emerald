@@ -132,6 +132,71 @@ export function onLine(ctx: ArenaContext, sx: number, sy: number, phase: (x: num
   return Math.abs(s - p) < maxStep && Math.floor(s) !== Math.floor(p);
 }
 
+export interface DuneRow {
+  /** Where the dunes' feet are (world z), how tall they rise (world units), crests per world unit. */
+  z: number;
+  height: number;
+  freq: number;
+  seed: number;
+  /** Lit faces (windward, facing the light at the left), darkest first; the shadowed slip faces; the crest line. */
+  lit: Ramp;
+  shade: Ramp;
+  crest: Rgb;
+}
+
+/**
+ * Dunes standing along the back, farthest row first: sharp crests, a long
+ * lit windward face rising from the left and a short steep slip face falling
+ * away on the right in shadow, a bright line along each crest.
+ */
+export function dunes(ctx: ArenaContext, rows: DuneRow[]): void {
+  const { view, ground } = ctx;
+  for (const r of [...rows].sort((a, b) => b.z - a.z)) {
+    const [, footY] = view.screen(0, 0, r.z);
+    const ppu = view.ppu(view.depth(0, 0, r.z));
+    // Screen-right is world -x: u grows to the right. Each dune: a long convex
+    // windward rise to its crest, then a short concave slip face; a smaller
+    // dune rides on the back of the bigger ones, and the crests wander.
+    const one = (u: number, seed: number) => {
+      const k = Math.floor(u), t = u - k;
+      const peak = 0.7 + (hash2(k, seed, 5) - 0.5) * 0.16;
+      const amp = 0.45 + hash2(k, seed, 6) * 0.55;
+      const up = t < peak;
+      const p = up ? Math.sin((t / peak) * Math.PI * 0.5) ** 1.6 : ((1 - t) / (1 - peak)) ** 2.2;
+      return { h: p * amp, up, t: up ? t / peak : (t - peak) / (1 - peak) };
+    };
+    const shape = (x: number) => {
+      const u = -x * r.freq + (noise(x * r.freq * 0.3, r.seed, r.seed) - 0.5) * 0.8;
+      const a = one(u, r.seed), b = one(u * 2.3 + 0.37, r.seed + 1);
+      const hb = b.h * 0.45;
+      const top = hb > a.h ? b : a;
+      return { h: 0.08 + Math.max(a.h, hb) * 0.92, up: top.up, t: top.t };
+    };
+    for (let sx = ground.ox; sx < ground.ox + ground.width; sx++) {
+      const g = view.groundAt(sx + 0.5, footY);
+      if (!g) continue;
+      const d = shape(g.x);
+      const h = r.height * ppu * d.h;
+      const y0 = Math.round(footY - h), y1 = Math.floor(footY);
+      for (let sy = Math.max(ground.oy, y0); sy <= y1; sy++) {
+        const down = (sy - y0) / Math.max(1, y1 - y0);
+        let c: Rgb;
+        if (d.up) {
+          // The windward face: brightest just under the crest, a little darker toward the trough.
+          const v = (r.lit.length - 1) * (0.45 + d.t * 0.55) - down * 1.2;
+          c = band(r.lit, v, sx, sy, 0.3);
+        } else {
+          const v = (r.shade.length - 1) * (0.4 + (1 - d.t) * 0.6) - down * 0.8;
+          c = band(r.shade, v, sx, sy, 0.3);
+        }
+        // The crest line along the lit face's top.
+        if (sy === y0 && d.up && d.t > 0.25) c = r.crest;
+        ground.set(sx, sy, c, MAT.BACKDROP);
+      }
+    }
+  }
+}
+
 export interface Shaft {
   /** Screen x where the shaft leaves the top of the painted area, its width, and its lean (pixels right per row). */
   x: number;

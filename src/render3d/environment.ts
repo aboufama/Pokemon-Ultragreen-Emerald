@@ -76,12 +76,13 @@ export class BattleEnvironment {
   }
 
   /** Ground effects of the environment's ambience (see src/render3d/ambience.ts). */
-  setGroundEffects(fx: { grassWaves?: boolean; clouds?: number; glints?: boolean; caustics?: boolean }): void {
+  setGroundEffects(fx: { grassWaves?: boolean; clouds?: number; glints?: boolean; caustics?: boolean; haze?: boolean }): void {
     const u = this.ground.material.uniforms;
     u.grassWaves.value = fx.grassWaves ? 1 : 0;
     u.clouds.value = fx.clouds ?? 0;
     u.glints.value = fx.glints ? 1 : 0;
     u.caustics.value = fx.caustics ? 1 : 0;
+    u.haze.value = fx.haze ? 1 : 0;
     this.cloudTint.set(1 - u.clouds.value, 1 - u.clouds.value * 0.85, 1 - u.clouds.value * 0.6);
     const reach = this.design.ripples ?? 0;
     this.feet.forEach((f, i) => (u.feet.value as THREE.Vector4[])[i].set(f.x, f.z, reach, i * 0.47));
