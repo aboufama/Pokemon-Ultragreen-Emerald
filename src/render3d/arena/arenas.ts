@@ -802,6 +802,21 @@ function chimney(ctx: ArenaContext): void {
     }
   }
   stand(ctx, steam, (c) => c);
+  // Steam vents on the slope: a crack glowing in the ash, a wisp wavering up out of it (one between the
+  // wild Pokémon's healthbox and the wild Pokémon, one at the right edge, more beyond for the intro).
+  for (const [vsx, vsy] of [[114, 50], [245, 66], [-60, 70], [300, 60]] as const) {
+    const g = view.ground(vsx, vsy)!;
+    const w = Math.max(3, Math.round(g.ppu * 0.2));
+    for (let i = -w; i <= w; i++) {
+      const y = vsy + Math.round(Math.sin(i * 0.9) * 0.6);
+      const x = vsx + i;
+      ground.set(x, y, Math.abs(i) < w * 0.4 ? LAVA[4] : LAVA[1], MAT.LAVA);
+      ground.set(x, y + 1, BASALT[0], MAT.SOLID);
+      if (Math.abs(i) < w * 0.7) ground.set(x, y - 1, BASALT[1], MAT.SOLID);
+    }
+    // Grey against the pale ash, so it reads.
+    addProp(ctx, { sprite: wisp(g.ppu * 0.12, g.ppu * 1.1, ramp('#8b7373', '#a49494', '#c5b4b4'), ctx.rng.int(1, 1e6), 0.15), x: g.x, z: g.z, sway: 2 });
+  }
   // Basalt boulders and spires at the sides, the biggest framing the foreground at the left.
   const pal = { shades: BASALT, outline: BASALT[0] };
   const lit = { shades: ramp('#411418', '#623931', '#833120', '#9c6252', '#bd8373'), outline: BASALT[0] };
