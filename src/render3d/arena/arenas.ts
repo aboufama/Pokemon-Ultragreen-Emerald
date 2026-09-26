@@ -473,7 +473,8 @@ const SEA = ramp('#213a7b', '#29418b', '#39529c', '#415abd', '#526ad5', '#6a83d5
  * it; long swells and rows of wavelets that shrink and crowd with distance,
  * calm over the battle; pink-brown sea stacks framing the sides with surf
  * ringing their feet and their dark reflections under them, rocky islets
- * far out, a path of sparkles toward the sun.
+ * far out, patches of deep water (the dive spots), a path of sparkles toward
+ * the sun.
  */
 function sea(ctx: ArenaContext): void {
   const { view, ground } = ctx;
@@ -490,10 +491,23 @@ function sea(ctx: ArenaContext): void {
     if (!onLine(ctx, sx, sy, wave, 0.42)) return false;
     return run(g.x, Math.floor(wave(g.x, g.z))) > -0.2 + calm(g.x, g.z) * 1.4;
   };
+  // Dive spots (Emerald's patches of deep water): darker, their edge wandering, a pale rim.
+  const spots = [{ x: 2.15, z: 10.3, rx: 1.0, rz: 1.3 }, { x: 2.3, z: 21, rx: 1.8, rz: 2.4 }, { x: -7, z: 11, rx: 1.4, rz: 1.6 }, { x: 7.5, z: 12.5, rx: 1.6, rz: 1.8 }];
+  const deep = (x: number, z: number) => {
+    let d = 9;
+    for (const p of spots) {
+      const a = Math.atan2(z - p.z, x - p.x);
+      d = Math.min(d, Math.hypot((x - p.x) / p.rx, (z - p.z) / p.rz) - 1 + Math.sin(a * 3 + p.x) * 0.12 + Math.sin(a * 5) * 0.06);
+    }
+    return d;
+  };
   fill(ctx, (sx, sy, g) => {
     // Lighter far off (the sky on the water), a slow swell of light and shade.
     const far = smoothstep(9, 26, g.z);
     let v = 2.8 + far * 2.7 + (fbm(g.x * 0.12, g.z * 0.2, 13) - 0.5) * 0.7;
+    const d = deep(g.x, g.z);
+    if (d < 0) v -= 1.4;
+    else if (d < 1.3 / g.ppu + 0.03) v += 0.9;
     if (crestAt(sx, sy)) v += far > 0.5 ? 1 : 1.6;
     else if (crestAt(sx, sy - 1)) v -= 1;
     return [band(W, v, sx, sy, 0.12), MAT.WATER];
@@ -520,7 +534,7 @@ function sea(ctx: ArenaContext): void {
   stack(2.6, 8.3, 1.3, 1.7, 9);
   stack(2.2, 9.6, 0.5, 0.45);
   stack(-3.9, 12.2, 1.2, 1.5, 8);
-  stack(-3.1, 13.4, 0.5, 0.4);
+  stack(1.9, 13.9, 0.5, 0.4);
   for (const [x, z, w, h] of [[6, 18, 2.4, 1.6], [-8, 17, 3, 2.1], [1.2, 22, 1.4, 0.8], [-3.6, 24, 2.2, 1.2], [9.5, 23, 2.8, 1.5], [-12, 21, 2.6, 1.8], [14, 16, 2.4, 2.4], [-16, 15, 2.6, 2.6]] as const) stack(x, z, w, h, 8);
   for (const r of rocks) {
     const [px, py] = view.screen(r.x, 0, r.z);
