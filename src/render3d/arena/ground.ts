@@ -112,9 +112,11 @@ const fragmentShader = /* glsl */ `
         vec4 n = painted(screen + vec2(-1.0, 0.0));
         if (materialOf(n) == ${MAT.GRASS}) c = n.rgb;
       }
-      // Wind rolling over the grass: lighter bands travelling downwind.
+      // Wind rolling over the grass: lighter bands travelling downwind, each
+      // a clean lift (a checkered half of its pixels read as dots drifting
+      // over the pale meadow).
       float wv = sin(w.x * 2.2 + w.z * 0.8 - time * 2.6) * sin(w.x * 0.7 - time * 0.9);
-      if (wv * (0.5 + gust) > 0.55 && bayer(screen) < 0.5) c = min(c * 1.08 + 0.02, 1.0);
+      if (wv * (0.5 + gust) > 0.55) c = min(c * 1.04 + 0.01, 1.0);
     }
     if (mat == ${MAT.WATER}) {
       if (waveDash(screen, w, 0.9, 0.45, 0.22, 0.34, 0.0) > 0.0) c = waveLight;
