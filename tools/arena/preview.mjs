@@ -9,15 +9,17 @@
 //   --boxes   outline the battlers' boxes (props never enter them) and dim what
 //             the healthboxes and the text box cover
 //
-// Writes <out>/<arena>.paint.png (and .wide.png). Judge the result in the
-// browser too (/?mode=stage&env=<arena>): the ground's life, the Pokémon and
-// their shadows are only there.
+// Writes <out>/<arena>.paint.png (and .wide.png), and prints how calm it is
+// where the battle shows it (the measures check.mjs holds against the sea's;
+// see the arena skill). Judge the result in the browser too
+// (/?mode=stage&env=<arena>): the ground's life, the Pokémon and their
+// shadows are only there.
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { importTs } from '../gauntlet/tsimport.mjs';
-import { busyness, compose as composeWith } from './screen.mjs';
+import { calm, compose as composeWith, propsShowing, shownMask } from './screen.mjs';
 import { ROOT } from '../gauntlet/species.mjs';
 
 const argv = process.argv.slice(2);
@@ -103,5 +105,8 @@ for (const name of names) {
     if (flag('boxes')) overlay(ctx, wide, g.ox, g.oy, g.width, g.height);
     await save(wide, g.width, g.height, join(out, `${name}.wide.png`));
   }
-  console.log(`${name.padEnd(11)} ${ms.toFixed(0).padStart(4)} ms  ${ctx.props.length} props  busy ${busyness(compose(ctx, 0, 0, 240, 160)).toFixed(1)}  -> ${join(out, name)}.paint.png`);
+  const mask = shownMask(battlerBox(ctx, 'player'));
+  const c = calm(compose(ctx, 0, 0, 240, 160), mask, battlerBox(ctx, 'enemy'));
+  const figures = `busy ${c.busy.toFixed(1)}  strong ${c.strong.toFixed(1)}%  specks ${c.specks.toFixed(1)}  marks ${c.marks.toFixed(1)}  open ${c.open.toFixed(0)}%  foe ${c.foe.toFixed(1)}  props ${propsShowing(ctx, propRect, mask)}`;
+  console.log(`${name.padEnd(11)} ${ms.toFixed(0).padStart(4)} ms  ${figures}  -> ${join(out, name)}.paint.png`);
 }
