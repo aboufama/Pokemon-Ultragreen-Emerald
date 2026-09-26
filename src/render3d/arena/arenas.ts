@@ -7,7 +7,7 @@
 // platforms: the Pokémon stand on the ground itself, with their shadows.
 
 import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, cells, fbm, hash2, hex, mix, noise, ramp, smoothstep } from './art';
-import { type ArenaContext, type ArenaDesign, addProp, at, darker, dunes, fill, frameProp, hills, onLine, scatter, shafts, shift, stand } from './design';
+import { type ArenaContext, type ArenaDesign, addProp, at, darker, dunes, fill, foeCalm, frameProp, hills, onLine, scatter, shafts, shift, stand } from './design';
 import { anemone, bush, coralHead, crag, lampPost, shrub, wisp, seaFan, staghorn, reeds, rock, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
 
 // Hoenn's greens (general tileset): route grass, tall grass and tree leaves.
@@ -356,30 +356,6 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
 const ROCK = ramp('#624152', '#835a5a', '#9c7373', '#bd948b', '#deb4a4');
 const ROCK_OUTLINE = hex('#413141');
 
-interface Placement {
-  /** Screen region to try, GBA pixels: x0, x1, y0, y1 (y is where the base stands). */
-  region: [number, number, number, number];
-  count: number;
-  /** Size of the sprite (in world units) and how to make it. */
-  make: (ppu: number) => { sprite: Sprite; sway?: number; sink?: number };
-  /** Keep this far (world units) from the battlers. */
-  clear?: number;
-  avoid?: (x: number, z: number) => boolean;
-}
-
-/** Stand props in a screen region, never over or in front of a battler. */
-function place(ctx: ArenaContext, p: Placement): void {
-  for (let i = 0, tries = 0; i < p.count && tries < p.count * 30; tries++) {
-    const g = ctx.view.ground(ctx.rng.range(p.region[0], p.region[1]), ctx.rng.range(p.region[2], p.region[3]));
-    if (!g) continue;
-    if (p.avoid?.(g.x, g.z)) continue;
-    const c = p.clear ?? 0.9;
-    if (Math.hypot(g.x - ctx.enemy.x, g.z - ctx.enemy.z) < c || Math.hypot(g.x - ctx.player.x, g.z - ctx.player.z) < c) continue;
-    const made = p.make(g.ppu);
-    if (addProp(ctx, { sprite: made.sprite, x: g.x, z: g.z, sway: made.sway, sink: made.sink })) i++;
-  }
-}
-
 // --- ROUTE 111: the desert ------------------------------------------------
 
 // Route 111's sand (the general tileset's desert yellows) with shadows cooling
@@ -392,9 +368,10 @@ const STRAW = ramp('#8b6a31', '#b49452', '#dec583');
 /**
  * Route 111's desert: dunes with sharp crests rolling away behind (lit on
  * their windward faces, their slip faces in shade, hazier the farther),
- * the heat shimmering over them; the floor heaped in low drifts combed by
- * the wind into rows of little ripples, sand ridges running away along the
- * sides; pointed pink-brown rocks, dry scrub and straw at the edges.
+ * the heat shimmering over them; the floor heaped in low drifts, combed by
+ * the wind into rows of little ripples here and there, sand ridges running
+ * away along the sides; a few pointed pink-brown rocks, dry scrub and straw
+ * at the edges. Open sand around the wild Pokémon.
  */
 function desert(ctx: ArenaContext): void {
   const { view, ground } = ctx;
@@ -407,7 +384,7 @@ function desert(ctx: ArenaContext): void {
     const hx = (height(x + e, z) - height(x - e, z)) / (2 * e), hz = (height(x, z + e) - height(x, z - e)) / (2 * e);
     return -hx * 0.9 + hz * 0.7;
   };
-  // Ripples: Emerald's rows of little zigzags, in patches, wandering with the drifts.
+  // Ripples: Emerald's rows of little zigzags, in a few patches, wandering with the drifts.
   const rippled = (x: number, z: number) => fbm(x * 0.22 + 4, z * 0.5, 12);
   const ripple = (x: number, z: number) => z * 3.1 + Math.sin(x * 38) * 0.28 + Math.sin(x * 0.45 + z * 0.6) * 0.8 + height(x, z) * 3;
   // Sand ridges running away from the camera along the sides: a long lit face on their left (screen),
@@ -429,44 +406,47 @@ function desert(ctx: ArenaContext): void {
     const far = smoothstep(12, 22, g.z);
     const light = 1 - smoothstep(0.55, 1.35, Math.hypot((g.x - cx) / 3.4, (g.z - cz) / 5));
     const slope = lightOn(g.x, g.z) * (1 - far);
-    let v = 2.95 + light * 1.45 + slope * 1.1 + far * 1.1 - smoothstep(2.8, 6, Math.abs(g.x - cx)) * 0.8;
+    // A gentle light pool and soft drifts, in clean bands with little dither: the sand is the ground the Pokémon stand on, not the show.
+    let v = 2.95 + light * 1.2 + slope * 0.9 + far * 1.1 - smoothstep(2.8, 6, Math.abs(g.x - cx)) * 0.7;
     const r = ridgeAt(g.x, g.z);
-    if (r && !r.lit) return [band(SAND_SHADE, 1.2 + r.t * 1.6, sx, sy, 0.2), MAT.SOLID];
+    if (r && !r.lit) return [band(SAND_SHADE, 1.2 + r.t * 1.6, sx, sy, 0.1), MAT.SOLID];
     if (r && r.u < 1.2 / g.ppu) return [S[6], MAT.SOLID];
     if (r) v += 1.3 * (1 - r.t);
-    if (g.z < 13 && rippled(g.x, g.z) > 0.47 && onLine(ctx, sx, sy, ripple, 0.34)) v += 1;
-    if (slope < -0.75) return [band(SAND_SHADE, 3.4 + (slope + 0.75) * 3, sx, sy, 0.25), MAT.SOLID];
-    return [band(S, v, sx, sy, 0.14), MAT.SOLID];
+    if (g.z < 12.5 && rippled(g.x, g.z) > 0.5 && foeCalm(ctx, sx, sy, 12) < 0.3 && onLine(ctx, sx, sy, ripple, 0.34)) v += 1;
+    if (slope < -0.75) return [band(SAND_SHADE, 3.4 + (slope + 0.75) * 3, sx, sy, 0.1), MAT.SOLID];
+    return [band(S, v, sx, sy, 0.06), MAT.SOLID];
   });
-  // Pebbles, few.
+  // A few pebbles on the near sand, a shade or two darker than it, none around the wild Pokémon.
   scatter(ctx, 16, 5, (_x, z, sx, sy, ppu, r) => {
-    if (r > 0.12 || z > 14 || indexIn(S, ground.get(sx, sy)) < 0) return;
-    ground.set(sx, sy, ROCK[1]);
-    if (ppu > 30) ground.set(sx + 1, sy, ROCK[3]);
+    if (r > 0.05 || z > 11 || foeCalm(ctx, sx, sy, 12) > 0 || indexIn(S, ground.get(sx, sy)) < 0) return;
+    ground.set(sx, sy, SAND_SHADE[1]);
+    if (ppu > 30) ground.set(sx + 1, sy, SAND_SHADE[3]);
   });
   // Dunes rolling away behind, hazier the farther they are; the heat shimmering in a pale band over the farthest.
   dunes(ctx, [
-    { z: 30, height: 2.4, freq: 0.13, seed: 3, lit: ramp('#e6d59c', '#eee6b4', '#f6eecd', '#fff6de'), shade: ramp('#cdb494', '#d5c5a4', '#decdac'), crest: hex('#ffffee') },
-    { z: 21, height: 1.9, freq: 0.2, seed: 7, lit: ramp('#d5b46a', '#decd83', '#eee6a4', '#f6f0c4'), shade: ramp('#b49473', '#c5a47b', '#d5b48b'), crest: hex('#fff8d8') },
-    { z: 16.4, height: 1.55, freq: 0.19, seed: 11, lit: ramp('#cd9c52', '#d5b46a', '#decd83', '#eee6a4'), shade: SAND_SHADE, crest: hex('#f6f0c4') },
+    { z: 30, height: 2.4, freq: 0.13, seed: 3, lit: ramp('#e6d59c', '#eee6b4', '#f6eecd', '#fff6de'), shade: ramp('#cdb494', '#d5c5a4', '#decdac'), crest: hex('#ffffee'), soft: 0.1 },
+    { z: 21, height: 1.9, freq: 0.2, seed: 7, lit: ramp('#d5b46a', '#decd83', '#eee6a4', '#f6f0c4'), shade: ramp('#b49473', '#c5a47b', '#d5b48b'), crest: hex('#fff8d8'), soft: 0.1 },
+    { z: 16.4, height: 1.55, freq: 0.19, seed: 11, lit: ramp('#cd9c52', '#d5b46a', '#decd83', '#eee6a4'), shade: SAND_SHADE, crest: hex('#f6f0c4'), soft: 0.1 },
   ]);
-  // Pointed rocks standing in the sand (Route 111's), far and near, clear of the battlers.
-  const rockPal = { shades: ROCK, outline: ROCK_OUTLINE };
+  // Pointed rocks standing in the sand (Route 111's): a few far off, clear of the wild Pokémon, and a
+  // few framing the sides, cropped by the frame. Outlined in the rock's own darkest shade, not near-black.
+  const rockPal = { shades: ROCK, outline: ROCK[0] };
   const standing = [];
   for (let i = 0; i < 9; i++) {
     const x = ctx.rng.range(-16, 16), z = ctx.rng.range(13, 16);
-    if (Math.abs(x - ctx.enemy.x) < 2.2) continue;
     const ppu = view.ppu(view.depth(x, 0, z));
     const w = ppu * ctx.rng.range(0.45, 1);
-    standing.push({ sprite: crag(w, w * ctx.rng.range(0.6, 0.9), rockPal, ctx.rng.int(1, 1e6), 5), x, z, shadow: { rx: w * 0.6, ry: w * 0.15 } });
+    const sprite = crag(w, w * ctx.rng.range(0.6, 0.9), rockPal, ctx.rng.int(1, 1e6), 5);
+    if (Math.abs(x - ctx.enemy.x) < 3.2 || i % 2) continue;
+    standing.push({ sprite, x, z, shadow: { rx: w * 0.6, ry: w * 0.15 } });
   }
-  for (const [x, z, s] of [[2.6, 7.2, 1.1], [2.9, 10.6, 0.8], [-3.2, 11.4, 0.9], [-2.9, 9.2, 0.6]] as const) {
+  for (const [x, z, s] of [[2.6, 7.2, 1.1], [2.9, 10.6, 0.8], [-3.7, 12.2, 1.0]] as const) {
     const ppu = view.ppu(view.depth(x, 0, z));
     const w = ppu * s;
     standing.push({ sprite: crag(w, w * 0.75, rockPal, ctx.rng.int(1, 1e6), 6), x, z, shadow: { rx: w * 0.62, ry: w * 0.15 } });
   }
   stand(ctx, standing, darker([S, SAND_SHADE, ROCK]));
-  // Dry scrub and straw at the edges of the view, swaying in the wind.
+  // Dry scrub and straw framing the edges of the view, swaying in the wind.
   const scrub = (ppu: number) => ({ sprite: shrub(ppu * ctx.rng.range(0.45, 0.7), ppu * ctx.rng.range(0.35, 0.55), ramp('#5a4221', '#8b6a39'), SCRUB, ctx.rng.int(1, 1e6)), sway: 1 });
   const straw = (ppu: number) => {
     const h = ppu * ctx.rng.range(0.25, 0.4);
@@ -474,10 +454,7 @@ function desert(ctx: ArenaContext): void {
   };
   frameProp(ctx, 4, 96, -1, scrub);
   frameProp(ctx, 8, 70, -1, straw);
-  frameProp(ctx, 232, 66, 1, straw);
-  frameProp(ctx, 236, 48, 1, scrub);
-  place(ctx, { region: [-240, -20, 40, 112], count: 8, make: (ppu) => (ctx.rng.chance(0.5) ? scrub(ppu) : straw(ppu)) });
-  place(ctx, { region: [260, 480, 40, 112], count: 8, make: (ppu) => (ctx.rng.chance(0.5) ? scrub(ppu) : straw(ppu)) });
+  frameProp(ctx, 236, 104, 1, straw);
 }
 
 // --- ROUTE 124: the open sea ------------------------------------------------
@@ -626,11 +603,11 @@ function seafloor(ctx: ArenaContext): void {
     const v = 5.3 + light * 1.75 + mound * 1.0 - far(g.z) * 2.6;
     return [band(UW, v, sx, sy, 0.07), MAT.SOLID];
   });
-  // Sand ripples: short crests in rows, lit on top with their shadow under them, in patches.
+  // Sand ripples: short crests in rows, lit on top with their shadow under them, in a few patches, none around the wild Pokémon.
   const rippled = (x: number, z: number) => fbm(x * 0.34 + 3, z * 0.5, 44);
-  scatter(ctx, 8, 61, (x, z, sx, sy, ppu, r) => {
+  scatter(ctx, 9, 61, (x, z, sx, sy, ppu, r) => {
     const f = rippled(x, z);
-    if (z > 12 || f < 0.47 || r > (f - 0.47) * 3.6) return;
+    if (z > 12 || f < 0.49 || r > (f - 0.49) * 3.4 || foeCalm(ctx, sx, sy, 12) > 0) return;
     const len = ppu > 52 ? 7 + Math.round(r * 5) : ppu > 38 ? 5 + Math.round(r * 3) : 3;
     rippleMark(ctx, sx, sy, len, [UW]);
   });
@@ -639,16 +616,18 @@ function seafloor(ctx: ArenaContext): void {
     { z: 22, height: 3.6, shades: DEEP.slice(3, 6), crest: DEEP[6], freq: 0.3, rough: 0.6, seed: 5 },
     { z: 16.8, height: 2.1, shades: DEEP.slice(1, 5), crest: DEEP[5], freq: 0.5, rough: 0.7, seed: 9 },
   ]);
-  // A kelp forest standing in the blue: dim silhouettes, dimmer the farther.
+  // A kelp forest standing in the blue: dim silhouettes in a few clumps, dimmer the farther, open water behind the wild Pokémon.
   const farKelp = [];
-  for (let x = -18; x < 18; x += ctx.rng.range(1.6, 3.4)) {
-    // Clumps of a few fronds.
+  for (let x = -18; x < 18; x += ctx.rng.range(2, 3.4)) {
     const z0 = ctx.rng.range(14.4, 18.5);
-    for (let k = ctx.rng.int(2, 4); k > 0; k--) {
+    for (let k = ctx.rng.int(1, 3); k > 0; k--) {
       const xx = x + ctx.rng.range(-0.5, 0.5), z = z0 + ctx.rng.range(-0.3, 0.3);
       const ppu = view.ppu(view.depth(xx, 0, z));
       const c = z > 16.4 ? DEEP[4] : DEEP[2];
-      farKelp.push({ sprite: seaweed(ppu * ctx.rng.range(0.2, 0.32), ppu * ctx.rng.range(1.2, 2.8), [c, c, c], null, ctx.rng.int(1, 1e6)), x: xx, z });
+      const sprite = seaweed(ppu * ctx.rng.range(0.2, 0.32), ppu * ctx.rng.range(1.2, 2.8), [c, c, c], null, ctx.rng.int(1, 1e6));
+      const [kx] = view.screen(xx, 0, z);
+      if (kx > 136 && kx < 220) continue;
+      farKelp.push({ sprite, x: xx, z });
     }
   }
   stand(ctx, farKelp, (c) => c);
@@ -660,50 +639,39 @@ function seafloor(ctx: ArenaContext): void {
   ];
   const farWater = (sx: number, sy: number) => ctx.ground.material(sx, sy) === MAT.BACKDROP || (view.ground(sx, sy)?.z ?? 0) > 11;
   shafts(ctx, shaftList, [DEEP, UW], farWater);
-  // Shells, pebbles and a starfish on the sand, sparse, clear of the battlers.
-  scatter(ctx, 15, 23, (x, z, sx, sy, ppu, r) => {
-    if (r > 0.14 || z > 12.2) return;
-    if (Math.hypot(x - ctx.enemy.x, z - ctx.enemy.z) < 1.3) return;
+  // A few shells and pebbles on the sand, a shade or two off it, none around the wild Pokémon.
+  scatter(ctx, 15, 23, (_x, z, sx, sy, ppu, r) => {
+    if (r > 0.06 || z > 12.2 || foeCalm(ctx, sx, sy, 12) > 0) return;
     const g = ctx.ground;
-    if (r < 0.045 && ppu > 34) {
+    if (r < 0.025 && ppu > 34) {
       g.set(sx - 1, sy, SHELL[1]);
       g.set(sx, sy, SHELL[2]);
       g.set(sx + 1, sy, SHELL[1]);
       g.set(sx, sy + 1, SHELL[0]);
     } else {
-      g.set(sx, sy, UW[4]);
+      g.set(sx, sy, UW[6]);
       if (ppu > 30) g.set(sx + 1, sy, UW[8]);
     }
   });
-  // Reefs: rocks with coral growing on and around them, framing the sides (the
-  // biggest in the foreground at the left), none near the battlers.
+  // Reefs: a rock or two with a little coral on and around them, framing the
+  // sides (the biggest in the foreground at the left), open sand between the
+  // battlers and around the wild Pokémon.
   const rockPal = { shades: UW_ROCK, outline: UW_ROCK[0] };
   type Piece = { k: 'rock' | 'head' | 'stag' | 'fan' | 'anem' | 'star'; x: number; z: number; s: number; c?: number };
   const pieces: Piece[] = [
     // Foreground, left.
-    { k: 'fan', x: 2.75, z: 7.5, s: 0.62, c: 0 },
     { k: 'rock', x: 2.5, z: 7.1, s: 1.3 },
     { k: 'stag', x: 2.2, z: 7.25, s: 0.55, c: 1 },
-    { k: 'head', x: 2.85, z: 6.95, s: 0.45, c: 2 },
-    { k: 'rock', x: 2.0, z: 6.25, s: 0.7 },
-    { k: 'anem', x: 1.72, z: 6.55, s: 0.3, c: 0 },
     { k: 'head', x: 1.85, z: 6.1, s: 0.34, c: 0 },
     // Midground, left.
     { k: 'rock', x: 3.1, z: 9.7, s: 1.0 },
     { k: 'stag', x: 2.8, z: 9.95, s: 0.42, c: 2 },
-    { k: 'anem', x: 2.55, z: 9.5, s: 0.24, c: 2 },
     { k: 'head', x: 2.2, z: 12.6, s: 0.4, c: 0 },
-    { k: 'fan', x: 1.4, z: 13.1, s: 0.45, c: 2 },
-    // Behind the enemy, far right.
+    // Past the wild Pokémon's right, cropped by the frame.
     { k: 'rock', x: -3.6, z: 11.8, s: 1.3 },
-    { k: 'fan', x: -3.2, z: 12.2, s: 0.5, c: 0 },
-    { k: 'stag', x: -4.0, z: 12.0, s: 0.5, c: 1 },
-    { k: 'head', x: -3.1, z: 11.7, s: 0.36, c: 2 },
-    { k: 'rock', x: -4.7, z: 13.4, s: 0.8 },
-    { k: 'anem', x: -4.4, z: 13.2, s: 0.26, c: 0 },
+    { k: 'fan', x: -3.75, z: 12.6, s: 0.5, c: 0 },
     // On the sand.
     { k: 'star', x: 1.55, z: 8.2, s: 0.28 },
-    { k: 'star', x: -2.6, z: 10.1, s: 0.26 },
   ];
   const standing = pieces.map((p) => {
     const ppu = view.ppu(view.depth(p.x, 0, p.z));
@@ -720,19 +688,13 @@ function seafloor(ctx: ArenaContext): void {
     }
   });
   stand(ctx, standing, darker([UW, UW_ROCK]));
-  // Seaweed swaying at the edges of the view and beyond, and a few fronds farther back.
+  // Seaweed swaying at the edges of the view, cropped by the frame, and a frond farther back at the left.
   const weed = (ppu: number, tall: number) => ({ sprite: seaweed(ppu * ctx.rng.range(0.3, 0.5), ppu * tall * ctx.rng.range(0.8, 1.2), UW_WEED.slice(1, 4), UW_WEED[0], ctx.rng.int(1, 1e6)), sway: ppu * 0.05 + 1 });
-  // Framing the view: fronds at its left and right edges, cropped by the frame.
   frameProp(ctx, 2, 84, -1, (ppu) => weed(ppu, 2.3));
   frameProp(ctx, 12, 64, -1, (ppu) => weed(ppu, 1.7));
   frameProp(ctx, 232, 70, 1, (ppu) => weed(ppu, 2.4));
-  frameProp(ctx, 238, 52, 1, (ppu) => weed(ppu, 1.9));
-  place(ctx, { region: [-240, -10, 30, 112], count: 10, make: (ppu) => weed(ppu, 1.7) });
-  place(ctx, { region: [250, 480, 30, 112], count: 10, make: (ppu) => weed(ppu, 1.7) });
-  for (const [sx, sy] of [[28, 30], [214, 24], [104, 22]] as const) {
-    const g = view.ground(sx, sy)!;
-    addProp(ctx, { x: g.x, z: g.z, ...weed(g.ppu, 1.2) });
-  }
+  const g = view.ground(28, 30)!;
+  addProp(ctx, { x: g.x, z: g.z, ...weed(g.ppu, 1.2) });
 }
 
 // --- MT. CHIMNEY --------------------------------------------------------------

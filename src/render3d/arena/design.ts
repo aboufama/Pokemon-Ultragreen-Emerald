@@ -146,6 +146,8 @@ export interface DuneRow {
   lit: Ramp;
   shade: Ramp;
   crest: Rgb;
+  /** How wide the dither between shades spreads (band softness, default 0.3): lower is calmer. */
+  soft?: number;
 }
 
 /**
@@ -188,10 +190,10 @@ export function dunes(ctx: ArenaContext, rows: DuneRow[]): void {
         if (d.up) {
           // The windward face: brightest just under the crest, a little darker toward the trough.
           const v = (r.lit.length - 1) * (0.45 + d.t * 0.55) - down * 1.2;
-          c = band(r.lit, v, sx, sy, 0.3);
+          c = band(r.lit, v, sx, sy, r.soft ?? 0.3);
         } else {
           const v = (r.shade.length - 1) * (0.12 + (1 - d.t) * 0.55) - down * 0.5;
-          c = band(r.shade, v, sx, sy, 0.3);
+          c = band(r.shade, v, sx, sy, r.soft ?? 0.3);
         }
         // The crest line along the lit face's top.
         if (sy === y0 && d.up && d.t > 0.25) c = r.crest;
@@ -264,6 +266,18 @@ export function battlerBox(ctx: ArenaContext, who: 'player' | 'enemy'): [number,
   const p = ctx[who];
   const [sx, sy] = ctx.view.screen(p.x, 0, p.z);
   return who === 'enemy' ? [sx - 46, sy - 70, sx + 46, sy + 10] : [sx - 64, sy - 120, sx + 64, sy + 10];
+}
+
+/**
+ * How deep screen pixel (sx, sy) is in the calm around the wild Pokémon: 1
+ * inside its battler box widened by `pad` px, falling to 0 over `fade` px
+ * more. The ground right behind and around it stays quiet (no marks,
+ * ripples or clutter), so the Pokémon reads against the place.
+ */
+export function foeCalm(ctx: ArenaContext, sx: number, sy: number, pad = 8, fade = 16): number {
+  const [x0, y0, x1, y1] = battlerBox(ctx, 'enemy');
+  const dx = Math.max(x0 - pad - sx, 0, sx - x1 - pad), dy = Math.max(y0 - pad - sy, 0, sy - y1 - pad);
+  return 1 - Math.min(1, Math.hypot(dx, dy) / fade);
 }
 
 /** True if a prop would cover a battler or stand in front of it (where it is drawn, sway included). */
