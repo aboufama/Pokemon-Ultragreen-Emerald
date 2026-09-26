@@ -572,7 +572,7 @@ function seafloor(ctx: ArenaContext): void {
   const rippled = (x: number, z: number) => fbm(x * 0.34 + 3, z * 0.5, 44);
   scatter(ctx, 8, 61, (x, z, sx, sy, ppu, r) => {
     const f = rippled(x, z);
-    if (z > 12 || f < 0.45 || r > (f - 0.45) * 5) return;
+    if (z > 12 || f < 0.47 || r > (f - 0.47) * 3.6) return;
     const len = ppu > 52 ? 7 + Math.round(r * 5) : ppu > 38 ? 5 + Math.round(r * 3) : 3;
     rippleMark(ctx, sx, sy, len, [UW]);
   });
