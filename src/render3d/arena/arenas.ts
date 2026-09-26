@@ -266,22 +266,34 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     trees.push({ sprite: bush(w, bushPal, ctx.rng.int(1, 1e6)), x, z });
   }
   stand(ctx, trees, dark);
-  // Framing the left: big tufts of grass and a clump of flowers in the foreground, cropped by the frame.
-  const tufts = [];
-  for (const [sx, sy, s] of [[2, 110, 1], [22, 104, 0.8], [-6, 92, 0.9], [34, 112, 0.7], [10, 84, 0.6]] as const) {
+  // Framing the left: big tufts of grass in the foreground, cropped by the frame, with red flowers
+  // (Route 101), grown taller (Route 120), or around a mossy boulder and reeds (Route 102).
+  const tall = o.tallGrassHeight ?? 1;
+  const tufts: { sprite: Sprite; x: number; z: number; mat: number }[] = [];
+  const tuftSpots = o.pond ? [[22, 106, 0.8], [36, 112, 0.7], [-8, 90, 0.8]] : [[2, 110, 1], [22, 104, 0.8], [-6, 92, 0.9], [34, 112, 0.7], [10, 84, 0.6]];
+  for (const [sx, sy, s] of tuftSpots) {
     const g = view.ground(sx, sy)!;
-    const w = g.ppu * 0.55 * s, h = g.ppu * 0.42 * s;
-    tufts.push({ sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z });
+    const w = g.ppu * 0.55 * s, h = g.ppu * 0.42 * s * Math.min(1.3, tall);
+    tufts.push({ sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z, mat: MAT.GRASS });
+  }
+  if (o.pond) {
+    const g = view.ground(2, 104)!;
+    tufts.push({ sprite: rock(g.ppu * 0.7, g.ppu * 0.45, { shades: ramp('#4a5a31', '#6a7b41', '#8b946a', '#b4ac8b', '#d5cdac'), outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z, mat: MAT.SOLID });
+    for (const [sx, sy] of [[14, 96], [-2, 88]]) {
+      const r = view.ground(sx, sy)!;
+      tufts.push({ sprite: reeds(r.ppu * 0.35, r.ppu * 0.7, REED_STEM, REED_HEAD, TREE_OUTLINE, ctx.rng.int(1, 1e6)), x: r.x, z: r.z, mat: MAT.GRASS });
+    }
   }
   tufts.sort((a, b) => b.z - a.z);
   for (const t of tufts) {
     const [px, py] = view.screen(t.x, 0, t.z);
-    ground.sprite(t.sprite, Math.round(px), Math.floor(py) + 1, MAT.GRASS);
+    ground.sprite(t.sprite, Math.round(px), Math.floor(py) + 1, t.mat);
   }
-  const fk = FLOWERS[0];
-  for (let i = 0; i < 7; i++) {
-    const g = view.ground(ctx.rng.range(4, 30), ctx.rng.range(88, 100))!;
-    flower(g.x, g.z, fk);
+  if (!o.pond && tall <= 1) {
+    for (let i = 0; i < 7; i++) {
+      const g = view.ground(ctx.rng.range(4, 30), ctx.rng.range(88, 100))!;
+      flower(g.x, g.z, FLOWERS[0]);
+    }
   }
   // Tall grass swaying at the edges of the view and around the sides (props: it can hide the Pokémon's feet).
   const clump = (ppu: number) => {
