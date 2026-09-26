@@ -15,7 +15,13 @@
 //   - an arena always paints the same (seeded) and quickly (it paints when a
 //     battle loads, on phones too);
 //   - every place is as calm as the open sea (Route 124, the benchmark) where
-//     the battle shows it, within a stated margin: the Pokémon are the focus.
+//     the battle shows it, within a stated margin: the Pokémon are the focus;
+//   - every place is as sparse as the sea, the way Emerald's own battle
+//     backgrounds are: few colors, a few broad tones, marks no more than the
+//     sea's, at most two props showing, the far view hazed;
+//   - with --render: in the battle view, the Pokémon (Blaziken, Sceptile,
+//     Swampert) are the most saturated and the highest-contrast things on
+//     screen.
 // Exits non-zero if any check fails.
 
 import { execSync } from 'node:child_process';
@@ -23,7 +29,7 @@ import { readFile, readdir, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { importTs } from '../gauntlet/tsimport.mjs';
 import { ROOT } from '../gauntlet/species.mjs';
-import { calm, compose, propsShowing, shownMask } from './screen.mjs';
+import { calm, compose, focus, propsShowing, shownMask, sparse } from './screen.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, all) => (a.startsWith('--') ? [a.slice(2), all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? true : all[i + 1]] : null)).filter(Boolean));
 const results = [];
@@ -55,6 +61,51 @@ const CALM = [
 ];
 /** Props that show (24+ pixels): the sea shows none, and props frame only the edges, so at most 3. */
 const MAX_PROPS_SHOWING = 3;
+
+/**
+ * Sparse, like Emerald's own battle backgrounds (a pale field of a few close
+ * tones, marks small and few) and the pixel-art rules of the arena skill,
+ * measured the same way, on what the battle shows (screen.mjs sparse(),
+ * calm(), propsShowing()). Every limit is the open sea's own value, so the
+ * sea passes by construction:
+ *
+ *   colors        no more colors shown than the sea: a small palette, a few
+ *                 ramps of 3-4 steps
+ *   three tones   the three most-used colors cover at least 90% of the sea's
+ *                 share (the sea's water is three blues): a few broad tones,
+ *                 large flat areas
+ *   specks, marks no more than the sea's (the calm gates allow 10% and 30%
+ *                 more; being sparse allows none): little scattered detail
+ *   far darks     the far view's darks no darker than the sea's far view's:
+ *                 haze lifts the far view, no near-black far off
+ *   far contrast  the far view's luma spread no wider than the sea's: haze
+ *                 lowers the far view's contrast
+ *   props         at most 2 showing (the sea shows none): framing at the
+ *                 edges, no clutter
+ */
+const SPARSE = [
+  { key: 'colours', label: 'colors', limit: (s) => s.colours, digits: 0 },
+  { key: 'tones', label: 'three tones', limit: (s) => s.tones * 0.9, least: true, unit: '%' },
+  { key: 'specks', label: 'specks/1k', limit: (s) => s.specks },
+  { key: 'marks', label: 'marks/1k', limit: (s) => s.marks },
+  { key: 'farDark', label: 'far darks', limit: (s) => s.farDark, least: true },
+  { key: 'farRange', label: 'far contrast', limit: (s) => s.farRange },
+];
+const MAX_PROPS_SPARSE = 2;
+
+/**
+ * The Pokémon are the focus (with --render): each arena is rendered in the
+ * browser with the three species facing each other (every one of them on
+ * both sides), no UI, and measured with screen.mjs focus() on what the
+ * battle shows: nothing in the arena may be more saturated than the
+ * Pokémon's saturated colors (99.9th percentile of the arena's chroma under
+ * the 90th of theirs), nor contrastier right around them than their own
+ * strongest edges (99th percentile of the local contrast 3-16 px from them
+ * under the 99th of theirs). The sea passes with room: its blues reach
+ * chroma 132 against the Pokémon's 148 and more, its surf a contrast of 146
+ * against their 165 and more.
+ */
+const PAIRS = [['blaziken', 'swampert'], ['sceptile', 'blaziken'], ['swampert', 'sceptile']];
 
 const app = await importTs('tools/arena/entry.ts');
 const { ARENAS, paintArena, battlerBox, propRect, BATTLE_CAMERA, groundPointAt, makeBattleCamera } = app;
@@ -94,13 +145,16 @@ const walk = async (dir) => {
 await walk(join(ROOT, 'src'));
 gate('arenas are painted, not Emerald backgrounds projected', offenders.length === 0, offenders.join(', '));
 
-/** How calm an arena is where the battle shows it, and how many props show. */
+/** How calm and how sparse an arena is where the battle shows it, and how many props show. */
 const measure = (ctx) => {
   const mask = shownMask(battlerBox(ctx, 'player'));
-  return { ...calm(compose(ctx, propRect, 0, 0, 240, 160), mask, battlerBox(ctx, 'enemy')), props: propsShowing(ctx, propRect, mask) };
+  const img = compose(ctx, propRect, 0, 0, 240, 160);
+  return { ...calm(img, mask, battlerBox(ctx, 'enemy')), ...sparse(img, mask), props: propsShowing(ctx, propRect, mask) };
 };
-const sea = measure(paintArena(BENCHMARK, camera, player, enemy).ctx);
+const seaCtx = paintArena(BENCHMARK, camera, player, enemy).ctx;
+const sea = measure(seaCtx);
 const limits = Object.fromEntries(CALM.map((m) => [m.key, sea[m.key] * (1 + m.margin)]));
+const sparseLimits = Object.fromEntries(SPARSE.map((m) => [m.key, m.limit(sea)]));
 
 for (const name of Object.keys(ARENAS)) {
   const t0 = performance.now();
@@ -149,6 +203,18 @@ for (const name of Object.keys(ARENAS)) {
   if (m.props > MAX_PROPS_SHOWING) over.push(`props showing ${m.props} <= ${MAX_PROPS_SHOWING}`);
   shown.push(`props showing ${m.props} <= ${MAX_PROPS_SHOWING}`);
   gate(`${name}: as calm as the sea`, over.length === 0, over.length ? `over: ${over.join('; ')}` : shown.join(', '));
+  // As sparse as the sea: each measure against the sea's own value.
+  const missed = [];
+  const sparseShown = SPARSE.map((s) => {
+    const d = s.digits ?? 1;
+    const ok = s.least ? m[s.key] >= sparseLimits[s.key] : m[s.key] <= sparseLimits[s.key];
+    const text = `${s.label} ${m[s.key].toFixed(d)}${s.unit ?? ''} ${s.least ? '>=' : '<='} ${sparseLimits[s.key].toFixed(d)}${s.unit ?? ''}`;
+    if (!ok) missed.push(text);
+    return text;
+  });
+  if (m.props > MAX_PROPS_SPARSE) missed.push(`props showing ${m.props} <= ${MAX_PROPS_SPARSE}`);
+  sparseShown.push(`props showing ${m.props} <= ${MAX_PROPS_SPARSE}`);
+  gate(`${name}: as sparse as the sea`, missed.length === 0, missed.length ? `missed: ${missed.join('; ')}` : sparseShown.join(', '));
 }
 
 if (args.render) {
@@ -158,6 +224,7 @@ if (args.render) {
   await mkdir(out, { recursive: true });
   const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 720, height: 480 } });
+  const mask = shownMask(battlerBox(seaCtx, 'player'));
   for (const name of Object.keys(ARENAS)) {
     const errors = [];
     const onError = (e) => errors.push(String(e.message ?? e));
@@ -167,9 +234,31 @@ if (args.render) {
     await page.goto(`${base}?mode=stage&env=${name}&player=blaziken&enemy=swampert&scale=3`);
     await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
     await page.screenshot({ path: join(out, `${name}.png`), clip: { x: 0, y: 0, width: 720, height: 480 } });
+    // The Pokémon are the focus: the battle view at GBA pixels, no UI, which pixels are a Pokémon.
+    const figures = [];
+    let focused = true;
+    for (const [p, e] of PAIRS) {
+      await page.goto(`${base}?mode=stage&env=${name}&player=${p}&enemy=${e}&scale=1&ui=0`);
+      await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
+      const { rgba, ids } = await page.evaluate(() => {
+        const stage = window.preview.stage;
+        stage.render();
+        const c = document.createElement('canvas');
+        c.width = 240;
+        c.height = 160;
+        const g = c.getContext('2d');
+        g.imageSmoothingEnabled = false;
+        g.drawImage(stage.canvas, 0, 0, 240, 160);
+        return { rgba: Array.from(g.getImageData(0, 0, 240, 160).data), ids: Array.from(stage.pipeline.renderIdMask(stage.scene, stage.camera, 240, 160)) };
+      });
+      const f = focus(rgba, ids, mask);
+      if (!(f.arenaChroma < f.monChroma && f.nearContrast < f.monContrast)) focused = false;
+      figures.push(`${p} vs ${e}: chroma ${f.arenaChroma} < ${f.monChroma}, contrast ${f.nearContrast.toFixed(0)} < ${f.monContrast.toFixed(0)}`);
+    }
     page.off('pageerror', onError);
     page.off('console', onConsole);
     gate(`${name}: renders in a battle`, errors.length === 0, errors.slice(0, 2).join(' | ') || `build/arenas/${name}.png`);
+    gate(`${name}: the Pokémon are the focus`, focused, figures.join('; '));
   }
   await browser.close();
 }

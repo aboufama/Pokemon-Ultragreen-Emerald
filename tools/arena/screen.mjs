@@ -1,8 +1,9 @@
 // What the resting battle camera sees of a painted arena (the ground with
 // its props standing on it; no Pokémon, no ground shader life), which of it
 // a battle shows (not under the text box, the healthboxes or the player's
-// Pokémon), and how calm that is, for the arena tools (preview.mjs,
-// check.mjs).
+// Pokémon), and how calm and how sparse that is, and whether the Pokémon
+// are the focus of the rendered battle view, for the arena tools
+// (preview.mjs, check.mjs).
 
 /**
  * The screen at rest, RGBA, for GBA pixels [x0, x0 + w) x [y0, y0 + h):
@@ -183,4 +184,102 @@ export function calm(img, mask, foeBox) {
     if (size <= 12) marks++;
   }
   return { busy: busy / n, strong: (strong / n) * 100, specks: (specks / n) * 1000, marks: (marks / n) * 1000, open: (open / n) * 100, foe: nFoe ? foe / nFoe : 0 };
+}
+
+/** The far view on screen: rows 1-25 (ground z 26-15, where tree lines, walls and the far water stand). */
+export const FAR_ROWS = [1, 26];
+
+const luma = (img, i) => 0.299 * img[i * 4] + 0.587 * img[i * 4 + 1] + 0.114 * img[i * 4 + 2];
+const chroma = (img, i) => Math.max(img[i * 4], img[i * 4 + 1], img[i * 4 + 2]) - Math.min(img[i * 4], img[i * 4 + 1], img[i * 4 + 2]);
+/** The value at fraction `p` of sorted numbers. */
+const pct = (sorted, p) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] : 0);
+
+/**
+ * How sparse the arena is where the battle shows it (`mask`, from
+ * shownMask), on the resting screen (`img`, from compose), after Emerald's
+ * own battle backgrounds (a pale field of a few close tones, detail kept
+ * small) and the pixel-art rules of the arena skill:
+ *
+ *   colours   distinct colors shown: a small palette
+ *   tones     share of the shown pixels in the three most-used colors (%):
+ *             a few broad tones, large flat areas
+ *   farDark   the far view's darks: 5th percentile of the luma of the shown
+ *             pixels in FAR_ROWS (haze lifts the far view's darks: no
+ *             near-black far off)
+ *   farRange  the far view's contrast: the spread of that luma, 5th to 95th
+ *             percentile (haze lowers the far view's contrast)
+ */
+export function sparse(img, mask) {
+  const counts = new Map();
+  const far = [];
+  let n = 0;
+  for (let i = 0; i < 240 * 160; i++) {
+    if (!mask[i]) continue;
+    n++;
+    const k = (img[i * 4] << 16) | (img[i * 4 + 1] << 8) | img[i * 4 + 2];
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+    const y = Math.floor(i / 240);
+    if (y >= FAR_ROWS[0] && y < FAR_ROWS[1]) far.push(luma(img, i));
+  }
+  const top = [...counts.values()].sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
+  far.sort((a, b) => a - b);
+  return { colours: counts.size, tones: (top / n) * 100, farDark: pct(far, 0.05), farRange: pct(far, 0.95) - pct(far, 0.05) };
+}
+
+/**
+ * Whether the Pokémon are the focus of the battle view: `img` is the
+ * rendered screen (RGBA, 240 x 160, the Pokémon standing, no UI), `ids`
+ * which of its pixels are a Pokémon (1 and 2, the pipeline's id mask),
+ * `mask` the shown pixels (shownMask).
+ *
+ *   monChroma     the Pokémon's saturated colors: 90th percentile of the
+ *                 chroma (max - min of R, G, B) of their pixels
+ *   arenaChroma   the arena's most saturated color shown: 99.9th percentile
+ *                 of the chroma of the shown pixels that are not a Pokémon
+ *   monContrast   the Pokémon's strongest edges: 99th percentile of the local
+ *                 contrast of their pixels (the largest luma step to a
+ *                 4-neighbor): their outlines
+ *   nearContrast  the strongest edges of the arena right around them: 99th
+ *                 percentile of the local contrast of the shown pixels 3 to
+ *                 16 px from a Pokémon
+ */
+export function focus(img, ids, mask) {
+  const W = 240, H = 160;
+  const isMon = (i) => ids[i] === 1 || ids[i] === 2;
+  // Chessboard distance to the nearest Pokémon pixel (up to 17).
+  const dist = new Uint8Array(W * H).fill(255);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (!isMon(y * W + x)) continue;
+      for (let dy = -17; dy <= 17; dy++) {
+        for (let dx = -17; dx <= 17; dx++) {
+          const X = x + dx, Y = y + dy;
+          if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+          const d = Math.max(Math.abs(dx), Math.abs(dy));
+          if (d < dist[Y * W + X]) dist[Y * W + X] = d;
+        }
+      }
+    }
+  }
+  const local = (i) => {
+    const x = i % W, y = (i - x) / W, l = luma(img, i);
+    let m = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const X = x + dx, Y = y + dy;
+      if (X >= 0 && Y >= 0 && X < W && Y < H) m = Math.max(m, Math.abs(l - luma(img, Y * W + X)));
+    }
+    return m;
+  };
+  const monC = [], monK = [], arenaK = [], nearC = [];
+  for (let i = 0; i < W * H; i++) {
+    if (isMon(i)) {
+      monC.push(local(i));
+      monK.push(chroma(img, i));
+    } else if (mask[i]) {
+      arenaK.push(chroma(img, i));
+      if (dist[i] >= 3 && dist[i] <= 16) nearC.push(local(i));
+    }
+  }
+  for (const a of [monC, monK, arenaK, nearC]) a.sort((p, q) => p - q);
+  return { monChroma: pct(monK, 0.9), arenaChroma: pct(arenaK, 0.999), monContrast: pct(monC, 0.99), nearContrast: pct(nearC, 0.99) };
 }

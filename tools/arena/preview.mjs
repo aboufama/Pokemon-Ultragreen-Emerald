@@ -9,9 +9,9 @@
 //   --boxes   outline the battlers' boxes (props never enter them) and dim what
 //             the healthboxes and the text box cover
 //
-// Writes <out>/<arena>.paint.png (and .wide.png), and prints how calm it is
-// where the battle shows it (the measures check.mjs holds against the sea's;
-// see the arena skill). Judge the result in the browser too
+// Writes <out>/<arena>.paint.png (and .wide.png), and prints how calm and how
+// sparse it is where the battle shows it (the measures check.mjs holds
+// against the sea's; see the arena skill). Judge the result in the browser too
 // (/?mode=stage&env=<arena>): the ground's life, the Pokémon and their
 // shadows are only there.
 
@@ -19,7 +19,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { importTs } from '../gauntlet/tsimport.mjs';
-import { calm, compose as composeWith, propsShowing, shownMask } from './screen.mjs';
+import { calm, compose as composeWith, propsShowing, shownMask, sparse } from './screen.mjs';
 import { ROOT } from '../gauntlet/species.mjs';
 
 const argv = process.argv.slice(2);
@@ -106,7 +106,9 @@ for (const name of names) {
     await save(wide, g.width, g.height, join(out, `${name}.wide.png`));
   }
   const mask = shownMask(battlerBox(ctx, 'player'));
-  const c = calm(compose(ctx, 0, 0, 240, 160), mask, battlerBox(ctx, 'enemy'));
-  const figures = `busy ${c.busy.toFixed(1)}  strong ${c.strong.toFixed(1)}%  specks ${c.specks.toFixed(1)}  marks ${c.marks.toFixed(1)}  open ${c.open.toFixed(0)}%  foe ${c.foe.toFixed(1)}  props ${propsShowing(ctx, propRect, mask)}`;
+  const img = compose(ctx, 0, 0, 240, 160);
+  const c = calm(img, mask, battlerBox(ctx, 'enemy'));
+  const s = sparse(img, mask);
+  const figures = `busy ${c.busy.toFixed(1)}  strong ${c.strong.toFixed(1)}%  specks ${c.specks.toFixed(1)}  marks ${c.marks.toFixed(1)}  open ${c.open.toFixed(0)}%  foe ${c.foe.toFixed(1)}  props ${propsShowing(ctx, propRect, mask)}  |  colors ${s.colours}  tones ${s.tones.toFixed(0)}%  far darks ${s.farDark.toFixed(0)}  far contrast ${s.farRange.toFixed(0)}`;
   console.log(`${name.padEnd(11)} ${ms.toFixed(0).padStart(4)} ms  ${figures}  -> ${join(out, name)}.paint.png`);
 }
