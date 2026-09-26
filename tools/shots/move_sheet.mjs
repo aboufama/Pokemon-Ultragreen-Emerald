@@ -7,7 +7,7 @@
 //        [--species blaziken] [--enemy blaziken] [--every 6] [--frames 16] [--density 1] \
 //        [--crop x,y,w,h] [--env sand] [--poseRate 0] --out build/sheets/blaziken.png
 //
-// --poseRate 0 shows smooth motion instead of the game's stop motion (12 poses a second).
+// --poseRate 0 shows smooth motion instead of the game's stop motion (15 poses a second).
 //
 // Prints page errors; exits non-zero if any move throws.
 
