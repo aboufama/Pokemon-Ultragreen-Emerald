@@ -649,9 +649,10 @@ function seafloor(ctx: ArenaContext): void {
   stand(ctx, farKelp, (c) => c);
   // Light shafts from the surface, slanting down from the upper left through the far water onto the sand.
   const shaftList = [
-    // Two in the view (one left of the wild Pokémon, one past it), more beyond for the intro's slide.
-    { x: 40, w: 16, lean: 0.42, bottom: 58, strength: 0.9, lift: 2 },
-    { x: 196, w: 11, lean: 0.42, bottom: 52, strength: 0.8, lift: 2 },
+    // Two in the view where it shows them (between the wild Pokémon's healthbox and the wild Pokémon,
+    // and past its right), more beyond for the intro's slide.
+    { x: 88, w: 15, lean: 0.42, bottom: 54, strength: 0.9, lift: 2 },
+    { x: 206, w: 12, lean: 0.42, bottom: 46, strength: 0.8, lift: 2 },
   ];
   for (let x = -250; x < 500; x += ctx.rng.range(70, 120)) if (x < 0 || x > 240) shaftList.push({ x, w: ctx.rng.range(9, 20), lean: 0.42, bottom: ctx.rng.range(44, 66), strength: ctx.rng.range(0.7, 0.95), lift: 2 });
   const farWater = (sx: number, sy: number) => ctx.ground.material(sx, sy) === MAT.BACKDROP || (view.ground(sx, sy)?.z ?? 0) > 11;
