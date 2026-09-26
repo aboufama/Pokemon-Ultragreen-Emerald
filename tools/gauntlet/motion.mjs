@@ -95,7 +95,8 @@ for (const slug of species) {
   const page = await browser.newPage({ viewport: { width: 740, height: 500 } });
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
   for (const clip of clips) {
-    await page.goto(`${base}?mode=clipreview&species=${slug}&enemy=${slug}&clip=${clip}&attacker=enemy&ui=0`);
+    // poseRate=0: the motion itself, not its stop-motion display.
+    await page.goto(`${base}?mode=clipreview&species=${slug}&enemy=${slug}&clip=${clip}&attacker=enemy&ui=0&poseRate=0`);
     await page.waitForFunction(() => !!window.__clip, null, { timeout: 120000 });
     const duration = await page.evaluate(() => window.__clip.info.duration);
     const frames = await page.evaluate(({ n, names }) => {
