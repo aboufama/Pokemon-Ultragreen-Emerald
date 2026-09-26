@@ -374,8 +374,8 @@ const STRAW = ramp('#8b6a31', '#b49452', '#dec583');
  * Route 111's desert: dunes with sharp crests rolling away behind (lit on
  * their windward faces, their slip faces in shade, hazier the farther),
  * the heat shimmering over them; the floor heaped in low drifts combed by
- * the wind into rows of little ripples; pointed pink-brown rocks, dry scrub
- * and straw at the edges.
+ * the wind into rows of little ripples, sand ridges running away along the
+ * sides; pointed pink-brown rocks, dry scrub and straw at the edges.
  */
 function desert(ctx: ArenaContext): void {
   const { view, ground } = ctx;
@@ -391,11 +391,30 @@ function desert(ctx: ArenaContext): void {
   // Ripples: Emerald's rows of little zigzags, in patches, wandering with the drifts.
   const rippled = (x: number, z: number) => fbm(x * 0.22 + 4, z * 0.5, 12);
   const ripple = (x: number, z: number) => z * 3.1 + Math.sin(x * 38) * 0.28 + Math.sin(x * 0.45 + z * 0.6) * 0.8 + height(x, z) * 3;
+  // Sand ridges running away from the camera along the sides: a long lit face on their left (screen),
+  // a crisp crest, a short slip face in shade on their right; they taper out near and far.
+  const ridges = [{ x: 2.3, a: 0.05, w: 1.0, s: 0.3 }, { x: -3.15, a: -0.07, w: 1.1, s: 0.34 }];
+  const ridgeAt = (x: number, z: number) => {
+    const taper = smoothstep(4.5, 7, z) * (1 - smoothstep(12.5, 15, z));
+    if (taper <= 0) return null;
+    for (const r of ridges) {
+      // The crest meanders; the ridge swells and thins along its length.
+      const u = x - (r.x + r.a * (z - 8) + Math.sin(z * 0.8 + r.x) * 0.45 + Math.sin(z * 2.1 + r.x * 3) * 0.08);
+      const k = taper * (0.65 + 0.35 * Math.sin(z * 1.3 + r.x * 2));
+      if (u >= 0 && u < r.w * k) return { lit: true, t: u / (r.w * k), u };
+      if (u < 0 && u > -r.s * k) return { lit: false, t: -u / (r.s * k), u };
+    }
+    return null;
+  };
   fill(ctx, (sx, sy, g) => {
     const far = smoothstep(12, 22, g.z);
     const light = 1 - smoothstep(0.55, 1.35, Math.hypot((g.x - cx) / 3.4, (g.z - cz) / 5));
     const slope = lightOn(g.x, g.z) * (1 - far);
-    let v = 3.3 + light * 1.2 + slope * 1.1 + far * 0.9;
+    let v = 3.3 + light * 1.2 + slope * 1.1 + far * 0.9 - smoothstep(3, 6, Math.abs(g.x - cx)) * 0.7;
+    const r = ridgeAt(g.x, g.z);
+    if (r && !r.lit) return [band(SAND_SHADE, 1.2 + r.t * 1.6, sx, sy, 0.2), MAT.SOLID];
+    if (r && r.u < 1.2 / g.ppu) return [S[6], MAT.SOLID];
+    if (r) v += 1.3 * (1 - r.t);
     if (g.z < 13 && rippled(g.x, g.z) > 0.47 && onLine(ctx, sx, sy, ripple, 0.34)) v += 1;
     if (slope < -0.75) return [band(SAND_SHADE, 3.4 + (slope + 0.75) * 3, sx, sy, 0.25), MAT.SOLID];
     return [band(S, v, sx, sy, 0.14), MAT.SOLID];
@@ -442,6 +461,8 @@ function desert(ctx: ArenaContext): void {
   place(ctx, { region: [260, 480, 40, 112], count: 8, make: (ppu) => (ctx.rng.chance(0.5) ? scrub(ppu) : straw(ppu)) });
 }
 
+// --- ROUTE 124: the open sea ------------------------------------------------
+// --- ROUTE 124: the open sea ------------------------------------------------
 // --- ROUTE 124: the open sea ------------------------------------------------
 
 // Hoenn's sea (the general tileset's blues), deepest first, up to the foam.

@@ -186,7 +186,7 @@ export function dunes(ctx: ArenaContext, rows: DuneRow[]): void {
           const v = (r.lit.length - 1) * (0.45 + d.t * 0.55) - down * 1.2;
           c = band(r.lit, v, sx, sy, 0.3);
         } else {
-          const v = (r.shade.length - 1) * (0.4 + (1 - d.t) * 0.6) - down * 0.8;
+          const v = (r.shade.length - 1) * (0.12 + (1 - d.t) * 0.55) - down * 0.5;
           c = band(r.shade, v, sx, sy, 0.3);
         }
         // The crest line along the lit face's top.
