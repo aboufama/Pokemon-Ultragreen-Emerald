@@ -11,7 +11,8 @@ Output root: public/assets/gba/
   balls/<ball>.png
   menu/*.png                            setup screens: Birch's bag, window frame, type icons, cursors
   title/*.png                           the title screen: Rayquaza, clouds, the logo, EMERALD VERSION, PRESS START
-Plus src/data/generated/gfx_meta.json with environment ids and palettes needed at runtime.
+Plus src/data/generated/gfx_meta.json with environment ids and palettes needed at runtime,
+and the battle transitions' GridSquares pattern.
 """
 
 from __future__ import annotations
@@ -348,6 +349,19 @@ def extract_title(decomp: Path, out: Path) -> None:
     save(G.to_rgba(np.concatenate(frames, axis=1), G.png_palette(t / "press_start.png")), out / "title" / "press_start.png")
 
 
+def extract_transitions(decomp: Path, meta: dict) -> None:
+    """GridSquares (battle_transition.c) fills every 8x8 cell with the shrinking-box
+    tiles, one stage every 3 frames: for each pixel of a cell, the first stage
+    (tile) that fills it (99: never)."""
+    tiles = G.indexed(decomp / "graphics/battle_transitions/shrinking_box.png")
+    fill = []
+    for y in range(8):
+        for x in range(8):
+            stages = [k for k in range(tiles.shape[0] // 8) if tiles[k * 8 + y, x]]
+            fill.append(stages[0] if stages else 99)
+    meta["gridSquaresFill"] = fill
+
+
 def main(decomp: Path, root: Path) -> None:
     out = root / "public/assets/gba"
     data_dir = root / "src/data/generated"
@@ -362,6 +376,7 @@ def main(decomp: Path, root: Path) -> None:
     extract_pokemon(decomp, out, species)
     extract_menus(decomp, out, meta)
     extract_title(decomp, out)
+    extract_transitions(decomp, meta)
     (data_dir / "gfx_meta.json").write_text(json.dumps(meta, separators=(",", ":")) + "\n")
     print(f"wrote {data_dir / 'gfx_meta.json'}")
 

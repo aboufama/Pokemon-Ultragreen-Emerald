@@ -120,6 +120,24 @@ const compositeFrag = /* glsl */ `
   uniform vec2 echoAlpha[${MAX_ECHOES}];
   // The copy's palette blended toward rgb by a (Double Team darkens them).
   uniform vec4 echoLook[${MAX_ECHOES}];
+  // The battle intro's entry layer: a 256x256 GBA background over the arena.
+  uniform sampler2D tEntry;
+  uniform bool entryOn;
+  uniform ivec2 entryScroll;
+  // x = the layer's weight (EVA / 16), y = the arena's behind it (EVB / 16).
+  uniform vec2 entryAlpha;
+  // Battle transitions over the whole screen (battle_transition.c): a palette
+  // blend (rgb, a), WhiteBarsFade's 8 bars of 20 rows (lightened by BLDY/16
+  // right of x), GridSquares' shrinking-box stage (0 = off) with the stage
+  // each pixel of an 8x8 cell fills at, and Ripple's rows shifted up and down
+  // (amplitude in pixels, the sine's running angle << 8).
+  uniform vec4 fxBlend;
+  uniform int barX[8];
+  uniform float barY[8];
+  uniform int gridStage;
+  uniform int gridFill[64];
+  uniform float rippleAmp;
+  uniform int rippleSin;
   // id layout: 0 environment, 1..8 palette slots (Pokémon), 9+ effects (no snap/outline)
   const int FIRST_FX_ID = ${MAX_PALETTES + 1};
 
@@ -250,11 +268,27 @@ const compositeFrag = /* glsl */ `
 
   void main() {
     ivec2 outPx = ivec2(gl_FragCoord.xy);
+    ivec2 outSize = srcSize / ss;
+    int density = outSize.x / 240;
+    // The GBA pixel this output pixel belongs to (row 0 at the top).
+    ivec2 screen = ivec2(outPx.x / density, (outSize.y - 1 - outPx.y) / density);
+    if (rippleAmp > 0.0) {
+      // Ripple: BGxVOFS per row = Sin(((sin + y * 0x180) >> 8) & 0xFF, amplitude).
+      int angle = ((rippleSin + screen.y * 384) >> 8) & 255;
+      int shift = int(floor(rippleAmp * floor(256.0 * sin(float(angle) * 6.2831853 / 256.0) + 0.5) / 256.0));
+      outPx.y = clamp(outPx.y - shift * density, 0, outSize.y - 1);
+    }
     int id = majorityId(outPx);
     vec3 c = objectColor(outPx, id);
 
+    // The entry layer covers the arena, behind the Pokémon and effects (BG1
+    // under the sprites), wrapping like a GBA background as it scrolls.
+    if (entryOn && id == 0) {
+      vec4 e = texelFetch(tEntry, (screen + entryScroll) & 255, 0);
+      if (e.a > 0.5) c = min(vec3(1.0), e.rgb * entryAlpha.x + c * entryAlpha.y);
+    }
+
     // Afterimages go behind their Pokémon and effects, over everything else.
-    ivec2 outSize = srcSize / ss;
     for (int e = 0; e < ${MAX_ECHOES}; e++) {
       int eid = echoId[e];
       if (eid == 0 || id == eid || id >= FIRST_FX_ID) continue;
@@ -263,6 +297,12 @@ const compositeFrag = /* glsl */ `
       vec3 copy = mix(objectColor(q, eid), echoLook[e].rgb, echoLook[e].a);
       c = min(vec3(1.0), copy * echoAlpha[e].x + c * echoAlpha[e].y);
     }
+
+    // Battle transitions, over everything.
+    int bar = min(screen.y / 20, 7);
+    if (screen.x >= barX[bar]) c += (1.0 - c) * barY[bar];
+    if (gridStage > 0 && gridStage >= gridFill[(screen.y & 7) * 8 + (screen.x & 7)]) c = vec3(0.0);
+    c = mix(c, fxBlend.rgb, fxBlend.a);
     if (rgb555) c = toRgb555(c);
     gl_FragColor = vec4(c, 1.0);
   }
@@ -323,6 +363,18 @@ export class PixelPipeline {
         echoOffset: { value: new Int32Array(MAX_ECHOES * 2) },
         echoAlpha: { value: Array.from({ length: MAX_ECHOES }, () => new THREE.Vector2()) },
         echoLook: { value: Array.from({ length: MAX_ECHOES }, () => new THREE.Vector4()) },
+        tEntry: { value: null },
+        entryOn: { value: false },
+        // ivec2 goes to WebGL as a flat list.
+        entryScroll: { value: new Int32Array(2) },
+        entryAlpha: { value: new THREE.Vector2(1, 0) },
+        fxBlend: { value: new THREE.Vector4(0, 0, 0, 0) },
+        barX: { value: new Array(8).fill(240) },
+        barY: { value: new Array(8).fill(0) },
+        gridStage: { value: 0 },
+        gridFill: { value: new Array(64).fill(99) },
+        rippleAmp: { value: 0 },
+        rippleSin: { value: 0 },
       },
       vertexShader: /* glsl */ `void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: compositeFrag,
@@ -420,12 +472,47 @@ export class PixelPipeline {
   }
 
   /**
-   * Horizontal bands of the screen shown shifted sideways by whole GBA pixels
-   * (a scanline effect, like BGxHOFS per row): the battle intro slides the
-   * top half in from the left and the bottom half from the right. Rows are
-   * GBA rows [y0, y1); dx > 0 shows what is to the right (content moves left).
+   * The battle intro's entry layer (BG1 of battle_intro.c: tall grass, dunes,
+   * waves, rocks...): a 256x256 GBA background with transparency, drawn over
+   * the arena but behind Pokémon and effects, showing BG pixel (x + scrollX,
+   * y + scrollY) at screen pixel (x, y), wrapping. `eva` / `evb` blend it with
+   * the arena as BLDALPHA does (1 / 0: opaque). Null hides it.
    */
-  bands: { y0: number; y1: number; dx: number }[] | null = null;
+  setEntry(texture: THREE.Texture | null, scrollX = 0, scrollY = 0, eva = 1, evb = 0): void {
+    const u = this.composite.uniforms;
+    u.entryOn.value = !!texture;
+    u.tEntry.value = texture;
+    (u.entryScroll.value as Int32Array).set([Math.round(scrollX), Math.round(scrollY)]);
+    (u.entryAlpha.value as THREE.Vector2).set(eva, evb);
+  }
+
+  /**
+   * The whole-screen effects of Emerald's battle transitions
+   * (src/battle/transition.ts), applied over everything; each field left out
+   * is turned off. `blend`: BlendPalettes over every palette (amount 0..1).
+   * `bars`: WhiteBarsFade's 8 bars of 20 rows, each lightened by `y` (BLDY
+   * 0..1) right of `x`. `grid`: GridSquares' shrinking-box stage (1..14) and
+   * the stage each pixel of an 8x8 cell fills at (64 values). `ripple`:
+   * Ripple's rows shifted by up to `amp` pixels, the sine at `sin` (u16).
+   */
+  setTransition(t: {
+    blend?: { color: RGB; amount: number };
+    bars?: { x: number; y: number }[];
+    grid?: { stage: number; fill: number[] };
+    ripple?: { amp: number; sin: number };
+  } | null): void {
+    const u = this.composite.uniforms;
+    const b = t?.blend;
+    (u.fxBlend.value as THREE.Vector4).set((b?.color[0] ?? 0) / 255, (b?.color[1] ?? 0) / 255, (b?.color[2] ?? 0) / 255, b?.amount ?? 0);
+    for (let i = 0; i < 8; i++) {
+      u.barX.value[i] = t?.bars?.[i]?.x ?? 240;
+      u.barY.value[i] = t?.bars?.[i]?.y ?? 0;
+    }
+    u.gridStage.value = t?.grid?.stage ?? 0;
+    if (t?.grid) for (let i = 0; i < 64; i++) u.gridFill.value[i] = t.grid.fill[i];
+    u.rippleAmp.value = t?.ripple?.amp ?? 0;
+    u.rippleSin.value = (t?.ripple?.sin ?? 0) & 0xffff;
+  }
 
   private idMaterial(id: number): THREE.MeshBasicMaterial {
     let m = this.idMaterials.get(id);
@@ -493,7 +580,7 @@ export class PixelPipeline {
     r.setRenderTarget(this.idRT);
     r.setClearColor(0x000000, 1);
     r.clear();
-    this.renderBands(this.idRT, camera, (cam) => r.render(scene, cam));
+    r.render(scene, camera);
     for (const e of swapped) {
       e.mesh.material = e.original;
       if ((e.mesh.userData as { _wasVisible?: boolean })._wasVisible) {
@@ -502,30 +589,6 @@ export class PixelPipeline {
       }
     }
     scene.background = prevBackground;
-  }
-
-  private bandCamera = new THREE.PerspectiveCamera();
-
-  /** Draw into `rt` once, or once per band with its rows scissored and the view shifted. */
-  private renderBands(rt: THREE.WebGLRenderTarget, camera: THREE.PerspectiveCamera, draw: (cam: THREE.PerspectiveCamera) => void): void {
-    const bands = this.bands?.filter((b) => b.y1 > b.y0);
-    if (!bands?.length || bands.every((b) => b.dx === 0)) {
-      draw(camera);
-      return;
-    }
-    const k = rt.height / 160;
-    const cam = this.bandCamera;
-    for (const b of bands) {
-      cam.copy(camera);
-      cam.setViewOffset(240, 160, b.dx, 0, 240, 160);
-      cam.updateProjectionMatrix();
-      rt.scissor.set(0, Math.round(rt.height - b.y1 * k), rt.width, Math.round((b.y1 - b.y0) * k));
-      rt.scissorTest = true;
-      this.renderer.setRenderTarget(rt);
-      draw(cam);
-    }
-    rt.scissorTest = false;
-    this.renderer.setRenderTarget(rt);
   }
 
   /**
@@ -542,7 +605,7 @@ export class PixelPipeline {
     r.setRenderTarget(this.colorRT);
     r.setClearColor(0x000000, 1);
     r.clear();
-    this.renderBands(this.colorRT, camera, (cam) => r.render(scene, cam));
+    r.render(scene, camera);
 
     // 2. ids
     this.renderIds(scene, camera);

@@ -84,10 +84,14 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 
 ## What's in the battle
 
-- **Intro** (`battle_intro.c` and the battle controllers):
-  - the window opening from the middle row and the scanline-split slide of the arena
-    (the top half comes in from the left with the wild Pokémon in shadow, the bottom
-    half from the right);
+- **Intro** (`battle_transition.c`, `battle_intro.c` and the battle controllers):
+  - picking a place starts the battle like a wild encounter: the battle theme and
+    the place's transition over its arena (three gray flashes, then White Bars Fade,
+    Grid Squares in the cave, Ripple on water);
+  - the window opening from the middle row onto the place's entry layer (the game's
+    own tall grass, dunes, waves, rocks) sweeping across the field, which then sinks
+    or fades, as the wild Pokémon slides in from the left in shadow and the trainer
+    from the right;
   - the trainer's throw, the Poké Ball arc and the white flash;
   - the Pokémon emerging in the ball's color, then Blaziken's red-glow send-out.
 - **Menus**: action and move selection with the controller's cursor rules, the
@@ -98,6 +102,13 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
   damage, Hidden Power, Protect / Detect / Endure, Hyper Beam's recharge, Focus
   Punch, and Struggle. Paralysis, poison, sleep, freeze, confusion, flinching and
   weather are not modelled yet (moves that only cause those are left out of movesets).
+- **Moves** look like what they are: every move has a motif (a bite, a kick, a breath
+  from the mouth, a jet from cannons, a leaf volley, a quake...) with its own clip per
+  species and its effects. Seismic Toss grabs the foe, carries it into the air and
+  hurls it back down into its place; Dig and Dive go underground (dirt heaving along
+  the way) and burst up at the foe; Mud-Slap flings mud; Double Team and Agility leave
+  afterimages as Emerald draws them; Flash whites out the screen with the Pokémon in
+  silhouette.
 - **Stop motion**: the Pokémon are shown in poses held for several frames (12 a second),
   while the animation runs on underneath at 60 fps, so timing, springs and hits stay
   exact (a hit's pose shows on its frame); slides, bounces, blinks and flashes stay smooth,
@@ -119,7 +130,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 | Pixel-exact 2D layer (text box, menus, healthboxes, trainer, ball) drawn into a software framebuffer | `src/gba/`, `src/battle/ui/` |
 | 3D stage: camera calibrated so both battlers land where the stock sprites are drawn | `src/render3d/stage.ts`, `src/data/battle_camera.json` |
 | Arenas, designed from scratch for the remake in Hoenn's overworld colors, with no platforms under the Pokémon: each place is painted pixel by pixel for the battle camera (ground, paths, ponds, dunes, ridges, walls, a tree line) and projected onto the ground, props stand at their depth one sprite pixel per screen pixel (trees, tall grass, reeds, rocks, kelp, coral, lamp posts) and sway, and the ground lives per pixel (wind in the grass, waves and glints, ripples at the battlers' feet, lava, caustics, cloud shadows) | `src/render3d/arena/`, `environment.ts`, `ambience.ts` |
-| Viewport pixel pass: object IDs, majority downsampling, snap to the species' stock palette, outline policy from the sprites, palette blends (fades, glows) and the arena's fades (the ball's white flash, move tints), scanline bands (the intro slide), RGB555 | `src/render3d/pipeline.ts` |
+| Viewport pixel pass: object IDs, majority downsampling, snap to the species' stock palette, outline policy from the sprites, palette blends (fades, glows) and the arena's fades (the ball's white flash, move tints), the intro's entry layer, afterimages (sprite clones in blend mode), the battle transitions, RGB555 | `src/render3d/pipeline.ts` |
 | Screens and menus drawn like Emerald's: the title screen (title_screen.c's layers, blends, shines and timings), window frames, text and the keypad icons, messages with the waiting arrow, YES/NO, list menus with scroll arrows, Birch's bag, the move relearner | `src/menus/`, `src/gba/font.ts` |
 | Rig and animation: semantic bone map, model-space rotations, aim constraints, foot IK, keyframed clips on smooth curves with events and crossfades, overlapping action, springs for loose parts (mane, tail, feathers), and a life layer (breathing, weight shifts, blinks, sprung turns and hit recoil) | `src/anim/`, `src/pokemon/`, `src/battle3d/battler.ts` |
 | Moves: animation category from move data, per-type effects from the stock battle-animation sprites, rendered in 3D through the pixel pass | `src/battle3d/` |

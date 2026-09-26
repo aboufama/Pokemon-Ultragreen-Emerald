@@ -1,12 +1,16 @@
 // Where to battle: a list of Hoenn places, each a battle arena, shown live
 // behind the menu as the cursor moves (wind in the grass, waves, falling ash),
-// the way the battle will look without the Pokémon.
+// the way the battle will look without the Pokémon. Choosing one starts the
+// battle the way a wild encounter does: the battle music and Emerald's
+// transition for that kind of place, over the arena (src/battle/transition.ts).
 
 import { bagBackdrop } from './bag';
 import type { ListItem, MenuScreen } from './screen';
 import { stdWindow, print, wrap } from './draw';
 import type { Bitmap } from '../gba/bitmap';
 import { BattleStage } from '../render3d/stage';
+import { sound } from '../audio/sound';
+import { transitionKind, wildTransition } from '../battle/transition';
 
 export interface Place {
   /** Arena id (src/render3d/arena/arenas.ts). */
@@ -32,6 +36,11 @@ class ArenaPreview {
       this.shown = arena;
       this.m.backdrop = stage;
     });
+  }
+
+  /** The arena on screen, if it is the one asked for. */
+  get ready(): BattleStage | null {
+    return this.shown && this.shown === this.wanted ? this.stage : null;
   }
 
   dispose(): void {
@@ -61,9 +70,19 @@ export async function choosePlace(m: MenuScreen, places: Place[], start = 0): Pr
   const rows = Math.min(6, places.length);
   try {
     const { index } = await m.list(items, { x: 120, y: 8, w: 112, h: rows * 16 }, { start });
-    // Fade out over the live arena before it goes.
-    await m.fadeTo(16);
-    return index === null ? null : places[index].arena;
+    const stage = preview.ready;
+    if (index === null || !stage) {
+      // Fade out over the live arena before it goes.
+      await m.fadeTo(16);
+      return index === null ? null : places[index].arena;
+    }
+    // A wild battle starts (CreateBattleStartTask): the battle music, and the
+    // place's transition over the arena, the windows gone, to black.
+    removeScene();
+    sound.playBGM('mus_vs_wild');
+    await wildTransition(stage.pipeline, m.clock, transitionKind(places[index].arena));
+    m.fadeAmount = 16;
+    return places[index].arena;
   } finally {
     removeScene();
     preview.dispose();

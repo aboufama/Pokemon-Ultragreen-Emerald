@@ -31,6 +31,9 @@ async function start(): Promise<void> {
   } else if (mode === 'stage') {
     const { runStagePreview } = await import('./devtools/stage_preview');
     (window as unknown as { preview: unknown }).preview = await runStagePreview(root);
+  } else if (mode === 'transition') {
+    const { runTransitionReview } = await import('./devtools/transition_review');
+    await runTransitionReview(root);
   } else if (mode === 'clipreview') {
     const { runClipReview } = await import('./devtools/clipreview');
     await runClipReview(root);

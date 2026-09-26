@@ -83,6 +83,8 @@ export const GFX_META = gfxMetaJson as unknown as {
   menuTextPalette: RGB[];
   /** text_window/1.png, the standard window frame. */
   frame1Palette: RGB[];
+  /** GridSquares (battle_transition.c): the stage each pixel of an 8x8 cell fills at. */
+  gridSquaresFill: number[];
 };
 
 export function species(slug: string): SpeciesData {

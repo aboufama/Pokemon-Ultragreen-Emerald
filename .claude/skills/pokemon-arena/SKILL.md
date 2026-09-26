@@ -23,7 +23,7 @@ reference), then `design.ts` (the painting helpers) and the header of
 | materials | each painted pixel carries a material the ground shader animates per GBA pixel: `GRASS` (leans, wind bands), `WATER`/`SHALLOW` (drifting waves, glints, ripples at the feet), `LAVA` (churning glow), `BACKDROP` (far things: no ground effects), `SOLID` | `art.ts` `MAT`, `ground.ts` |
 | props | pixel-art sprites made at their on-screen size (`sprites.ts`: trees, bushes, tall grass, reeds, rocks, kelp, coral, stalagmites, lamp posts, light shafts) standing at their depth, hidden by and hiding the Pokémon by depth, swaying row by row in whole pixels | `props.ts`, `addProp()` / `place()` |
 | life | wind, gusts, motes (seeds, sand, ash, bubbles), dust on landings, cloud shadows | `ambience.ts` (`ArenaDesign.ambience`) |
-| intro and fades | the scanline split of the intro and the arena's palette fades (ball flash, move tints) are the pixel pipeline's (`bands`, `setEnvironmentBlend`) | `pipeline.ts` |
+| intro and fades | the intro's entry layer (the game's own BG1 art for the place, `public/assets/gba/battle_env/<arena>_entry.png`: tall grass, dunes, waves, rocks, sweeping across and sinking or fading as battle_intro.c does) and the arena's palette fades (ball flash, move tints) are the pixel pipeline's (`setEntry`, `setEnvironmentBlend`). The arena never moves in the intro, only the Pokémon and the trainer slide in, so an arena needs no plain sky to hide a seam | `pipeline.ts`, `environment.ts`, `src/battle/scene.ts` `intro()` |
 
 ## Rules
 
@@ -60,8 +60,12 @@ reference), then `design.ts` (the painting helpers) and the header of
    backgrounds, the screen fully painted, the palette, nothing over a battler,
    seeded, painting time); `--render` also renders each arena in the browser
    into build/arenas/.
-4. Watch a battle in it (`/?mode=battle&env=<arena>`): the intro slide, the
-   ball's white flash, a big move's tint, the life of the ground.
+4. Watch a battle in it (`/?mode=battle&env=<arena>`): the intro (the entry
+   layer over the arena), the ball's white flash, a big move's tint, the life of
+   the ground. An arena named after an Emerald environment gets that
+   environment's entry layer and intro slide (`INTRO_SLIDE` in scene.ts) and
+   battle transition (`transitionKind` in src/battle/transition.ts;
+   `/?mode=transition&env=<arena>` plays it).
 
 ## Failure modes and fixes
 

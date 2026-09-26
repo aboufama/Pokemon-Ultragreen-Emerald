@@ -42,17 +42,22 @@ for (const [id, d] of Object.entries(ARENAS)) gate(`${id}: names its place`, /^[
 const playtest = await readFile(join(ROOT, 'src/demo/playtest.ts'), 'utf8');
 gate('the playtest lists every arena', /PLACES[^=]*=\s*Object\.entries\(ARENAS\)/.test(playtest));
 
-// No projected Emerald backgrounds anywhere in the app.
+// No projected Emerald backgrounds anywhere in the app. The one Emerald layer
+// allowed is the intro's entry layer (battle_env/<place>_entry.png), which
+// sweeps over the arena for a moment as battle_intro.c's BG1 does.
 const offenders = [];
 const walk = async (dir) => {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, e.name);
     if (e.isDirectory()) await walk(path);
-    else if (/\.(ts|js)$/.test(e.name) && /battle_env\//.test(await readFile(path, 'utf8'))) offenders.push(path.slice(ROOT.length + 1));
+    else if (/\.(ts|js)$/.test(e.name)) {
+      const lines = (await readFile(path, 'utf8')).split('\n').filter((l) => /battle_env\//.test(l) && !/battle_env\/[^'"`\s]*_entry\.png/.test(l));
+      if (lines.length) offenders.push(path.slice(ROOT.length + 1));
+    }
   }
 };
 await walk(join(ROOT, 'src'));
-gate('arenas are painted, not Emerald backgrounds projected', offenders.length === 0, offenders.join(', '));
+gate('arenas are painted, not Emerald backgrounds projected (entry layers aside)', offenders.length === 0, offenders.join(', '));
 
 for (const name of Object.keys(ARENAS)) {
   const t0 = performance.now();
