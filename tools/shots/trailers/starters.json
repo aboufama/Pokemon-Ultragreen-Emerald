@@ -1,0 +1,15 @@
+{
+  "music": "mus_vs_wild",
+  "seconds": 10,
+  "fade": 0.25,
+  "shots": [
+    {"query": "species=blaziken&enemy=sceptile&attacker=player&move=BLAZE_KICK&env=grass&drain=0.45", "from": 0.0, "hit": 0.619, "se": "se_super_effective", "pan": 63},
+    {"query": "species=swampert&enemy=sceptile&attacker=enemy&move=LEAF_BLADE&env=long_grass&drain=0.8", "from": 1.1, "hit": 1.54, "se": "se_super_effective", "pan": -64},
+    {"query": "species=swampert&enemy=blaziken&attacker=player&move=EARTHQUAKE&env=sand&drain=0.6", "from": 1.95, "hit": 2.461, "se": "se_super_effective", "pan": 63},
+    {"query": "species=sceptile&enemy=blaziken&attacker=enemy&move=FLAMETHROWER&env=building&drain=0.55", "from": 3.1, "hit": 3.7, "se": "se_super_effective", "pan": -64},
+    {"query": "species=swampert&enemy=sceptile&attacker=enemy&move=DRAGON_CLAW&env=cave&drain=0.35", "from": 4.45, "hit": 4.922, "se": "se_effective", "pan": -64},
+    {"query": "species=blaziken&enemy=sceptile&attacker=player&move=SKY_UPPERCUT&env=water&drain=0.3", "from": 5.7, "hit": 6.161, "se": "se_effective", "pan": 63},
+    {"query": "species=blaziken&enemy=sceptile&attacker=player&move=OVERHEAT&env=mountain&foeHp=0.3&drain=1", "from": 6.65, "hit": 7.384, "se": "se_super_effective", "pan": 63},
+    {"query": "species=blaziken&enemy=sceptile&attacker=enemy&clip=faint&env=mountain&hp=0", "from": 8.342, "hit": 9.242, "se": "se_faint", "pan": 63}
+  ]
+}

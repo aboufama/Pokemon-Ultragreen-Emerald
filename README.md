@@ -149,6 +149,7 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `tools/calibrate/candidates.mjs` | compare stance variants by how well each fits the stock sprites |
 | `tools/models/optimize_model.mjs` | strip upstream animations and recompress a fetched model |
 | `tools/shots/move_sheet.mjs` | contact sheets of moves and clips in the battle view |
+| `tools/shots/trailer.mjs` | cut a trailer from moves in the battle view: shots timed so each hit lands on the music, Emerald's music and hit sounds from the sound engine, MP4 with square pixels (`tools/shots/trailers/starters.json` is the starters' 10-second trailer; needs `npm run dev` and ffmpeg) |
 | `tools/arena/check.mjs` | the arenas' checks: every place has one, painted (no Emerald backgrounds, no platforms), fully painted, a pixel-art palette, nothing over a battler, seeded, fast to paint (`--render` adds screenshots) |
 | `tools/sound/check.mjs` | the sound's checks: the extracted bank is whole, every song the game plays is in it, every song renders (music loops, looping effects get stopped), the engine runs alone as the AudioWorklet builds it, fast enough for a phone (`--wav <song>` writes one to listen to) |
 | `tools/sound/reference/run.py` | the engine against the game itself in mGBA, song by song (after `tools/reference/build_rom.sh` and `build_capture.sh`) |
