@@ -1,8 +1,8 @@
 """Extract battle graphics from pret/pokeemerald into web-ready RGBA PNGs.
 
 Output root: public/assets/gba/
-  battle_env/<environment>.png          composed BG3 (tiles + tilemap + palette), 256x256
-  battle_env/<environment>_entry.png    entry (intro slide) layer, where present
+  battle_env/<environment>.png          composed BG3 (tiles + tilemap + palette), 256x256:
+                                        reference for the arenas' art, never drawn
   battle_interface/textbox.png          composed BG0 with the 3 pages (message/action/move), 256x512
   battle_interface/*.png                healthboxes, hp/exp bars, status icons (index 0 transparent)
   fonts/<font>.png                      glyph sheets, 2-bit index kept in the red channel (see font.ts)
@@ -58,18 +58,10 @@ def extract_environments(decomp: Path, out: Path, meta: dict) -> None:
         tm = np.fromfile(tilemap, dtype="<u2")
         im = G.compose_tilemap(tile_px, tm[:1024], 32, G.palette_blocks(pal, 2))
         save(im, out / "battle_env" / f"{name}.png")
-        entry = None
-        if f.get("entryTileset") in syms and f.get("entryTilemap") in syms:
-            etiles = G.tiles_of(G.indexed(decomp / syms[f["entryTileset"]]))
-            etm = np.fromfile(decomp / syms[f["entryTilemap"]], dtype="<u2")
-            eim = G.compose_tilemap(etiles, etm, 32, G.palette_blocks(pal, 2))
-            save(eim, out / "battle_env" / f"{name}_entry.png")
-            entry = f"battle_env/{name}_entry.png"
         envs[name] = {
             "id": consts[key],
             "const": key,
             "image": f"battle_env/{name}.png",
-            "entryImage": entry,
             "palette": [list(c) for c in pal],
         }
         print(f"env {name}: {tiles.parent.name}")

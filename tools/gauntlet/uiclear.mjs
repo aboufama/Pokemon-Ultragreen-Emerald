@@ -12,8 +12,8 @@
 //   node tools/gauntlet/uiclear.mjs [--species blaziken,sceptile] [--clips intro,hit] [--shots dir] [--base URL]
 //
 // A box counts while the game shows it: the foe's from its slide-in on, ours
-// from our send-out on (so not while the wild Pokémon plays its intro; its
-// entrance comes before either). Fails when any frame puts more than
+// from our send-out on (so not while the wild Pokémon plays its intro).
+// Fails when any frame puts more than
 // TOLERANCE pixels under a box. --shots saves the worst frame of each clip
 // that fails. tools/gauntlet/check.mjs --render runs it for its species.
 // Needs the dev server.

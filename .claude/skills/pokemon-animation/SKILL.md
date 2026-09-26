@@ -71,7 +71,6 @@ as Blaziken does). Rules:
 | strong ranged | ~2.3 s | 0.5 gather (charge) · hold · snap · 0.8 sustained (release → releaseEnd) · recover |
 | status | ~1.4–1.7 s | gather or rear up · the action with a moving hold · relax |
 | intro | ~1.6 s | curled crouch · burst up · cry with a moving hold · settle to stance |
-| entrance | ~1.5 s | coiled low · spring (`launch`) · knees drawn up at the top · legs reach down · land deep (`land`) · rise to stance |
 | faint | ~1.8 s | reel · sway forward · knees buckle · slump with a small bounce · sink (`root.y` -1.1) |
 
 Strikes happen in 3–6 frames; holds last 8–20 frames and never freeze (move
@@ -148,17 +147,6 @@ existing clips in `profile.motifClips`.
 | `aura` | a self-buff peaks | aura / shield / heal sparkle |
 | `cry` | intro roar | small shake |
 | `thud` | faint hits the ground | — |
-| `launch` | entrance: the feet leave the ground | the place's path starts (bursting out of the grass, sand or sea; leaping or dropping in; sinking through water) with its spray |
-| `land` | entrance: the feet touch down | the path ends; the cover in front of it clears |
-
-The **entrance** acts out a jump straight up and down on the spot: the path
-(`src/battle3d/entrance.ts`) is added by the battle, rising from below the
-ground behind the grass, falling from above the screen or drifting down, and
-timed by `launch` and `land`, so one clip serves every place. Keep the root
-still in it (no `root.y` arc, no `advance`); give it the coil, the spring, a
-tuck at the top and a landing with weight (at least 0.3 s between `launch`
-and `land`; Blaziken's is 0.5 s). Review it with `--clips entrance --env
-grass` (bursting up) and `--env cave` (dropping in).
 
 Place events on the pose that causes them *plus the overlap delay* of the part
 that acts. Contact moves must have `advance: 1` at `impact`.

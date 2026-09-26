@@ -225,63 +225,6 @@ const intro: Clip = {
   events: [{ t: 1.02, name: 'cry' }],
 };
 
-/** Both knees drawn up in front of the belly, feet tucked under it (a jump straight up or down, not forward). */
-const KNEES_UP: Pose = { plantFeet: 0, bones: { thighL: { x: -70, z: -30 }, thighR: { x: -70, z: 30 }, shinL: { x: 100 }, shinR: { x: 100 }, footL: { x: 30 }, footR: { x: 30 } } };
-/** Legs driven straight, toes pointing down: the push of the spring, or reaching for the ground. */
-const LEGS_DOWN: Pose = { plantFeet: 0, bones: { thighL: { x: 4 }, thighR: { x: 4 }, shinL: { x: -2 }, shinR: { x: -2 }, footL: { x: 28 }, footR: { x: 28 } } };
-/** Breaching: both arms thrown up and out in a V, open hands (bursting out of the cover). */
-const ARMS_BREACH = arms([0.78, 0.55, 0.3], [0.45, 0.85, 0.28], [0.18, 0.95, 0.25]);
-/** Both arms raised high above the head fins, a little forward: the slam wound up. */
-const ARMS_RAISED = arms([0.5, 0.75, 0.43], [0.25, 0.9, 0.36], [0.05, 0.9, 0.43]);
-/** The slam: both arms driven down to the ground in front, palms flat, catching its weight. */
-const ARMS_SLAM = arms([0.55, -0.55, 0.63], [0.22, -0.92, 0.33], [0.0, -0.55, 0.84]);
-/** Pressed into the ground as the body sinks onto them (elbows bent out). */
-const ARMS_PRESSED = arms([0.72, -0.45, 0.53], [0.18, -0.95, 0.25], [-0.05, -0.55, 0.83]);
-/** Pushing up off the ground, on the way back to the crab arms (a breakdown). */
-const ARMS_PUSH_UP = arms([0.85, -0.42, 0.33], [0.4, -0.85, 0.34], [-0.35, -0.85, 0.4]);
-
-/**
- * A wild Swampert comes into the battle: coiled low with the arms swung back,
- * it springs (launch), bursting up with its arms thrown open like a breach,
- * draws its knees up at the top and winds both arms up high, reaches down
- * with its feet, and lands like a boulder (land): the knees sink deep, the
- * body folds forward and both arms slam down flat to catch its weight, the
- * head fins and tail fan bounce on their springs. It squashes, rebounds,
- * pushes itself up off the ground and rises into its crab-armed stance. The
- * path (bursting up out of the tall grass, dropping in, drifting down) is the
- * place's: src/battle3d/entrance.ts.
- */
-const entrance: Clip = {
-  name: 'entrance',
-  duration: 1.95,
-  keys: [
-    key(0, pelvis(0, -0.08), bend(6, 3, 0, 6), ARMS_BACK, MOUTH_SHUT, SHUT),
-    // Coils deeper, arms swung further back.
-    key(0.26, pelvis(0, -0.11), bend(8, 4, 0, 8), ARMS_BACK, MOUTH_SHUT, SHUT),
-    // The spring, gathering speed into the launch: the legs drive straight, the body stretches
-    // up and the arms fly up and open.
-    key(0.4, LEGS_DOWN, pelvis(0, 0.03), bend(-10, -5, -2, -12), ARMS_BREACH, jaw(10), ANGRY),
-    key(0.54, LEGS_DOWN, pelvis(0, 0.03), bend(-8, -4, -2, -10, 0, 2), ARMS_BREACH, jaw(12), ANGRY),
-    // Tucked at the top: knees drawn up, the arms winding up high.
-    key(0.72, KNEES_UP, bend(0, 2, 0, -6), ARMS_RAISED, jaw(4), ANGRY),
-    // Reaching down with the feet, arms high, eyes on the spot.
-    key(0.84, LEGS_DOWN, bend(-2, 0, 0, -8), ARMS_RAISED, MOUTH_SHUT, ANGRY),
-    // Touches down (land)...
-    key(0.9, { plantFeet: 1 }, bend(0, 1, 0, -6), ARMS_RAISED, MOUTH_SHUT, ANGRY),
-    // ...and down like a boulder: the knees sink deep and the arms slam down flat.
-    snap(0.98, LAND, pelvis(0, -0.07, 0.01), bend(4, 3, 0, 2), ARMS_SLAM, MOUTH_SHUT, SQUINT),
-    // Squash onto its arms...
-    key(1.08, LAND, pelvis(0, -0.09, 0.015), bend(7, 4, 0, 4), ARMS_PRESSED, MOUTH_SHUT, SQUINT),
-    // ...a heavy rebound...
-    key(1.22, LAND, pelvis(0, -0.06, 0.01), bend(3, 2, 0, 0, 3), ARMS_PRESSED, MOUTH_SHUT, ANGRY),
-    // ...and it pushes itself up off the ground, glaring at the foe.
-    key(1.44, pelvis(0, -0.04), bend(2, 1, 0, -4, -3), ARMS_PUSH_UP, jaw(-8), ANGRY),
-    key(1.66, pelvis(0, -0.015), bend(1, 0, 0, -2), jaw(-2), ANGRY),
-    key(1.95, OPEN_EYES),
-  ],
-  events: [{ t: 0.4, name: 'launch' }, { t: 0.9, name: 'land' }],
-};
-
 /** Taking a hit: the head snaps back, arms fly out, then it digs back in. */
 const hit: Clip = {
   name: 'hit',
@@ -856,7 +799,7 @@ const afterimage: Clip = {
 };
 
 export const CLIPS: Record<string, Clip> = Object.fromEntries(
-  [idle, intro, entrance, hit, faint, physicalWeak, physicalStrong, specialWeak, specialStrong, statusSelf, statusTarget, quake, wave, shield, punch, strike, glare, kickSand, heal, toss, burrow, fling, afterimage].map((c) => [c.name, c]),
+  [idle, intro, hit, faint, physicalWeak, physicalStrong, specialWeak, specialStrong, statusSelf, statusTarget, quake, wave, shield, punch, strike, glare, kickSand, heal, toss, burrow, fling, afterimage].map((c) => [c.name, c]),
 );
 
 /** Eye atlas (pm0260_00_Eye1): 2 columns x 4 rows of 128x64 cells. */

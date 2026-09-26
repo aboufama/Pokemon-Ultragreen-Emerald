@@ -13,7 +13,6 @@ and ends on the stance. GIFs are exported by the orchestrator.
 
 - [x] `idle`: breathing, weight shift and the fighter's bounce read in the crouch; the tail sways and the fern leaflets and forearm blades ride on springs; blinks; the loop point is the stance, nothing pops
 - [x] `intro`: crouched behind its crossed blades with the eyes shut, springs up with the arms flung wide, claws open, jaw wide for the cry and the tail raised, settles into the stance (reads from both sides; the cry lands on the burst)
-- [x] `entrance`: a gecko's quick coil, then it springs (launch, the feet still down as the legs drive straight) with the arms swept back, so the crest and head lead up out of the grass; splays at the top like a leaping gecko (knees drawn up wide, arms flung out, claws open) while the tail whips up, reaches down with its legs and its claws like front feet, touches down on its toes (land) and keeps sinking onto all fours, low, the head level and the tail swinging out as a counterweight, then rears up into its stance. 0.46 s between launch and land. Reviewed bursting out of the tall grass (`env=grass`), dropping off the cave's ceiling (`env=cave`: the splayed frog legs drop in first) and drifting down to the seabed (`env=underwater`, slowed to 0.6: a slow splayed paddle down), then in the battle intro at game size for grass, sea, cave and underwater: in the wild Pokémon's shadow tint the crest breaks the grass first and the splayed star shape reads at the top of the jump (a tight tuck with crossed blades read as a dark knot there, so the top pose opens up instead)
 - [x] `hit`: snaps back with the hurt eyes and the arms thrown out, the sprung knock-back carries it, recovers without popping
   - healthbox pass: its weight stays back on its heels while it recovers (the knock-back spring's swing back carried a wild Sceptile's toes a pixel past the top of our healthbox: 5 px under it)
 - [x] `faint`: reels back, sways forward, its knees buckle and splay out and it sits back on its heels in a low gecko sprawl, flops back onto its tail with the head bowed onto its chest and a small bounce, then sinks
@@ -119,8 +118,7 @@ the IK (`DART`), fold deep crouches' knees outward (`SQUAT`) and keep claws
 and knees from reaching the ground in front of the feet.
 
 Fluidity of the changed clips (`tools/gauntlet/motion.mjs`, stop-starts / one-frame pops,
-before → after; Blaziken in brackets): `entrance` 5 / 0 (the generic clip) → 0 / 1, the
-pop on the spring itself [0 / 5]; `physical_strong_quake` 2 / 0 → 0 / 0; `status_self`
+before → after; Blaziken in brackets): `physical_strong_quake` 2 / 0 → 0 / 0; `status_self`
 1 / 0 → 0 / 0 [0 / 0]; `special_weak` 3 / 2 → 1 / 2, the pops on the first peck's snap
 [0 / 1]; `faint` 14 / 0 → 13 / 0 [15 / 0]; `afterimage`, `hit`, `fling`, `special_strong`,
 `special_weak_drain`, `status_target` and `status_target_glare` 0 / 0 before and after.
@@ -136,8 +134,7 @@ No dead holds and no turn in the first 0.3 s anywhere.
   - re-checked after the toss, burrow, fling, afterimage and flash clips
     (Agility now plays `afterimage`): `check.mjs --render` runs both battles
     to the end and plays every clip from both sides without errors
-  - re-checked after the entrance and the healthbox pass: `check.mjs
-    --render` runs both battles to the end, plays every clip (the entrance
-    too) from both sides, and every clip at home stays clear of the
-    healthboxes from both sides (at most 2 px past the edge); the battle
-    intro filmed at game size in the grass, the sea, the cave and underwater
+  - re-checked after the healthbox pass: `check.mjs --render` runs both
+    battles to the end, plays every clip from both sides, and every clip at
+    home stays clear of the healthboxes from both sides (at most 2 px past
+    the edge)

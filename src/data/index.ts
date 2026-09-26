@@ -68,7 +68,6 @@ export interface EnvironmentMeta {
   id: number;
   const: string;
   image: string;
-  entryImage: string | null;
   palette: RGB[];
 }
 

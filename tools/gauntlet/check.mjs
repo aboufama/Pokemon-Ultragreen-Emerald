@@ -61,7 +61,6 @@ const REQUIRED_EVENTS = {
   status_self: ['aura'],
   status_target: ['emit'],
   intro: ['cry'],
-  entrance: ['launch', 'land'],
   faint: ['thud'],
 };
 // Bones every species of a body plan has (shells may lack a spine; some necks are one bone).
@@ -156,9 +155,6 @@ for (const name of [...MOMENT_CLIPS, ...CATEGORY_CLIPS]) {
   const lacking = need.filter((e) => !events.includes(e));
   if (lacking.length) problems.push(`missing events: ${lacking.join(', ')}`);
   if ((c.events ?? []).some((e) => e.t < 0 || e.t > c.duration)) problems.push('event outside the clip');
-  // The entrance's path (src/battle3d/entrance.ts) runs from the launch to the landing.
-  const at = (e) => (c.events ?? []).find((x) => x.name === e)?.t;
-  if (name === 'entrance' && !lacking.length && !(at('launch') < at('land') - 0.3)) problems.push('launch must come at least 0.3 s before land');
   gate(`clip ${name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s, ${keys.length} keys${events.length ? ', ' + events.join(' ') : ''}`);
 }
 

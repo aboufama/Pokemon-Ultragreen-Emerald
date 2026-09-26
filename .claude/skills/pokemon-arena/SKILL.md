@@ -41,9 +41,8 @@ the player's x 126-230, rows 72-109; the text box everything from row 112. So
 what shows is the band across the top, the upper right around the wild
 Pokémon, and the left side (x 0-40, rows 44-112): compose for those. During
 the intro there are no healthboxes and nobody on our side yet: the whole
-screen above the text box shows, first behind the entry layer (the game's
-tall grass, dunes, waves... across rows ~60-112), then bare while the wild
-Pokémon slides in. The arena itself never moves, so nothing beyond the
+screen above the text box shows as the window opens on it, the wild Pokémon
+already in its spot. The arena itself never moves, so nothing beyond the
 screen's edges is ever seen.
 
 Props may not overlap the battlers' boxes (the player's is x 10-138 from row
@@ -70,7 +69,7 @@ over 16 px more).
 | materials | each painted pixel carries a material the ground shader animates per GBA pixel: `GRASS` (leans, wind bands), `WATER`/`SHALLOW` (drifting waves, glints, ripples at the feet), `LAVA` (churning glow), `BACKDROP` (far things: no ground effects, heat haze), `SOLID` | `art.ts` `MAT`, `ground.ts` |
 | props | pixel-art sprites made at their on-screen size (`sprites.ts`: trees and bushes (`speckle`, `soft` in their palette), tall grass, reeds, rocks (`cracks`), faceted `crag`s, `seaweed`, `coralHead`, `staghorn`, `seaFan`, `anemone`, `starfish`, desert `shrub`s, stalagmites, lamp posts, steam `wisp`s) standing at their depth, hidden by and hiding the Pokémon by depth, swaying row by row in whole pixels | `props.ts`, `addProp()` / `frameProp()` |
 | life | wind, gusts, motes (seeds, sand, ash, bubbles), dust on landings, cloud shadows; ground effects: grass waves, glints, underwater caustics (a drifting cellular net), heat haze (the far view's rows wobble, sand and Mt. Chimney) | `ambience.ts` (`ArenaDesign.ambience`), `ground.ts` |
-| intro and fades | the intro's entry layer (the game's own BG1 art for the place, `public/assets/gba/battle_env/<arena>_entry.png`: tall grass, dunes, waves, rocks, sweeping across and sinking or fading as battle_intro.c does) and the arena's palette fades (ball flash, move tints) are the pixel pipeline's (`setEntry`, `setEnvironmentBlend`). The arena never moves in the intro, only the Pokémon and the trainer slide in, so an arena needs no plain sky to hide a seam | `pipeline.ts`, `environment.ts`, `src/battle/scene.ts` `intro()` |
+| intro and fades | the intro is the window opening on the arena from the middle row (`src/battle/scene.ts` `intro()`); the arena's palette fades (ball flash, move tints) are the pixel pipeline's (`setEnvironmentBlend`). The arena never moves | `pipeline.ts`, `environment.ts`, `src/battle/scene.ts` `intro()` |
 
 ## Rules
 
@@ -127,13 +126,12 @@ over 16 px more).
    seeded, painting time, as calm as the sea); `--render` also renders each
    arena in the browser into build/arenas/.
 5. Watch a battle in it (`/?mode=battle&env=<arena>`, or step one with
-   `&manual=1` and `window.__battle.step(n)`): the intro (the entry layer over
-   the arena), the ball's white flash, a big move's tint and camera shake
+   `&manual=1` and `window.__battle.step(n)`): the intro (the window opening
+   on the arena), the ball's white flash, a big move's tint and camera shake
    (`/?mode=clipreview&move=EARTHQUAKE&species=swampert&enemy=blaziken&attacker=player&env=<arena>`),
-   the life of the ground. An arena named after an Emerald environment gets
-   that environment's entry layer and intro slide (`INTRO_SLIDE` in
-   scene.ts) and battle transition (`transitionKind` in
-   src/battle/transition.ts; `/?mode=transition&env=<arena>` plays it).
+   the life of the ground. An arena's battle transition is its kind of place's
+   (`transitionKind` in src/battle/transition.ts; `/?mode=transition&env=<arena>`
+   plays it).
 
 ## Calm (the sea is the benchmark)
 
