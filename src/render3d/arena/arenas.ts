@@ -131,7 +131,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   const grassTone = (x: number, z: number) => {
     const pool = 1 - smoothstep(0.35, 1.3, Math.hypot((x - cx) / 3.6, (z - cz) / 5.2));
     const shade = smoothstep(line - 2.2, line - 0.6, z);
-    const fleck = shade > 0.3 && fbm(x * 1.2, z * 2.2, 57) > 0.64 ? 1 : 0;
+    const fleck = shade > 0.25 && fbm(x * 1.1, z * 2, 57) > 0.6 ? 1 : 0;
     const patch = fbm(x * 0.2, z * 0.34, 11);
     const p = patch > 0.66 ? 1 : patch < 0.38 ? -1 : 0;
     return 2.4 + pool * 1.7 + p * 0.7 - shade * 1.7 + fleck * 1.4;
