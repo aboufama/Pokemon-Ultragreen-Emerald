@@ -30,7 +30,7 @@ A species is done when all of these hold:
       Blaziken is at 0.60 / 0.61 IoU and 0.80 / 0.98 box IoU.
 - [ ] Color calibration is fitted (histogram loss ≤ 1.0; Blaziken 0.94) and the outline
       policy is checked in `reference/calibration/<slug>.png`.
-- [ ] Clips exist for `idle`, `intro`, `hit`, `faint` and all six categories, with the
+- [ ] Clips exist for `idle`, `intro`, `entrance`, `hit`, `faint` and all six categories, with the
       events the director needs (below), and for the move motifs the species needs
       (its showcase moves and its most common motifs). No generic placeholders remain.
 - [ ] The species brief (`bodyPlan`, `character`, `powerSource`), emitters and four
@@ -149,8 +149,8 @@ sprite's shadow implies.
 
 ## 6. Clips
 
-One clip per category, plus `idle` (loop), `intro` (sent out / appears), `hit` and
-`faint`. Categories come from move data, so every move in the game maps to one
+One clip per category, plus `idle` (loop), `intro` (sent out / appears), `entrance`
+(a wild one coming into its spot), `hit` and `faint`. Categories come from move data, so every move in the game maps to one
 (`src/battle3d/director.ts`, `categorize`):
 
 | category | rule | events the director reacts to |
@@ -162,6 +162,7 @@ One clip per category, plus `idle` (loop), `intro` (sent out / appears), `hit` a
 | `status_self` | power 0, targets the user | `aura` |
 | `status_target` | power 0, targets the foe | `emit` |
 | `intro` / `faint` | send-out / fainting | `cry` / `thud` |
+| `entrance` | a wild Pokémon comes into the battle (the path is the place's, `src/battle3d/entrance.ts`) | `launch` / `land` |
 
 - **Per-move overrides** go in `moveClips` (e.g. `MOVE_DOUBLE_KICK: 'physical_weak_kick'`).
   Multi-hit clips emit one `impact` per hit.

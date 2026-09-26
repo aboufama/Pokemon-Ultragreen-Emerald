@@ -89,10 +89,13 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
   - picking a place starts the battle like a wild encounter: the battle theme and
     the place's transition over its arena (three gray flashes, then White Bars Fade,
     Grid Squares in the cave, Ripple on water);
-  - the window opening from the middle row onto the place's entry layer (the game's
-    own tall grass, dunes, waves, rocks) sweeping across the field, which then sinks
-    or fades, as the wild Pokémon slides in from the left in shadow and the trainer
-    from the right;
+  - the window opening from the middle row onto the field, the trainer already there;
+    the camera holds still, so the wild Pokémon comes into its spot itself, in shadow
+    (`src/battle3d/entrance.ts`): it bursts up out of the tall grass, the sand or the
+    sea it was hiding in (the game's own entry layer, lifted in front of it, rustling
+    or trembling first), leaps down into the pond, the mountain and the hall, drops
+    off the cave's ceiling, or drifts down to the seabed; once it lands the cover sinks
+    or fades away, its healthbox slides in and its colors come back;
   - the trainer's throw, the Poké Ball arc and the white flash;
   - the Pokémon emerging in the ball's color, then Blaziken's red-glow send-out.
 - **Menus**: action and move selection with the controller's cursor rules, the
@@ -158,7 +161,8 @@ the stock sprites) and its toon color grade (palette histograms). See
 | `tools/gauntlet/brief.mjs` | a species' Pokédex entry, stats and every move it can use with its motif |
 | `tools/gauntlet/skeleton.mjs` | a model's skeleton, what each bone moves, its textures, and any animations it ships |
 | `tools/gauntlet/classify_moves.mjs` | which body part a species uses for each move, classified by [Jev](https://typesafe.ai) (needs `TYPESAFE_API_KEY`) |
-| `tools/gauntlet/check.mjs` | the gauntlet's quality gates for a species (`--render` adds battles) |
+| `tools/gauntlet/check.mjs` | the gauntlet's quality gates for a species (`--render` adds battles, every clip and the healthbox clearance) |
+| `tools/gauntlet/uiclear.mjs` | the Pokémon stay clear of the healthboxes: every clip played at home, from both sides, against the pixels each box draws |
 | `tools/gauntlet/cliplint.mjs` | static clip checks: slides, pivots on planted feet, partly aimed bones, torso rushes, limb hitches |
 | `tools/gauntlet/motion.mjs` | how fluid a species' clips are on the animated joints (stop-starts, pops, dead holds, early turns), next to Blaziken |
 | `tools/gauntlet/setup_worktree.mjs` | ready a git worktree for a gauntlet run beside other agents |

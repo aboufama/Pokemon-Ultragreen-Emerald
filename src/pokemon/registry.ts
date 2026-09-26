@@ -1,6 +1,10 @@
 // Species with 3D profiles (tools/gauntlet/new_species.mjs adds entries).
 import { asset } from '../gba/assets';
 import { type MovePartsFile, type SpeciesProfile, movePartsOf } from './profile';
+import { makeGenericClips } from './generic/clips';
+
+/** The clips every battle plays for every species (the rest are chosen per move). */
+export const MOMENT_CLIPS = ['idle', 'intro', 'entrance', 'hit', 'faint'] as const;
 
 type ProfileFactory = (palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }) => Promise<SpeciesProfile>;
 
@@ -34,6 +38,9 @@ export function getSpeciesProfile(slug: string): Promise<SpeciesProfile> {
       const profile = await (await factory())(palettes);
       const parts = MOVE_PARTS[`./${slug}/moves.json`];
       if (parts) profile.moveParts = { ...movePartsOf(parts), ...profile.moveParts };
+      // A moment a species has no clip for yet (mid-gauntlet) plays the generic one.
+      const generic = makeGenericClips(profile.poses.stance ?? {});
+      for (const name of MOMENT_CLIPS) if (!profile.clips[name]) profile.clips[name] = { ...generic[name], generic: true };
       return profile;
     })();
     cache.set(slug, p);

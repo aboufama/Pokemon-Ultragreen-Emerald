@@ -37,7 +37,8 @@ export function clipOf(data, profile, moveConst) {
 }
 
 export const CATEGORY_CLIPS = ['physical_weak', 'physical_strong', 'special_weak', 'special_strong', 'status_self', 'status_target'];
-export const MOMENT_CLIPS = ['idle', 'intro', 'hit', 'faint'];
+/** The clips every battle plays (as src/pokemon/registry.ts MOMENT_CLIPS). */
+export const MOMENT_CLIPS = ['idle', 'intro', 'entrance', 'hit', 'faint'];
 
 /**
  * One review job per clip: moments play the clip itself, attack clips play a

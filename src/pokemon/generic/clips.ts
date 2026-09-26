@@ -6,7 +6,8 @@
 // bespoke ones (see src/pokemon/blaziken/clips.ts and docs/POKEMON_PIPELINE.md).
 //
 // Event names and timings match the Blaziken set so the move director drives
-// both the same way: impact, release, releaseEnd, charge, aura, emit, cry, thud.
+// both the same way: impact, release, releaseEnd, charge, aura, emit, cry,
+// thud, and the entrance's launch and land.
 
 import type { Clip, Ease, Keyframe } from '../../anim/clip';
 import { compose } from '../../anim/animator';
@@ -34,6 +35,22 @@ export function makeGenericClips(stance: Pose = {}): Record<string, Clip> {
         key(1.4),
       ],
       events: [{ t: 0.35, name: 'cry' }],
+    },
+    {
+      // A wild Pokémon comes into the battle (the path is the place's,
+      // src/battle3d/entrance.ts): crouch, spring (launch), stretch in the
+      // air, land low (land), settle.
+      name: 'entrance',
+      duration: 1.3,
+      keys: [
+        key(0, { root: { pitch: 8 }, pelvis: { y: -0.06 }, bones: { spine: { x: 14 }, head: { x: 12 } } }),
+        key(0.3, { root: { pitch: -6 }, bones: { spine: { x: -10 }, head: { x: -12 }, tail: { x: -14 } } }, 'out'),
+        key(0.6, { root: { pitch: 4 }, bones: { spine: { x: 6 }, head: { x: -4 }, tail: { x: -6 } } }),
+        key(0.78, { root: { pitch: 10 }, pelvis: { y: -0.06 }, bones: { spine: { x: 14 }, head: { x: 8 }, tail: { x: 10 } } }, 'out'),
+        key(1.0, { root: { pitch: 4 }, pelvis: { y: -0.02 }, bones: { spine: { x: 6 }, head: { x: 2 } } }),
+        key(1.3),
+      ],
+      events: [{ t: 0.3, name: 'launch' }, { t: 0.78, name: 'land' }],
     },
     {
       // Weak contact: short wind-up, dash in, strike, hop back.

@@ -9,9 +9,10 @@ the text box) and the opponent's side, starts and ends on the stance.
 ## Battle moments
 
 - [x] `idle`: breathing, weight shift and bounce read; mane and wrist feathers sway on springs; blinks
-- [x] `intro`: curled crouch as it emerges, bursts into the battle cry with arms up and wrist flames, settles into guard
+- [x] `intro`: curled crouch as it emerges, bursts into the battle cry with arms flung wide and wrist flames (wide, not overhead: from our side the claws and crest stay under the foe's healthbox), settles into guard
+- [x] `entrance`: coiled low, springs with the legs driving straight and arms swept down, knees and claws drawn in at the top, talons reaching down, lands deep with the wrist flames flaring, rises into the stance; reviewed bursting out of the tall grass (grass), dropping off the ceiling (cave) and in the battle intro of every place
 - [x] `hit`: snaps back with the hurt eyes, the sprung knock-back carries the body, shakes it off
-- [x] `faint`: reels, sways forward, knees buckle, slumps with a small bounce, sinks
+- [x] `faint`: reels, sways forward, knees buckle, folds onto its knees sitting back a little (slumped over its feet the foe's head fell onto our healthbox), sinks
 
 ## Attack categories
 
@@ -32,7 +33,7 @@ the text box) and the opponent's side, starts and ends on the stance.
 - [x] `toss` (toss): Seismic Toss — rushes in and seizes the foe (grab), sinks with it, springs up and back toward mid-field heaving it high and spinning round, hurls it back down into its own place (throw) and lands; the foe crashes there on its side (impact: rocks and dust), lies a moment and gets up. Both views see the crash: the foe lands in its own spot, Blaziken a third of the way home
 - [x] `burrow` (burrow): Dig — crouches and drives the claws in (dig: dirt bursts), sinks out of sight, a trail of heaving dirt runs to the foe, bursts up in front of it with a rising knee (impact as the knee breaks the surface), comes down and hops home
 - [x] `fling` (fling): Mud-Slap — weight back, the right foot scoops and flicks a spray of mud clods at the foe (emitterFor fling: feet)
-- [x] `afterimage` (afterimage): Double Team — darts left and right in quick hops, guard up; the two darkened afterimages swing out on both sides from the aura
+- [x] `afterimage` (afterimage): Double Team — darts left and right in quick hops (0.18 heights: wider took our Blaziken under our healthbox), guard up; the two darkened afterimages swing out on both sides from the aura
 - Also mapped: kick_strong → `physical_strong`, breath and beam → `special_strong` (the stream from the beak), spit and orb → `special_weak` (the spat ember), strike → `physical_weak` (Slash), buff → `status_self`, roar → `status_target`
 
 ## Showcase moves in battle

@@ -120,7 +120,7 @@ const compositeFrag = /* glsl */ `
   uniform vec2 echoAlpha[${MAX_ECHOES}];
   // The copy's palette blended toward rgb by a (Double Team darkens them).
   uniform vec4 echoLook[${MAX_ECHOES}];
-  // The battle intro's entry layer: a 256x256 GBA background over the arena.
+  // The battle intro's entry layer: a 256x256 GBA background over the scene.
   uniform sampler2D tEntry;
   uniform bool entryOn;
   uniform ivec2 entryScroll;
@@ -281,9 +281,10 @@ const compositeFrag = /* glsl */ `
     int id = majorityId(outPx);
     vec3 c = objectColor(outPx, id);
 
-    // The entry layer covers the arena, behind the Pokémon and effects (BG1
-    // under the sprites), wrapping like a GBA background as it scrolls.
-    if (entryOn && id == 0) {
+    // The entry layer is the nearest thing to the camera (the grass or waves
+    // a wild Pokémon comes out of): over the arena, the Pokémon and effects,
+    // wrapping like a GBA background as it moves.
+    if (entryOn) {
       vec4 e = texelFetch(tEntry, (screen + entryScroll) & 255, 0);
       if (e.a > 0.5) c = min(vec3(1.0), e.rgb * entryAlpha.x + c * entryAlpha.y);
     }
@@ -473,10 +474,11 @@ export class PixelPipeline {
 
   /**
    * The battle intro's entry layer (BG1 of battle_intro.c: tall grass, dunes,
-   * waves, rocks...): a 256x256 GBA background with transparency, drawn over
-   * the arena but behind Pokémon and effects, showing BG pixel (x + scrollX,
-   * y + scrollY) at screen pixel (x, y), wrapping. `eva` / `evb` blend it with
-   * the arena as BLDALPHA does (1 / 0: opaque). Null hides it.
+   * waves, rocks...): a 256x256 GBA background with transparency, drawn in
+   * front of everything 3D (the cover a wild Pokémon comes out of), showing
+   * BG pixel (x + scrollX, y + scrollY) at screen pixel (x, y), wrapping.
+   * `eva` / `evb` blend it with what is behind as BLDALPHA does (1 / 0:
+   * opaque). Null hides it.
    */
   setEntry(texture: THREE.Texture | null, scrollX = 0, scrollY = 0, eva = 1, evb = 0): void {
     const u = this.composite.uniforms;

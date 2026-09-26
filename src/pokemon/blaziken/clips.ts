@@ -61,12 +61,17 @@ const GUARD: Pose = {
   },
 };
 
+/**
+ * Arms flung wide at the shoulders, forearms raised: the battle cry. Wide
+ * rather than overhead, so from the back our Blaziken's claws stay under the
+ * foe's healthbox (tools/gauntlet/uiclear.mjs).
+ */
 const ARMS_SPREAD_UP: Pose = {
   aim: {
-    armR: { dir: [-0.85, 0.35, 0.3] },
-    forearmR: { dir: [-0.45, 0.85, 0.25] },
-    armL: { dir: [0.85, 0.35, 0.3] },
-    forearmL: { dir: [0.45, 0.85, 0.25] },
+    armR: { dir: [-0.93, 0.1, 0.35] },
+    forearmR: { dir: [-0.7, 0.62, 0.36] },
+    armL: { dir: [0.93, 0.1, 0.35] },
+    forearmL: { dir: [0.7, 0.62, 0.36] },
   },
 };
 
@@ -188,6 +193,64 @@ const intro: Clip = {
     key(1.65, flames(0), OPEN_EYES),
   ],
   events: [{ t: 0.48, name: 'cry' }],
+};
+
+/** Both knees drawn up under the body (a jump straight up or down, not forward). */
+const KNEES_UP: Pose = {
+  plantFeet: 0,
+  aim: {
+    thighR: { dir: [-0.3, -0.42, 0.86] }, shinR: { dir: [-0.12, -0.9, -0.42] },
+    thighL: { dir: [0.3, -0.42, 0.86] }, shinL: { dir: [0.12, -0.9, -0.42] },
+  },
+};
+
+/** Legs straight down: the push of a spring, or reaching for the ground. */
+const LEGS_DOWN: Pose = {
+  plantFeet: 0,
+  aim: {
+    thighR: { dir: [-0.26, -0.95, 0.18] }, shinR: { dir: [-0.16, -0.98, -0.06] },
+    thighL: { dir: [0.26, -0.95, 0.18] }, shinL: { dir: [0.16, -0.98, -0.06] },
+  },
+};
+
+/** Arms out to the sides, a little low: balance in the air and on landing. */
+const ARMS_OUT: Pose = {
+  aim: {
+    armR: { dir: [-0.88, -0.3, 0.36] },
+    forearmR: { dir: [-0.62, 0.12, 0.78] },
+    armL: { dir: [0.88, -0.3, 0.36] },
+    forearmL: { dir: [0.62, 0.12, 0.78] },
+  },
+};
+
+/**
+ * A wild Blaziken comes into the battle: coiled low, it springs (launch),
+ * draws its knees and claws in at the top, reaches down with its talons,
+ * lands deep in its knees with the wrist flames flaring (land) and rises
+ * into its stance glaring at the foe. The path (bursting up out of the tall
+ * grass, leaping in, drifting down) is the place's: src/battle3d/entrance.ts.
+ */
+const entrance: Clip = {
+  name: 'entrance',
+  duration: 1.5,
+  keys: [
+    key(0, pelvis(0, -0.08), bend(24, 8, 0, 16), CHAMBER, FISTS, SHUT),
+    key(0.22, pelvis(0, -0.11), bend(30, 10, 2, 20), CHAMBER, FISTS, SHUT),
+    // The spring: legs drive straight, the body stretches up, arms swept down.
+    snap(0.32, LEGS_DOWN, pelvis(0, 0.03), bend(-6, -4, -2, -12), BRACED, FISTS, ANGRY),
+    key(0.42, LEGS_DOWN, pelvis(0, 0.03), bend(-2, -2, -2, -10), BRACED, FISTS, ANGRY),
+    // Tucked at the top: knees up, claws drawn in.
+    key(0.6, KNEES_UP, bend(14, 6, 0, -8), CROSSED, FISTS, ANGRY),
+    // Reaching down for the ground, arms out for balance.
+    key(0.74, LEGS_DOWN, bend(8, 3, 0, -8), ARMS_OUT, ANGRY),
+    // Down: the knees take it, head low, flames flaring.
+    snap(0.82, LAND, pelvis(0, -0.06), bend(24, 8, 0, 4), ARMS_OUT, ANGRY, flames(0.8)),
+    key(0.98, LAND, pelvis(0, -0.07), bend(26, 8, 0, 6), ARMS_OUT, ANGRY, flames(0.6)),
+    // Rise into the stance, eyes on the foe.
+    key(1.22, pelvis(0, -0.015), bend(4, 2, 0, -4), GUARD, ANGRY, flames(0.2)),
+    key(1.5, flames(0), OPEN_EYES),
+  ],
+  events: [{ t: 0.32, name: 'launch' }, { t: 0.82, name: 'land' }],
 };
 
 /** Weak contact move (Scratch, Slash, Quick Attack...): leap in, claw slash, hop back. */
@@ -646,15 +709,15 @@ const afterimage: Clip = {
   keys: [
     key(0),
     key(0.1, pelvis(0, -0.05), bend(14, 2, 0, -4), GUARD, ANGRY),
-    key(0.2, { root: { x: 0.24, y: 0.05 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
-    key(0.3, { root: { x: 0.3 } }, LAND, GUARD, ANGRY),
-    key(0.42, { root: { x: -0.05, y: 0.06 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
-    key(0.52, { root: { x: -0.3 } }, LAND, GUARD, ANGRY),
-    key(0.64, { root: { x: 0.02, y: 0.06 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
-    key(0.74, { root: { x: 0.26 } }, LAND, GUARD, ANGRY),
-    key(0.86, { root: { x: -0.02, y: 0.05 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
-    key(0.96, { root: { x: -0.24 } }, LAND, GUARD, ANGRY),
-    key(1.1, { root: { x: -0.06, y: 0.04 } }, HOP, bend(6, 0, 0, -2), GUARD, ANGRY),
+    key(0.2, { root: { x: 0.144, y: 0.05 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
+    key(0.3, { root: { x: 0.18 } }, LAND, GUARD, ANGRY),
+    key(0.42, { root: { x: -0.03, y: 0.06 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
+    key(0.52, { root: { x: -0.18 } }, LAND, GUARD, ANGRY),
+    key(0.64, { root: { x: 0.012, y: 0.06 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
+    key(0.74, { root: { x: 0.156 } }, LAND, GUARD, ANGRY),
+    key(0.86, { root: { x: -0.012, y: 0.05 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
+    key(0.96, { root: { x: -0.144 } }, LAND, GUARD, ANGRY),
+    key(1.1, { root: { x: -0.036, y: 0.04 } }, HOP, bend(6, 0, 0, -2), GUARD, ANGRY),
     key(1.22, { root: { x: 0 } }, LAND, GUARD, ANGRY),
     key(1.75, OPEN_EYES),
   ],
@@ -684,17 +747,19 @@ const faint: Clip = {
     snap(0.12, { root: { z: -0.04 } }, bend(-14, -6, -4, -24), HURT,
       { aim: { armR: { dir: [-0.8, -0.3, 0.5] }, armL: { dir: [0.8, -0.35, -0.48] } } }),
     key(0.4, pelvis(0, -0.04), { root: { z: -0.02 } }, bend(10, 4, 4, 16), LIMP_ARMS, SHUT),
-    key(0.72, pelvis(0, -0.2), { root: { z: -0.02 } }, bend(30, 8, 6, 26), LIMP_ARMS, SHUT),
-    fall(0.9, pelvis(0, -0.275), { root: { z: -0.02 } }, bend(42, 10, 6, 32), LIMP_ARMS, SHUT),
-    key(1.0, pelvis(0, -0.255), { root: { z: -0.02 } }, bend(40, 10, 6, 30), LIMP_ARMS, SHUT),
-    key(1.12, pelvis(0, -0.27), { root: { z: -0.02 } }, bend(42, 10, 6, 32), LIMP_ARMS, SHUT),
-    fall(1.8, pelvis(0, -0.27), { root: { y: -1.1, z: -0.02 } }, bend(42, 10, 6, 32), LIMP_ARMS, SHUT),
+    // It folds onto its knees sitting back a little: slumped forward over its
+    // feet, the foe's head would drop onto our healthbox (tools/gauntlet/uiclear.mjs).
+    key(0.72, pelvis(0, -0.2), { root: { z: -0.08 } }, bend(26, 8, 6, 24), LIMP_ARMS, SHUT),
+    fall(0.9, pelvis(0, -0.275), { root: { z: -0.15 } }, bend(32, 10, 6, 26), LIMP_ARMS, SHUT),
+    key(1.0, pelvis(0, -0.255), { root: { z: -0.15 } }, bend(30, 10, 6, 24), LIMP_ARMS, SHUT),
+    key(1.12, pelvis(0, -0.27), { root: { z: -0.15 } }, bend(32, 10, 6, 26), LIMP_ARMS, SHUT),
+    fall(1.8, pelvis(0, -0.27), { root: { y: -1.1, z: -0.15 } }, bend(32, 10, 6, 26), LIMP_ARMS, SHUT),
   ],
   events: [{ t: 0.9, name: 'thud' }],
 };
 
 export const BLAZIKEN_CLIPS: Record<string, Clip> = Object.fromEntries(
-  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, peck, toss, burrow, fling, afterimage, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
+  [idle, intro, entrance, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, peck, toss, burrow, fling, afterimage, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
 );
 
 /** Eye atlas (pm0257_00_Eye1): 2 columns x 4 rows of 128x64 cells. */
