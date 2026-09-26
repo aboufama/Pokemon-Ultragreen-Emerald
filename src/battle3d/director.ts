@@ -480,6 +480,7 @@ function releaseFx(attacker: Battler3D, target: Battler3D, move: MoveData, motif
     case 'beam':
       return spray(vfx, fx.beam ?? fx.projectile, from, to, { every: 0.025, travel: 0.16, px: 14, max: 1.2, arc: 0, wobble: 0.015, scaleFrom: 0.8, scaleTo: 1 });
     case 'throw':
+      if (move.name === 'ROCK SLIDE' || move.name === 'ROCK TOMB') return rockFall(target, move, vfx);
       return (async () => {
         // A volley: several projectiles in a fan, landing one after another.
         const sheet = move.type === 'TYPE_GRASS' ? 'Leaf' : move.type === 'TYPE_ROCK' ? 'Rocks' : fx.projectile;
@@ -592,6 +593,33 @@ function releaseFx(attacker: Battler3D, target: Battler3D, move: MoveData, motif
         void vfx.sprite(fx.burst, to(), { px: strong ? 44 : 32, fps: 16, life: 0.45, loop: true });
       })();
   }
+}
+
+/**
+ * Rocks that fall on the foe from above instead of flying from the attacker.
+ * Rock Slide (RockSlideRocks): rocks drop two frames apart across the foe
+ * and bounce off; Rock Tomb (gRockTombRockSpriteTemplate): four big rocks
+ * land around it, one every 16 frames, and stay a moment.
+ */
+function rockFall(target: Battler3D, move: MoveData, vfx: VfxSystem): Promise<void> {
+  const tomb = move.name === 'ROCK TOMB';
+  const at = hitPoint(target);
+  const upp = vfx.unitsPerPixel(at);
+  const xs = tomb ? [20, -20, 30, -10] : [-20, 28, -10, 10, 24, -32, -20, 30];
+  const falls: Promise<void>[] = [];
+  xs.forEach((x, i) => {
+    falls.push(new Promise((resolve) => vfx.after(i * (tomb ? 16 / 60 : 2 / 60), () => {
+      const land = at.clone().add(new THREE.Vector3(x * upp, (tomb ? -14 : (i % 3) * 6 - 4) * upp, 0));
+      const from = land.clone().add(new THREE.Vector3(0, 80 * upp, 0));
+      void vfx.projectile('Rocks', from, land, tomb ? 0.24 : 0.2, { px: tomb ? 28 : 14 + (i % 3) * 4, fps: 0, frame: i % 4, spin: tomb ? 0 : 5 }).then(() => {
+        vfx.shake(tomb ? 0.05 : 0.025, 0.12);
+        if (tomb) void vfx.sprite('Rocks', land, { px: 28, fps: 0, frame: i % 4, life: 0.5 });
+        else void vfx.sprite('Rocks', land, { px: 12 + (i % 3) * 4, fps: 0, frame: i % 4, life: 0.25, spin: -6, velocity: new THREE.Vector3(Math.sign(x) * 40 * upp, 50 * upp, 0) });
+        resolve();
+      });
+    })));
+  });
+  return Promise.all(falls).then(() => undefined);
 }
 
 function auraFx(attacker: Battler3D, motif: Motif, move: MoveData, vfx: VfxSystem): void {
