@@ -44,6 +44,22 @@ const fragmentShader = /* glsl */ `
   varying vec3 vWorld;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  // Distance between the nearest two points of a drifting cellular scatter (small on cell edges).
+  float causticEdge(vec2 p, float t) {
+    p += vec2(sin(p.y * 1.3 + t * 0.7), cos(p.x * 1.1 - t * 0.6)) * 0.3;
+    vec2 i = floor(p), f = fract(p);
+    float d1 = 8.0, d2 = 8.0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 g = vec2(float(x), float(y));
+        vec2 o = vec2(hash(i + g), hash(i + g + 17.3));
+        o = 0.5 + 0.4 * sin(t * 0.6 + 6.2831 * o);
+        float d = length(g + o - f);
+        if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+      }
+    }
+    return d2 - d1;
+  }
   float noise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -148,10 +164,13 @@ const fragmentShader = /* glsl */ `
       if (hot > bayer(screen)) c = mix(c, lavaHot, 0.85);
     }
     if (caustics > 0.0 && mat != ${MAT.BACKDROP}) {
-      // Light rippling across the sea floor.
-      vec2 p = w.xz * 3.0;
-      float k = abs(sin(p.x + time * 0.9 + sin(p.y * 1.3 + time * 0.6)) + sin(p.y * 1.1 - time * 0.7 + sin(p.x * 0.9)));
-      if (k < 0.2 * near && bayer(screen) < 0.7) c = min(c * 1.12 + 0.03, 1.0);
+      // Light rippling across the sea floor: the bright edges of a slowly
+      // swimming net of cells (stretched along z so they look round on
+      // screen), a pixel thin, fading away from the battle.
+      vec2 wn = groundAt(screen + vec2(0.0, 1.0)).xz;
+      float stp = max(0.02, length(wn - w.xz) * 0.7);
+      float k = causticEdge(w.xz * vec2(1.5, 0.7), time);
+      if (k < stp * 0.9 && near > bayer(screen) * 0.9) c = min(c + vec3(0.07, 0.09, 0.11), 1.0);
     }
     if (haze > 0.0 && mat == ${MAT.BACKDROP}) {
       // Heat haze: rows of the far view wobble a pixel, in bands drifting up.
