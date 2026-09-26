@@ -70,7 +70,7 @@ export const MOTIFS: Record<Motif, MotifInfo> = {
   spit: { kind: 'ranged', fallback: 'special', body: 'quick breath, head snaps forward, a projectile from the mouth', events: ['release'], emitter: 'mouth' },
   beam: { kind: 'ranged', fallback: 'special', body: 'gather power (charge glow), brace, fire a sustained beam, recoil', events: ['charge', 'release', 'releaseEnd'], emitter: 'mouth' },
   jet: { kind: 'ranged', fallback: 'special', body: 'brace wide and low, a high-pressure jet with heavy recoil', events: ['release', 'releaseEnd'], emitter: 'mouth' },
-  throw: { kind: 'ranged', fallback: 'special', body: 'a flick or sweep that sends a volley of leaves, stars or rocks', events: ['release'], emitter: 'body' },
+  throw: { kind: 'ranged', fallback: 'special', body: 'a flick or sweep that sends a volley of leaves, stars or rocks (Rock Slide and Rock Tomb call rocks down on the foe from above)', events: ['release'], emitter: 'body' },
   wave: { kind: 'ranged', fallback: 'special', body: 'raise up and push forward; a wave rolls across the field', events: ['release'], emitter: 'body' },
   quake: { kind: 'ranged', fallback: 'physical', body: 'rear up and stomp; the ground shakes', events: ['impact'], emitter: 'feet' },
   burst: { kind: 'ranged', fallback: 'special', body: 'gather in, then explode outward with everything', events: ['charge', 'release'], emitter: 'body' },
