@@ -663,8 +663,8 @@ function seafloor(ctx: ArenaContext): void {
     { k: 'fan', x: -3.2, z: 12.2, s: 0.5, c: 0 },
     { k: 'stag', x: -4.0, z: 12.0, s: 0.5, c: 1 },
     { k: 'head', x: -3.1, z: 11.7, s: 0.36, c: 2 },
-    { k: 'rock', x: -2.4, z: 13.4, s: 0.8 },
-    { k: 'anem', x: -2.1, z: 13.2, s: 0.26, c: 0 },
+    { k: 'rock', x: -4.7, z: 13.4, s: 0.8 },
+    { k: 'anem', x: -4.4, z: 13.2, s: 0.26, c: 0 },
     // On the sand.
     { k: 'star', x: 1.55, z: 8.2, s: 0.28 },
     { k: 'star', x: -2.6, z: 10.1, s: 0.26 },
