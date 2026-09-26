@@ -723,6 +723,7 @@ const BASALT = ramp('#2c1220', '#411418', '#623931', '#833120', '#9c6252');
 const LAVA = ramp('#621000', '#943100', '#cd3100', '#e65a1a', '#ff7341', '#f69400', '#ffd573');
 const WALL = ramp('#623931', '#734a42', '#835a52', '#9c7373', '#bd8373');
 const STEAM = ramp('#b49c9c', '#d5c5c5', '#eee2de');
+const SMOKE = ramp('#2c2028', '#41303a', '#5a4148', '#7b5352', '#a46a52');
 
 /**
  * Mt. Chimney: an ash slope running up to a river of lava below the crater's
@@ -747,6 +748,12 @@ function chimney(ctx: ArenaContext): void {
   // Ash lies in soft mounds lit from the upper left.
   const mound = (x: number, z: number) => fbm(x * 0.26, z * 0.46, 23);
   fill(ctx, (sx, sy, g) => {
+    // Far beyond the crater's rim: the sky, thick with the volcano's smoke, glowing low down over the lava.
+    if (g.z > 23) {
+      const billow = fbm(g.x * 0.05 + sy * 0.02, sy * 0.09, 27);
+      const v = 2.4 + smoothstep(-24, 12, sy) * 1.6 + (billow - 0.5) * 2.2;
+      return [band(SMOKE, v, sx, sy, 0.2), MAT.BACKDROP];
+    }
     const gr = view.ground(sx + 1, sy)!, gd = view.ground(sx, sy + 1)!;
     const d = river(g.x, g.z);
     if (d < 0) {
@@ -794,8 +801,8 @@ function chimney(ctx: ArenaContext): void {
   });
   // The crater's wall rising behind the lava: dark rock, lit along its crests, the far rim hazier.
   hills(ctx, [
-    { z: 26, height: 5.5, shades: WALL, crest: hex('#bd948b'), freq: 0.22, rough: 0.7, seed: 13 },
-    { z: 18.6, height: 2.6, shades: BASALT, crest: ASH[1], freq: 0.42, rough: 0.9, seed: 17 },
+    { z: 21, height: 1.5, shades: WALL, crest: hex('#bd948b'), freq: 0.3, rough: 0.9, seed: 13 },
+    { z: 18.6, height: 0.9, shades: BASALT, crest: ASH[1], freq: 0.5, rough: 0.9, seed: 17 },
   ]);
   // Steam rising off the lava, drifting right, before the crater wall.
   const steam = [];
