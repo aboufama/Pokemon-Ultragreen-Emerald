@@ -1,7 +1,7 @@
 // An Emerald single battle with 3D battlers.
 //
 // The flow follows the game: the environment intro of battle_intro.c
-// (window reveal, scanline-split slide of the arena), the wild Pokémon's
+// (window reveal, the entry layer sweeping across, the slide-in), the wild Pokémon's
 // shadowed slide-in, the trainer's throw and the Poké Ball send-out
 // (pokeball.c / battle_anim_throw.c), the action and move menus of
 // battle_controller_player.c, and turns presented from BattleEngine steps.
@@ -36,6 +36,23 @@ const WAIT_LONG = 64;
 const WAIT_SHORT = 32;
 
 const BLACK: RGB = [0, 0, 0];
+/**
+ * The intro slide by place (sBattleIntroSlideFuncs): which of Slide1-3, and
+ * how fast the entry layer scrolls (BG1_X per frame).
+ */
+const INTRO_SLIDE: Record<string, { slide: 1 | 2 | 3; scroll: number }> = {
+  grass: { slide: 1, scroll: 6 },
+  long_grass: { slide: 1, scroll: 6 },
+  pond: { slide: 1, scroll: 6 },
+  mountain: { slide: 1, scroll: 6 },
+  cave: { slide: 1, scroll: 6 },
+  sand: { slide: 2, scroll: 8 },
+  water: { slide: 2, scroll: 8 },
+  underwater: { slide: 2, scroll: 6 },
+  building: { slide: 3, scroll: 8 },
+  plain: { slide: 3, scroll: 8 },
+};
+
 /** RGB(8, 8, 8): palette the wild Pokémon is faded to while it slides in. */
 const SHADOW: RGB = [66, 66, 66];
 /** gBallOpenFadeColors[BALL_POKE] = RGB(31, 22, 30). */
@@ -460,7 +477,7 @@ export class BattleScene {
       void b.play('idle', { fade: 0 });
     }
     const env = this.stage.environment!;
-    env.slide = 0;
+    env.setEntry(null);
     env.whiteout = 0;
     this.textbox.page = 'message';
     this.textbox.setMessage('');
@@ -488,23 +505,52 @@ export class BattleScene {
     enemy.setTint(SHADOW, 10 / 16);
     this.trainer = { visible: true, x: 80 + 240, y: 80, frame: 3 };
 
-    // BattleIntroSlide1: WIN0 opens from the middle row (1px/frame to row 48,
-    // then 4px/frame) and the arena's halves slide in 2px/frame, the top half
-    // from the left and the bottom from the right. The wild Pokémon stands in
-    // the top half and rides in with it; the trainer rides the bottom half.
-    let slide = 240, top = 80, bottom = 81, state = 2;
+    // BattleIntroSlide1/2/3 (battle_intro.c), by the place's environment.
+    // WIN0 opens from the middle row, 1 px a frame to row 48, then 4; the
+    // wild Pokémon slides in from the left and the trainer from the right,
+    // 2 px a frame. (The game slides the halves of its backdrop, whose
+    // plain sky hides the seam; this arena stays put and only they move.)
+    // All along, the entry layer (BG1: tall grass, dunes, waves, rocks)
+    // sweeps across the field; 32 frames into the slide it sinks away
+    // (Slide1), fades out (Slide2), or fades from half-transparent (Slide3).
+    const look = INTRO_SLIDE[env.name] ?? INTRO_SLIDE.building;
+    const sinkTo = env.name === 'long_grass' ? -80 : -56;
+    const sinkStep = env.name === 'long_grass' ? 2 : 1;
+    let bg1x = 0, bg1y = 0, wave = 0;
+    let blend = look.slide === 3, eva = look.slide === 3 ? 8 : 16, fadeIn = 1;
+    let slide = 240, top = 80, bottom = 81, state = 1, wait = 32;
     const apply = () => {
-      env.slide = slide;
       this.window = top > 0 ? [top, bottom] : null;
       this.trainer.x = 80 + slide;
+      enemy.screenOffset = [-slide, 0];
+      env.setEntry(state < 4 ? { x: bg1x, y: bg1y, eva: blend ? eva / 16 : 1, evb: blend ? 1 - eva / 16 : 0 } : null);
     };
     apply();
     await this.clock.task(() => {
-      if (state === 2) {
+      bg1x += look.scroll;
+      if (env.name === 'water') {
+        // The waves bob: BG1_Y = Cos2(angle) / 512 - 8.
+        bg1y = Math.trunc(Math.round(Math.cos((wave * Math.PI) / 180) * 4096) / 512) - 8;
+        wave += wave < 180 ? 4 : 6;
+        if (wave === 360) wave = 0;
+      }
+      if (state === 1) {
+        state = 2;
+      } else if (state === 2) {
         top--;
         bottom++;
         if (top === 48) state = 3;
       } else {
+        if (look.slide === 1) {
+          if (wait) wait--;
+          else if (bg1y !== sinkTo) bg1y -= sinkStep;
+        } else if (wait) {
+          // Slide2 starts blending (opaque until now) when the wait ends.
+          if (--wait === 0) blend = true;
+        } else if (eva && --fadeIn === 0) {
+          eva--;
+          fadeIn = look.slide === 2 ? 4 : 6;
+        }
         if (top > 0) {
           top -= 4;
           bottom += 4;

@@ -7,13 +7,14 @@
 //   props   trees, tall grass, rocks... standing at their depth, pixel-exact,
 //           swaying (arena/props.ts)
 //
-// The intro effects of battle_intro.c are the pipeline's: the scanline split
-// that slides the top half in from the left and the bottom half from the
-// right, and the arena's palette fades (the white flash when a Poké Ball
-// opens, the backdrop tint of big moves) on environment pixels.
+// The intro's entry layer is the game's own (BG1 of battle_intro.c: tall
+// grass, dunes, waves, rocks... from the decomp), drawn by the pipeline over
+// the arena and under the Pokémon; so are the arena's palette fades (the
+// white flash when a Poké Ball opens, the backdrop tint of big moves).
 
 import * as THREE from 'three';
-import type { RGB } from '../gba/bitmap';
+import { asset } from '../gba/assets';
+import { type RGB, loadBitmap } from '../gba/bitmap';
 import { type ARENAS, paintArena } from './arena';
 import { ArenaGround } from './arena/ground';
 import { ArenaProp } from './arena/props';
@@ -46,7 +47,7 @@ export class BattleEnvironment {
     this.props = props;
     this.group.add(ground.mesh);
     for (const p of props) this.group.add(p.mesh);
-    this.slide = 0;
+    this.setEntry(null);
     this.whiteout = 0;
     this.setTint(new THREE.Color(0, 0, 0), 0);
   }
@@ -56,13 +57,20 @@ export class BattleEnvironment {
     const ground = new ArenaGround(ctx.ground, design.look ?? {});
     ground.setCamera(opts.camera);
     const props = ctx.props.map((p, i) => new ArenaProp(p, ctx.view, i * 7919 + 13));
-    return new BattleEnvironment(opts.name, opts.pipeline, ground, props, design, [opts.player.clone(), opts.enemy.clone()]);
+    const env = new BattleEnvironment(opts.name, opts.pipeline, ground, props, design, [opts.player.clone(), opts.enemy.clone()]);
+    env.entry = await loadEntry(opts.name);
+    return env;
   }
 
-  /** The intro slide (GBA pixels, 240 -> 0): the top half enters from the left, the bottom half from the right. */
-  set slide(px: number) {
-    const d = Math.round(px);
-    this.pipeline.bands = d ? [{ y0: 0, y1: 80, dx: d }, { y0: 80, y1: 160, dx: -d }] : null;
+  /** The battle intro's entry layer for this place (null: the game has none, or it failed to load). */
+  private entry: THREE.DataTexture | null = null;
+
+  /**
+   * Show the intro's entry layer scrolled to (x, y) GBA pixels (BG1HOFS /
+   * BG1VOFS), blended eva / evb (BLDALPHA / 16), or hide it (null).
+   */
+  setEntry(at: { x: number; y: number; eva?: number; evb?: number } | null): void {
+    this.pipeline.setEntry(at && this.entry, at?.x, at?.y, at?.eva ?? 1, at?.evb ?? 0);
   }
 
   /** 0..1 fade of the arena toward white (a Poké Ball opening). */
@@ -133,10 +141,31 @@ export class BattleEnvironment {
   }
 
   dispose(): void {
-    this.pipeline.bands = null;
+    this.pipeline.setEntry(null);
+    this.entry?.dispose();
     this.pipeline.setEnvironmentBlend('flash', WHITE, 0);
     this.pipeline.setEnvironmentBlend('tint', [0, 0, 0], 0);
     this.ground.dispose();
     for (const p of this.props) p.dispose();
+  }
+}
+
+/**
+ * The entry layer of an arena's place (public/assets/gba/battle_env/<place>_entry.png,
+ * extracted from the decomp): 256x256, transparent where the arena shows through.
+ */
+async function loadEntry(name: string): Promise<THREE.DataTexture | null> {
+  try {
+    const bmp = await loadBitmap(asset(`gba/battle_env/${name}_entry.png`));
+    const tex = new THREE.DataTexture(new Uint8Array(bmp.data.buffer, bmp.data.byteOffset, bmp.data.byteLength), bmp.width, bmp.height, THREE.RGBAFormat);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.needsUpdate = true;
+    return tex;
+  } catch {
+    // Without it the intro still plays, only without the layer.
+    return null;
   }
 }

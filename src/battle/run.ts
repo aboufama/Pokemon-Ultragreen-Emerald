@@ -14,7 +14,7 @@
 
 import { SPECIES } from '../data';
 import { getSpeciesProfile, profiledSpecies } from '../pokemon/registry';
-import { BattleScene, type BattleSceneOptions, type TextSpeed } from './scene';
+import { BattleScene, type BattleSceneOptions, TEXT_FRAMES, type TextSpeed } from './scene';
 import { createTouchPad } from './touch_pad';
 import { ARENAS } from '../render3d/arena';
 import { sound } from '../audio/sound';
@@ -82,7 +82,8 @@ export async function runBattle(root: HTMLElement): Promise<BattleScene> {
       environment: choice.env,
       seed: num('seed'),
       autoplay: params.get('autoplay') === '1',
-      textSpeed: (params.get('text') as TextSpeed | null) ?? 'fast',
+      // An unknown speed would stall every message: slow, mid or fast only.
+      textSpeed: (params.get('text') ?? '') in TEXT_FRAMES ? (params.get('text') as TextSpeed) : 'fast',
       intro: params.get('intro') !== '0',
       loop: params.get('loop') !== '0',
       manual: params.get('manual') === '1',
