@@ -632,6 +632,10 @@ export class Battler3D {
     const shadowScale = (this.appear / (1 + up * 1.6)) * H;
     this.shadow.update(root.position.x, root.position.z, root.rotation.y, this.footprint.x * shadowScale, this.footprint.z * shadowScale, this.visible ? sunk * Math.max(0, 1 - up * 1.4) : 0);
 
+    // Water rings the feet of a Pokémon standing in its place (not one away at the foe, carried, or gone).
+    const home = this.visible && this.appear >= 1 && (pose.advance ?? 0) < 0.5 && !this.carry && !this.letGo;
+    this.stage.environment?.setStanding(this.slot === 'player' ? 0 : 1, home);
+
     // Visibility / blink (GBA hit blink toggles every 4 frames).
     let seen = this.visible;
     if (this.blinkTime > 0) {

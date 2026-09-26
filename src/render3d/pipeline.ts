@@ -295,7 +295,13 @@ const compositeFrag = /* glsl */ `
       // Ripple: BGxVOFS per row = Sin(((sin + y * 0x180) >> 8) & 0xFF, amplitude).
       int angle = ((rippleSin + screen.y * 384) >> 8) & 255;
       int shift = int(floor(rippleAmp * floor(256.0 * sin(float(angle) * 6.2831853 / 256.0) + 0.5) / 256.0));
-      outPx.y = clamp(outPx.y - shift * density, 0, outSize.y - 1);
+      // A row pulled in from beyond the screen mirrors the rows inside it: on
+      // the GBA the map just goes on there, but the arena is painted for the
+      // screen only (clamping smeared the edge row into streaks).
+      int y = outPx.y - shift * density;
+      if (y < 0) y = -y - 1;
+      if (y >= outSize.y) y = 2 * outSize.y - 1 - y;
+      outPx.y = clamp(y, 0, outSize.y - 1);
     }
     int id = majorityId(outPx);
     vec3 c = objectColor(outPx, id);
@@ -310,8 +316,10 @@ const compositeFrag = /* glsl */ `
       c = min(vec3(1.0), copy * echoAlpha[e].x + c * echoAlpha[e].y);
     }
 
-    // Battle transitions, over everything.
-    int bar = min(screen.y / 20, 7);
+    // Battle transitions, over everything. WhiteBarsFade's rows take their
+    // BLDY and WIN0H at the previous line's HBlank, so each bar starts a row
+    // down, and row 0 shows the last row's.
+    int bar = screen.y == 0 ? 7 : min((screen.y - 1) / 20, 7);
     if (screen.x >= barX[bar]) c += (1.0 - c) * barY[bar];
     if (gridStage > 0 && gridStage >= gridFill[(screen.y & 7) * 8 + (screen.x & 7)]) c = vec3(0.0);
     c = mix(c, fxBlend.rgb, fxBlend.a);

@@ -73,8 +73,17 @@ export class BattleEnvironment {
     u.clouds.value = fx.clouds ?? 0;
     u.glints.value = fx.glints ? 1 : 0;
     this.cloudTint.set(1 - u.clouds.value, 1 - u.clouds.value * 0.85, 1 - u.clouds.value * 0.6);
-    const reach = this.design.ripples ?? 0;
-    this.feet.forEach((f, i) => (u.feet.value as THREE.Vector4[])[i].set(f.x, f.z, reach, i * 0.47));
+    // Nobody stands on the spots until a battler says so (setStanding).
+    this.feet.forEach((f, i) => (u.feet.value as THREE.Vector4[])[i].set(f.x, f.z, 0, i * 0.47));
+  }
+
+  /**
+   * Whether a Pokémon stands on its spot (0 ours, 1 the foe's): water rings
+   * only the feet of one that does, not an empty spot before a send-out or
+   * after a faint.
+   */
+  setStanding(spot: 0 | 1, standing: boolean): void {
+    (this.ground.material.uniforms.feet.value as THREE.Vector4[])[spot].z = standing ? (this.design.ripples ?? 0) : 0;
   }
 
   /** The arena floor: center (x, z) and radius, where ground effects are strongest. */
