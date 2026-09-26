@@ -74,7 +74,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 | `level=`, `enemyLevel=` | levels |
 | `moves=` / `enemyMoves=` | comma lists, e.g. `BLAZE_KICK,FLAMETHROWER,DOUBLE_KICK,BULK_UP` |
 | `shiny=1`, `enemyShiny=1` | shiny variants |
-| `env=` | arena: `grass` (Route 101), `long_grass` (Route 120), `sand` (Route 111), `water` (Route 124), `pond` (Route 102), `underwater` (the seafloor), `mountain` (Mt. Chimney), `cave` (Granite Cave), `building` (Battle Tower) |
+| `env=` | arena: `grass` (Route 101), `water` (Route 124, the open sea), `cave` (Granite Cave) |
 | `seed=` | deterministic battle RNG |
 | `text=slow\|mid\|fast` | text speed |
 | `intro=0` | skip the intro |

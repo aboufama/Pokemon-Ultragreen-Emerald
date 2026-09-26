@@ -22,7 +22,7 @@ export type TransitionKind = 'normal' | 'cave' | 'water';
 
 /** GetBattleTransitionTypeByMap for the playtest's places (by arena). */
 export function transitionKind(arena: string): TransitionKind {
-  if (arena === 'water' || arena === 'underwater') return 'water';
+  if (arena === 'water') return 'water';
   if (arena === 'cave') return 'cave';
   return 'normal';
 }
