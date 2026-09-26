@@ -976,7 +976,8 @@ function cave(ctx: ArenaContext): void {
   const heap = [];
   for (let x = -2.9; x < 2.9; x += ctx.rng.range(0.7, 1.5)) {
     const z = back(x) - ctx.rng.range(0.15, 0.5);
-    if (Math.abs(x - spot.x) < 0.8) continue;
+    // Clear of the daylight's spot, and of the wild Pokémon's head and shoulders (a calm wall behind it).
+    if (Math.abs(x - spot.x) < 0.8 || (x > ctx.enemy.x - 1.3 && x < ctx.enemy.x + 0.45)) continue;
     const ppu = view.ppu(view.depth(x, 0, z));
     const w = ppu * ctx.rng.range(0.35, 0.75);
     const pal = Math.abs(x - spot.x) < 2.4 ? pale : dim;
@@ -990,7 +991,7 @@ function cave(ctx: ArenaContext): void {
     const ppu = view.ppu(view.depth(x, 0, z));
     heap.push({ sprite: rock(ppu * s, ppu * s * 0.65, dim, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * s * 0.6, ry: ppu * s * 0.13 } });
   }
-  const spikes = [[2.2, 12.1, 0.8], [-2.3, 12.3, 1], [1.6, 12.5, 0.55]] as const;
+  const spikes = [[2.2, 12.1, 0.8], [-3.35, 12.3, 1], [1.6, 12.5, 0.55]] as const;
   for (const [x, z, s] of spikes) {
     const ppu = view.ppu(view.depth(x, 0, z));
     heap.push({ sprite: stalagmite(ppu * s * 0.42, ppu * s * 1.4, dim, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * s * 0.3, ry: ppu * 0.06 } });
