@@ -77,5 +77,5 @@ export const TYPE_SHEETS: string[] = [...new Set([
   // Motif sheets (src/battle3d/director.ts).
   'SharpTeeth', 'Cut', 'SlamHit', 'HornHit', 'PunchImpact', 'SpeedDust', 'DirtMound', 'FlyingDirt', 'Splash',
   'WaterColumn', 'Roots', 'Vine', 'Lightning', 'SpinningFire', 'Explosion', 'WhiteFeather', 'Spore', 'Seed',
-  'Petal', 'YellowBall', 'Sunlight', 'MagentaHeart', 'MusicNotes', 'GoldRing', 'Protect', 'RainDrops', 'Hail',
+  'Petal', 'YellowBall', 'Sunlight', 'MagentaHeart', 'MusicNotes', 'GoldRing', 'Protect', 'RainDrops', 'Hail', 'WaterDroplet',
 ].filter((s): s is string => !!s))];

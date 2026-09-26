@@ -32,6 +32,8 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     moveClips: {
       MOVE_LOW_KICK: 'physical_weak_kick',
     },
+    // Mud-Slap is flicked with a foot.
+    emitterFor: { fling: 'feet' },
     // Clips by move motif (src/battle3d/motifs.ts). Blaziken's clips keep
     // their category names; this maps the motifs they perform.
     motifClips: {

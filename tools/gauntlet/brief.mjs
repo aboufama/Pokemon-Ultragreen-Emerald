@@ -117,7 +117,7 @@ export async function speciesBrief(slug) {
     pokedex: { category, heightM: heightDm / 10, weightKg: weightHg / 10, text: dexText },
     movesAtLevel50: at50,
     moves: all,
-    motifs: Object.fromEntries(Object.entries(motifs).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => [k, { kind: MOTIFS[k].kind, body: MOTIFS[k].body, moves: v }])),
+    motifs: Object.fromEntries(Object.entries(motifs).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => [k, { kind: MOTIFS[k].kind, body: MOTIFS[k].body, events: MOTIFS[k].requires ?? MOTIFS[k].events, moves: v }])),
   };
 }
 
@@ -132,7 +132,7 @@ if (args.slug && import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.log(`Stats: ${Object.entries(b.baseStats).map(([k, v]) => `${k} ${v}`).join(', ')}; elevation ${b.elevation}; stock anims ${b.stockAnims.front} / ${b.stockAnims.back}`);
     console.log(`Level 50 moveset (Gen 3 wild rule): ${b.movesAtLevel50.join(', ')}`);
     console.log('\nMotifs across its moves (most common first) — clip each motif that matters:');
-    for (const [motif, m] of Object.entries(b.motifs)) console.log(`  ${motif.padEnd(10)} ${m.kind.padEnd(8)} ${m.moves.join(', ')}`);
+    for (const [motif, m] of Object.entries(b.motifs)) console.log(`  ${motif.padEnd(10)} ${m.kind.padEnd(8)} ${m.moves.join(', ')}${m.events.length ? `  [events: ${m.events.join(', ')}]` : ''}`);
     console.log('\nMoves:');
     for (const m of b.moves) console.log(`  ${m.const.padEnd(22)} ${m.type.padEnd(9)} ${String(m.power).padStart(3)}  ${m.motif.padEnd(10)} -> ${m.clip.padEnd(16)} ${m.sources.join(',')}`);
   }
