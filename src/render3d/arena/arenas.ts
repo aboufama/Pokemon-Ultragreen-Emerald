@@ -134,7 +134,8 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     const fleck = shade > 0.25 && fbm(x * 1.1, z * 2, 57) > 0.6 ? 1 : 0;
     const patch = fbm(x * 0.2, z * 0.34, 11);
     const p = patch > 0.66 ? 1 : patch < 0.38 ? -1 : 0;
-    return 2.4 + pool * 1.7 + p * 0.7 - shade * 1.7 + fleck * 1.4;
+    // Kept within a narrow range of the ramp: the grass is the ground the Pokémon stand on, not the show.
+    return 2.4 + pool * 1.25 + p * 0.5 - shade * 1.25 + fleck * 0.9;
   };
   fill(ctx, (sx, sy, g) => {
     const w = water(g.x, g.z);
@@ -179,13 +180,13 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     const v = grassTone(qIsGrass ? q.x : g.x, qIsGrass ? q.z : g.z);
     return [band(G, v, sx, sy, 0.06), MAT.GRASS];
   });
-  // Blade tufts, in clusters: two darker blades, a light tip near the camera.
+  // Blade tufts, in clusters: two blades a shade darker than the grass, a light tip near the camera.
   scatter(ctx, 9, 3, (x, z, sx, sy, ppu, r) => {
     const f = fbm(x * 0.45, z * 0.75, 51);
-    if (r > (f - 0.5) * 3.2 || ground.material(sx, sy) !== MAT.GRASS) return;
+    if (r > (f - 0.5) * 2.2 || ground.material(sx, sy) !== MAT.GRASS) return;
     const i = indexIn(G, ground.get(sx, sy));
     if (i < 0) return;
-    const dark = G[Math.max(0, i - 2)], light = r < 0.2 ? G[Math.min(G.length - 1, i + 1)] : null;
+    const dark = G[Math.max(0, i - 1)], light = r < 0.12 ? G[Math.min(G.length - 1, i + 1)] : null;
     if (ppu < 24) ground.set(sx, sy, dark, MAT.GRASS);
     else if (ppu < 44) {
       ground.set(sx - 1, sy - 1, dark, MAT.GRASS);
@@ -196,17 +197,16 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
       if (light) ground.set(sx, sy - 2, light, MAT.GRASS);
     }
   });
-  // Clover in patches near the camera: three round leaves, a light dot.
+  // Clover in patches near the camera: three round leaves a shade darker than the grass.
   scatter(ctx, 11, 17, (x, z, sx, sy, ppu, r) => {
-    if (ppu < 40 || r > 0.45 || fbm(x * 0.6, z * 0.9, 52) < 0.62 || ground.material(sx, sy) !== MAT.GRASS) return;
+    if (ppu < 40 || r > 0.3 || fbm(x * 0.6, z * 0.9, 52) < 0.66 || ground.material(sx, sy) !== MAT.GRASS) return;
     const i = indexIn(G, ground.get(sx, sy));
     if (i < 1) return;
-    const dark = G[Math.max(0, i - 2)], leaf = G[Math.max(0, i - 1)];
+    const leaf = G[i - 1];
     ground.set(sx - 1, sy, leaf, MAT.GRASS);
     ground.set(sx + 1, sy, leaf, MAT.GRASS);
     ground.set(sx, sy - 1, leaf, MAT.GRASS);
-    ground.set(sx, sy, dark, MAT.GRASS);
-    if (ppu > 52) ground.set(sx, sy - 2, G[Math.min(G.length - 1, i + 1)], MAT.GRASS);
+    ground.set(sx, sy, leaf, MAT.GRASS);
   });
   // Pebbles on the path.
   if (o.path) {
@@ -234,7 +234,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
       ground.set(px, py + 1, stem, MAT.GRASS);
     } else ground.set(px, py, kind[0], MAT.GRASS);
   };
-  const beds = o.flowers ?? 7;
+  const beds = o.flowers ?? 4;
   // The first beds where they show (below the wild Pokémon's healthbox, past its right, behind it), then anywhere.
   const spots = [[20, 62], [238, 100], [124, 46]];
   for (let b = 0, tries = 0; b < beds && tries < 200; tries++) {
@@ -243,7 +243,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     if (Math.hypot(c.x - ctx.enemy.x, (c.z - ctx.enemy.z) * 1.4) < 2.2 || Math.hypot(c.x - ctx.player.x, c.z - ctx.player.z) < 1.6 || c.z > line - 0.6) continue;
     b++;
     const kind = FLOWERS[ctx.rng.int(0, FLOWERS.length - 1)];
-    const n = ctx.rng.int(6, 13);
+    const n = ctx.rng.int(4, 8);
     for (let i = 0; i < n; i++) flower(c.x + ctx.rng.range(-0.7, 0.7) * (1 - i / n * 0.5), c.z + ctx.rng.range(-0.4, 0.4), kind);
   }
   // The tree line: staggered rows of round trees, the far rows hazy; bushes at its foot.
@@ -251,7 +251,9 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   const trees = [];
   for (let row = 0; row < 3; row++) {
     const z0 = line + row * 1.7;
-    const pal = { leaves: row ? tint(o.leaves, HAZE, row * 0.16) : o.leaves, outline: row ? mix(TREE_OUTLINE, HAZE, row * 0.16) : TREE_OUTLINE, trunk: TRUNK };
+    // Every row a little hazy and its outline softened, the far ones more: a quiet backdrop.
+    const haze = 0.1 + row * 0.16;
+    const pal = { leaves: tint(o.leaves, HAZE, haze), outline: mix(TREE_OUTLINE, HAZE, haze + 0.12), trunk: TRUNK };
     for (let x = -24 + row * 0.9; x < 24; x += ctx.rng.range(1.6, 2.2)) {
       const z = z0 + ctx.rng.range(-0.35, 0.35);
       const ppu = view.ppu(view.depth(x, 0, z));
@@ -259,7 +261,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
       trees.push({ sprite: tree(w, pal, ctx.rng.int(1, 1e6)), x, z });
     }
   }
-  const bushPal = { leaves: o.leaves, outline: TREE_OUTLINE, trunk: TRUNK };
+  const bushPal = { leaves: tint(o.leaves, HAZE, 0.1), outline: mix(TREE_OUTLINE, HAZE, 0.22), trunk: TRUNK };
   for (let i = 0; i < 14; i++) {
     const x = ctx.rng.range(-20, 20), z = line - ctx.rng.range(0.5, 1.6);
     if (water(x, z) < 0.3) continue;
@@ -270,13 +272,16 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   stand(ctx, trees, dark);
   // Framing the left: big tufts of grass in the foreground, cropped by the frame, with red flowers
   // (Route 101), grown taller (Route 120), or around a mossy boulder and reeds (Route 102).
+  // Tall grass is drawn a little toward the meadow's own green, its outline softened: framing, not a feature.
+  const blades = tint(o.blades, G[2], 0.3);
+  const bladeOutline = mix(TREE_OUTLINE, G[1], 0.3);
   const tall = o.tallGrassHeight ?? 1;
   const tufts: { sprite: Sprite; x: number; z: number; mat: number }[] = [];
   const tuftSpots = o.pond ? [[22, 106, 0.8], [36, 112, 0.7], [-8, 90, 0.8]] : [[2, 110, 1], [22, 104, 0.8], [-6, 92, 0.9], [34, 112, 0.7], [10, 84, 0.6]];
   for (const [sx, sy, s] of tuftSpots) {
     const g = view.ground(sx, sy)!;
     const w = g.ppu * 0.55 * s, h = g.ppu * 0.42 * s * Math.min(1.3, tall);
-    tufts.push({ sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z, mat: MAT.GRASS });
+    tufts.push({ sprite: tallGrass(w, h, { blades, outline: bladeOutline }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z, mat: MAT.GRASS });
   }
   if (o.pond) {
     const g = view.ground(2, 104)!;
@@ -292,7 +297,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     ground.sprite(t.sprite, Math.round(px), Math.floor(py) + 1, t.mat);
   }
   if (!o.pond && tall <= 1) {
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 3; i++) {
       const g = view.ground(ctx.rng.range(4, 30), ctx.rng.range(88, 100))!;
       flower(g.x, g.z, FLOWERS[0]);
     }
@@ -300,7 +305,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   // Tall grass swaying at the edges of the view and around the sides (props: it can hide the Pokémon's feet).
   const clump = (ppu: number) => {
     const w = ppu * ctx.rng.range(0.4, 0.62), h = ppu * ctx.rng.range(0.3, 0.4) * (o.tallGrassHeight ?? 1);
-    return { sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), sway: Math.max(1, h * 0.12) };
+    return { sprite: tallGrass(w, h, { blades, outline: bladeOutline }, ctx.rng.int(1, 1e6)), sway: Math.max(1, h * 0.12) };
   };
   frameProp(ctx, 3, 70, -1, clump);
   frameProp(ctx, 236, 64, 1, clump);
@@ -317,7 +322,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   // Reeds along the pond's shore, lily pads in a few clusters on it.
   if (o.pond) {
     const p = o.pond;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 18; i++) {
       const a = ctx.rng.range(0, Math.PI * 2);
       if (Math.sin(a) < -0.3 && ctx.rng.chance(0.7)) continue; // fewer on the near shore
       const x = p.x + Math.cos(a) * p.rx * 1.03, z = p.z + Math.sin(a) * p.rz * 1.03;
