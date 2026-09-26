@@ -9,10 +9,14 @@ import type { GroundLook } from './ground';
 import { type PropSpec, propRect } from './props';
 import type { ArenaView, GroundPoint } from './view';
 
-/** The painted area, in GBA screen pixels: three screens wide (the intro slide) and past the bottom and top edges (camera shake). */
-export const PAINT_X0 = -240;
+/**
+ * The painted area, in GBA screen pixels: the screen and a margin all round
+ * for the camera shake. (The camera never pans, and the intro slides only
+ * the Pokémon and the trainer in, so nothing beyond it is ever seen.)
+ */
+export const PAINT_X0 = -32;
 export const PAINT_Y0 = -24;
-export const PAINT_W = 720;
+export const PAINT_W = 304;
 export const PAINT_H = 224;
 
 export interface ArenaContext {
@@ -64,8 +68,8 @@ export function scatter(ctx: ArenaContext, px: number, seed: number, fn: (x: num
   for (let row = 0; z < top.z; row++) {
     const d = view.depth(0, 0, z);
     const step = px / view.ppu(d);
-    // The painted area spans three screens: about 0.95 z either side at depth z.
-    const halfW = z * 0.95 + 1.5;
+    // The painted area spans the screen and its margin: under 0.4 z either side at depth z.
+    const halfW = z * 0.4 + 1.5;
     for (let i = Math.floor(-halfW / step); i < halfW / step; i++) {
       const rx = hash2(i, row, seed), rz = hash2(i, row, seed + 1);
       const x = (i + rx) * step, zz = z + rz * step;
