@@ -4,9 +4,9 @@
 // Battle Tower's yellow grid floor). No platforms: the Pokémon stand on the
 // ground itself, with their shadows.
 
-import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, fbm, hex, ramp, smoothstep } from './art';
+import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, fbm, hash2, hex, noise, ramp, smoothstep } from './art';
 import { type ArenaContext, type ArenaDesign, addProp, at, darker, fill, frameProp, hills, scatter, shafts, shift, stand } from './design';
-import { anemone, bush, coralHead, lampPost, seaFan, staghorn, reeds, rock, rockWall, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
+import { anemone, bush, coralHead, lampPost, seaFan, staghorn, reeds, rock, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
 
 // Hoenn's greens (general tileset): route grass, tall grass and tree leaves.
 const MEADOW = ramp('#287a54', '#3c9f72', '#56b98b', '#73c5a4', '#8dd3b4', '#a9e0c8');
@@ -594,55 +594,191 @@ function chimney(ctx: ArenaContext): void {
 
 // --- GRANITE CAVE -------------------------------------------------------------
 
-const CAVE = ramp('#26140f', '#3a1e1a', '#522931', '#734a39', '#946a5a', '#ac8b6a', '#cdac7b', '#e6c58b');
+// The cave tileset's browns: sandy floor and pale boulders in the light,
+// down through rust browns to the purple-brown of the dark (cool shadows,
+// warm light).
+const GC = ramp('#1a0e16', '#2c1826', '#412941', '#522931', '#734a39', '#946a5a', '#ac8b6a', '#cdac7b', '#e6c58b', '#ffe69c');
 
+/**
+ * Granite Cave: a chamber walled in rock (its side walls receding along the
+ * edges of the view, a ledge across the back with terraces rising behind it
+ * into the dark, like Emerald's cave ledges), daylight falling through an
+ * opening in the ceiling onto the floor behind the wild Pokémon, the battle
+ * lit around it and the cave darkening toward its walls; boulders and rubble
+ * at the walls' feet and on the terraces.
+ */
 function cave(ctx: ArenaContext): void {
-  const C = CAVE;
-  // Light falls on the battle from above; the cave darkens all around it.
-  const cx = (ctx.player.x + ctx.enemy.x) / 2, cz = (ctx.player.z + ctx.enemy.z) / 2 + 0.8;
-  const crack = (x: number, z: number) => Math.abs(fbm(x * 0.4, z * 0.6, 37) - 0.5);
-  fill(ctx, (sx, sy, g) => {
-    const d = Math.hypot((g.x - cx) * 0.8, g.z - cz);
-    let v = 5.2 + (fbm(g.x * 0.2, g.z * 0.3, 5) - 0.5) * 2 - smoothstep(2.5, 8.5, d) * 3.6;
-    let c = band(C, v, sx, sy, 0.45);
-    if (crack(g.x, g.z) < 0.01 * (40 / g.ppu)) c = C[Math.max(0, indexIn(C, c) - 2)];
-    return [c, MAT.SOLID];
-  });
-  scatter(ctx, 9, 31, (_x, _z, sx, sy, ppu, r) => {
-    if (r > 0.3) return;
-    const i = indexIn(C, ctx.ground.get(sx, sy));
-    if (i < 0) return;
-    ctx.ground.set(sx, sy, C[Math.max(0, i - 2)]);
-    if (ppu > 30) ctx.ground.set(sx, sy - 1, C[Math.min(C.length - 1, i + 1)]);
-  });
-  // The back wall, stalagmites before it.
-  const shadeWall = { shades: ramp('#1c0f0c', '#2e1916', '#442522', '#5c3a2e', '#734a39'), outline: C[0] };
-  const far = [];
-  for (let x = -22; x < 22; x += ctx.rng.range(3, 4.5)) {
-    const z = ctx.rng.range(13.4, 14.4);
-    const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    far.push({ sprite: rockWall(ppu * ctx.rng.range(3.5, 5), ppu * ctx.rng.range(2.6, 3.4), shadeWall, ctx.rng.int(1, 1e6)), x, z });
+  const { view, ground } = ctx;
+  const cam = view.camera.position;
+  const cx = (ctx.player.x + ctx.enemy.x) / 2, cz = (ctx.player.z + ctx.enemy.z) / 2 + 1;
+  const spot = { x: -0.25, z: 10.4 };
+  // The chamber: a ledge across the back (wandering in and out), walls down the sides, terraces behind.
+  const back = (x: number) => 12.9 + Math.sin(x * 0.55 + 1) * 0.45 + Math.sin(x * 1.4 + 0.3) * 0.18;
+  const left = (z: number) => 2.95 + Math.sin(z * 0.9 + 0.5) * 0.18 + Math.sin(z * 2.3) * 0.06;
+  const right = (z: number) => -3.05 + Math.sin(z * 0.8 + 2.1) * 0.2 + Math.sin(z * 2.1 + 1) * 0.06;
+  const LEDGES = [
+    { z: back, h: 0.72 },
+    { z: (x: number) => 15.8 + Math.sin(x * 0.4 + 2) * 0.5 + Math.sin(x * 1.1) * 0.2, h: 1.5 },
+    { z: (x: number) => 19 + Math.sin(x * 0.35 + 4) * 0.7, h: 9 },
+  ];
+  // What each pixel's view ray meets first: kind (0 chamber floor, 1 terrace, 2 ledge face, 3 left wall, 4 right wall), level, and the point.
+  const W = ground.width, H = ground.height;
+  const KIND = new Int8Array(W * H), LEVEL = new Int8Array(W * H);
+  const PX = new Float32Array(W * H), PY = new Float32Array(W * H), PZ = new Float32Array(W * H);
+  const trace = (X: number, G: number, i: number) => {
+    const set = (k: number, lv: number, t: number) => {
+      KIND[i] = k;
+      LEVEL[i] = lv;
+      PX[i] = cam.x + (X - cam.x) * t;
+      PY[i] = cam.y * (1 - t);
+      PZ[i] = cam.z + (G - cam.z) * t;
+    };
+    for (const [side, sgn, k] of [[left, 1, 3], [right, -1, 4]] as const) {
+      if ((X - cam.x) * sgn <= 0) continue;
+      let t = 0.5;
+      for (let n = 0; n < 4; n++) t = (side(cam.z + (G - cam.z) * t) - cam.x) / (X - cam.x);
+      if (t <= 0 || t > 1.0001) continue;
+      const x = cam.x + (X - cam.x) * t, z = cam.z + (G - cam.z) * t;
+      if (z < back(x)) return set(k, 0, t);
+    }
+    let base = 0;
+    for (let lv = 0; lv < LEDGES.length; lv++) {
+      const l = LEDGES[lv];
+      const tf = 1 - base / cam.y;
+      if (cam.z + (G - cam.z) * tf < l.z(cam.x + (X - cam.x) * tf)) return set(lv === 0 ? 0 : 1, lv, tf);
+      let t = tf;
+      for (let n = 0; n < 4; n++) t = (l.z(cam.x + (X - cam.x) * t) - cam.z) / (G - cam.z);
+      if (cam.y * (1 - t) < l.h) return set(2, lv, t);
+      base = l.h;
+    }
+    set(2, LEDGES.length - 1, 1);
+  };
+  for (let j = 0; j < H; j++) {
+    for (let i = 0; i < W; i++) {
+      const g = view.ground(ground.ox + i, ground.oy + j);
+      if (g) trace(g.x, g.z, j * W + i);
+    }
   }
-  for (let i = 0; i < 12; i++) {
-    const x = ctx.rng.range(-14, 14), z = ctx.rng.range(11.2, 13.2);
-    const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    far.push({ sprite: stalagmite(ppu * ctx.rng.range(0.4, 0.8), ppu * ctx.rng.range(0.8, 1.8), shadeWall, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * 0.4, ry: ppu * 0.08 } });
+  const idx = (sx: number, sy: number) => {
+    const i = sx - ground.ox, j = sy - ground.oy;
+    return i < 0 || j < 0 || i >= W || j >= H ? -1 : j * W + i;
+  };
+  /** Light on the chamber floor: the daylight's spot, the battle around it, dark toward the walls. */
+  const floorLight = (x: number, z: number) => {
+    const s = Math.hypot((x - spot.x) / 1.3, (z - spot.z) / 1.0) + (fbm(x * 1.3, z * 1.3, 83) - 0.5) * 0.3;
+    const a = Math.hypot((x - cx) / 2.7, (z - cz) / 4.0) + (fbm(x * 0.5, z * 0.5, 84) - 0.5) * 0.35;
+    const inSpot = s < 1 ? 1 : s < 1.2 ? 0.55 : 0;
+    return Math.max(inSpot * 1.75 + (s < 0.5 ? 0.4 : 0), 1 - smoothstep(0.35, 1.15, a));
+  };
+  /**
+   * Rock faces: irregular layers of rock (each a little lighter or darker, a
+   * lit edge along its top and a dark seam under it), bulging here and there,
+   * split now and then by a dark crack.
+   */
+  const rockFace = (along: number, y: number, base: number, px: number) => {
+    const L = y / 0.3 + (noise(along * 0.8, y * 0.6, 92) - 0.5) * 0.9 + Math.sin(along * 1.3) * 0.15;
+    const layer = Math.floor(L), f = L - layer;
+    let v = base + (hash2(layer, 7, 93) - 0.5) * 0.9 + (noise(along * 1.6, layer * 3.1, 94) - 0.5) * 1.1;
+    if (f < px * 1.2) v -= 1.5;
+    else if (f > 1 - px * 1.2) v += 0.9;
+    const c = along / 0.9 + hash2(layer, 3, 95) * 5;
+    if (Math.abs(c - Math.round(c)) < px * 0.2 && hash2(layer, Math.round(c), 96) < 0.45) v -= 1.6;
+    return v;
+  };
+  fill(ctx, (sx, sy) => {
+    const i = idx(sx, sy);
+    const kind = KIND[i], lv = LEVEL[i], x = PX[i], y = PY[i], z = PZ[i];
+    const up = idx(sx, sy - 1), down = idx(sx, sy + 1);
+    const ppu = view.ppu(view.depth(x, y, z));
+    const px = 1 / (ppu * 0.3);
+    // Away from the daylight the cave sinks into the dark.
+    const dark = smoothstep(2.5, 7, Math.hypot(x - spot.x, (z - spot.z) * 0.8));
+    if (kind === 0) {
+      const L = floorLight(x, z);
+      // The walls' feet: a shadow along the back ledge and the sides.
+      const ao = Math.max(smoothstep(back(x) - 1.1, back(x), z), smoothstep(left(z) - 0.9, left(z), x), smoothstep(right(z) + 0.9, right(z), x));
+      const v = 3.2 + L * 2.9 - ao * 1.3 + (fbm(x * 0.6, z * 0.8, 5) - 0.5) * 0.5;
+      return [band(GC, v, sx, sy, 0.12), MAT.SOLID];
+    }
+    if (kind === 1) {
+      // A terrace: a pale lip along its edge, darker sand behind.
+      if (down >= 0 && (KIND[down] !== 1 || LEVEL[down] !== lv)) return [GC[lv === 1 ? 7 : 5], MAT.BACKDROP];
+      const v = 4.4 - lv * 1.3 - dark * 1.6 + (fbm(x * 0.7, z * 0.9, 6) - 0.5) * 0.6;
+      return [band(GC, v, sx, sy, 0.15), MAT.BACKDROP];
+    }
+    if (kind >= 3) {
+      // The left wall faces away from the light, the right one into it.
+      let v = rockFace(z * 1.4, y, kind === 3 ? 3.3 : 4.9, px) - dark * 0.8;
+      if (y < 0.08) v -= 1;
+      return [band(GC, v, sx, sy, 0.15), MAT.BACKDROP];
+    }
+    // A ledge's face, lit by the daylight's spill near the spot; the lip along its top catches the light.
+    if (up >= 0 && KIND[up] === 1 && LEVEL[up] === lv + 1) return [GC[Math.max(2, Math.round(7 - lv - dark * 1.5))], MAT.BACKDROP];
+    const spill = 1 - smoothstep(0.8, 3.6, Math.abs(x - spot.x - 0.3));
+    let v = rockFace(x, y, 3.7 - lv * 1.1 + spill * (lv === 0 ? 1.0 : 0.3), px) - dark * (1.2 + lv * 0.4);
+    if (y < 0.06) v -= 1.2;
+    return [band(GC, v, sx, sy, 0.15), MAT.BACKDROP];
+  });
+  // The floor's texture: Emerald's cave hatching (short light strokes up to the right) in the light, and rubble.
+  scatter(ctx, 7, 31, (x, z, sx, sy, ppu, r) => {
+    if (ground.material(sx, sy) !== MAT.SOLID) return;
+    const i = indexIn(GC, ground.get(sx, sy));
+    if (i >= 5 && r < 0.3 && fbm(x * 0.5, z * 0.7, 77) > 0.47) {
+      const len = ppu > 50 ? 3 : 2;
+      for (let k = 0; k < len; k++) {
+        const c = ground.get(sx + k, sy - k);
+        if (c && ground.material(sx + k, sy - k) === MAT.SOLID) ground.set(sx + k, sy - k, shift([GC], c, 1));
+      }
+    } else if (r > 0.93 && i >= 0) {
+      ground.set(sx, sy, GC[Math.max(0, i - 2)]);
+      if (ppu > 34) ground.set(sx + 1, sy, GC[Math.min(9, i + 1)]);
+    }
+  });
+  // Daylight through an opening in the ceiling, slanting down from the upper left onto the spot.
+  const [spx, spy] = view.screen(spot.x, 0, spot.z);
+  const slope = 0.3;
+  shafts(ctx, [
+    { x: spx - (spy - ground.oy) * slope - 16, w: 30, lean: slope, bottom: spy + 5, strength: 0.9, lift: 2 },
+    { x: spx - (spy - ground.oy) * slope + 18, w: 6, lean: slope, bottom: spy - 8, strength: 0.6, lift: 1 },
+  ], [GC]);
+  // Boulders heaped at the walls' feet and on the terraces; stalagmites along the sides.
+  const pale = { shades: ramp('#522931', '#734a39', '#946a5a', '#ac8b6a', '#cdac7b', '#e6c58b'), outline: GC[1] };
+  const dim = { shades: ramp('#2c1826', '#412941', '#522931', '#734a39', '#946a5a'), outline: GC[0] };
+  const heap = [];
+  for (let x = -2.9; x < 2.9; x += ctx.rng.range(0.7, 1.5)) {
+    const z = back(x) - ctx.rng.range(0.15, 0.5);
+    if (Math.abs(x - spot.x) < 0.8) continue;
+    const ppu = view.ppu(view.depth(x, 0, z));
+    const w = ppu * ctx.rng.range(0.35, 0.75);
+    const pal = Math.abs(x - spot.x) < 2.4 ? pale : dim;
+    heap.push({ sprite: rock(w, w * ctx.rng.range(0.6, 0.8), pal, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: w * 0.6, ry: w * 0.14 } });
+    if (ctx.rng.chance(0.6)) {
+      const w2 = w * ctx.rng.range(0.4, 0.6);
+      heap.push({ sprite: rock(w2, w2 * 0.7, pal, ctx.rng.int(1, 1e6)), x: x + ctx.rng.range(-0.45, 0.45), z: z - ctx.rng.range(0.2, 0.5) });
+    }
   }
-  stand(ctx, far, darker([C]));
-  const lit = { shades: ramp('#3a1e1a', '#522931', '#734a39', '#946a5a', '#ac8b6a'), outline: C[0] };
-  place(ctx, {
-    region: [-40, 290, 30, 112],
-    count: 5,
-    make: (ppu) => ({ sprite: stalagmite(ppu * ctx.rng.range(0.3, 0.55), ppu * ctx.rng.range(0.6, 1.2), lit, ctx.rng.int(1, 1e6)) }),
-  });
-  place(ctx, {
-    region: [-40, 290, 34, 112],
-    count: 4,
-    make: (ppu) => {
-      const w = ppu * ctx.rng.range(0.35, 0.7);
-      return { sprite: rock(w, w * 0.7, lit, ctx.rng.int(1, 1e6)), sink: 1 };
-    },
-  });
+  for (const [x, z, s] of [[2.55, 11.2, 0.7], [2.45, 9.4, 0.5], [-2.7, 11.6, 0.8], [-2.65, 10.3, 0.55], [2.6, 7.3, 0.9], [-2.7, 8.2, 0.9]] as const) {
+    const ppu = view.ppu(view.depth(x, 0, z));
+    heap.push({ sprite: rock(ppu * s, ppu * s * 0.65, dim, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * s * 0.6, ry: ppu * s * 0.13 } });
+  }
+  const spikes = [[2.2, 12.1, 0.8], [-2.3, 12.3, 1], [1.6, 12.5, 0.55]] as const;
+  for (const [x, z, s] of spikes) {
+    const ppu = view.ppu(view.depth(x, 0, z));
+    heap.push({ sprite: stalagmite(ppu * s * 0.42, ppu * s * 1.4, dim, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * s * 0.3, ry: ppu * 0.06 } });
+  }
+  // Boulders up on the first terrace (standing on it: painted at their height).
+  for (let x = -12; x < 12; x += ctx.rng.range(1.2, 2.6)) {
+    const z = back(x) + ctx.rng.range(0.4, 1.6);
+    const [bx, by] = view.screen(x, LEDGES[0].h, z);
+    const ppu = view.ppu(view.depth(x, LEDGES[0].h, z));
+    const w = ppu * ctx.rng.range(0.4, 0.8);
+    const i = idx(Math.round(bx), Math.floor(by));
+    if (i < 0 || KIND[i] !== 1 || LEVEL[i] !== 1) continue;
+    // Not right behind a stalagmite's tip (it would read as a cap).
+    if (spikes.some((sp) => Math.abs(view.screen(sp[0], 0, sp[1])[0] - bx) < w * 0.5 + 4)) continue;
+    ground.sprite(rock(w, w * 0.7, dim, ctx.rng.int(1, 1e6)), Math.round(bx), Math.floor(by) + 1);
+  }
+  stand(ctx, heap, darker([GC]));
 }
 
 // --- BATTLE TOWER -------------------------------------------------------------
