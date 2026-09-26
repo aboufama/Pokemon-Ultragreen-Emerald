@@ -2,8 +2,9 @@
 // Everything the game says about a species, for writing its brief and
 // choosing which clips it needs: Pokédex entry, types, stats, and every move
 // it can use in Emerald (level-up, TM/HM, tutor) with the move's motif and
-// category clip. Motifs used by several of its moves, and by its showcase
-// moves, deserve bespoke clips.
+// the clip it plays: the species' own clip once it has a profile, else the
+// category clip it falls back to. Motifs used by several of its moves, and by
+// its showcase moves, deserve bespoke clips.
 //
 //   node tools/gauntlet/brief.mjs --slug swampert [--json]
 
@@ -13,6 +14,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { importTs } from './tsimport.mjs';
+import { loadProfile } from './species.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -70,7 +72,10 @@ export async function speciesBrief(slug) {
   const moves = JSON.parse(await readFile(join(ROOT, 'src/data/generated/moves.json'), 'utf8'));
   const { motifOf, namedMotif, MOTIFS } = await importTs('src/battle3d/motifs.ts');
   const descriptions = await moveDescriptions();
-  const { categorize } = await importTs('src/battle3d/director.ts');
+  const { categorize, clipFor } = await importTs('src/battle3d/director.ts');
+  // The clip each move plays: the species' own (clipFor) once it has a profile.
+  const profile = existsSync(join(ROOT, 'src/pokemon', slug, 'index.ts')) ? await loadProfile(slug) : null;
+  const clipOf = (move) => (profile ? clipFor({ profile }, move) : categorize(move));
 
   const camel = species.name.charAt(0) + species.name.slice(1).toLowerCase();
   const text = await read('pokedex_text.h');
@@ -95,7 +100,7 @@ export async function speciesBrief(slug) {
       split: data.power === 0 ? 'status' : PHYSICAL_TYPES.has(type) ? 'physical' : 'special',
       contact: data.flags.includes('FLAG_MAKES_CONTACT'), target: data.target.replace('MOVE_TARGET_', '').toLowerCase(),
       description: descriptions[m.move] ?? '',
-      motif: motifOf(data), motifByName: !!namedMotif(data), clip: categorize(data), sources: [],
+      motif: motifOf(data), motifByName: !!namedMotif(data), clip: clipOf(data), sources: [],
     };
     if (!e.sources.includes(m.source)) e.sources.push(m.source);
     seen.set(m.move, e);
