@@ -6,7 +6,7 @@
 // opponent.
 //
 // Stop motion: the body is shown in poses held for several frames
-// (Battler3D.poseRate a second, 12 by default; ?poseRate=0 for smooth
+// (Battler3D.poseRate a second, 15 by default; ?poseRate=0 for smooth
 // motion, as the motion gates use). The animation runs on underneath at 60
 // fps, so clips keep their timing and springs their feel; a clip event
 // (an impact, a release) shows its pose at once. What the GBA does to
@@ -33,10 +33,10 @@ const DEG = Math.PI / 180;
 /** Lying on its side (a thrown body lands so): rolled about its forward axis. */
 const ON_SIDE = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 80 * DEG);
 
-/** Poses a second from the page's ?poseRate= (0 or 60: every frame), 12 by default. */
+/** Poses a second from the page's ?poseRate= (0 or 60: every frame), 15 by default (each held 4 frames). */
 function pagePoseRate(): number {
   const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('poseRate');
-  const v = q === null ? 12 : Number(q);
+  const v = q === null ? 15 : Number(q);
   return Number.isFinite(v) && v > 0 && v < 60 ? v : 0;
 }
 /** Effect origins every species has, by the rig bones they sit on. */

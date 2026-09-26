@@ -81,7 +81,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
 | `loop=0` | stop after one battle |
 | `playerExp=0.9` | start close to a level-up |
 | `sound=1` | Emerald's music and sound effects (from the first key press or tap; the playtest has them on) |
-| `poseRate=12` | stop motion: poses a second the Pokémon are shown in (12 by default, `0` for smooth 60 fps motion) |
+| `poseRate=15` | stop motion: poses a second the Pokémon are shown in (15 by default, `0` for smooth 60 fps motion) |
 
 ## What's in the battle
 
@@ -110,7 +110,7 @@ skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILI
   the way) and burst up at the foe; Mud-Slap flings mud; Double Team and Agility leave
   afterimages as Emerald draws them; Flash whites out the screen with the Pokémon in
   silhouette.
-- **Stop motion**: the Pokémon are shown in poses held for several frames (12 a second),
+- **Stop motion**: the Pokémon are shown in poses held for several frames (15 a second),
   while the animation runs on underneath at 60 fps, so timing, springs and hits stay
   exact (a hit's pose shows on its frame); slides, bounces, blinks and flashes stay smooth,
   as the GBA moves sprites.
