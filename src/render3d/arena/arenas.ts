@@ -354,45 +354,6 @@ function place(ctx: ArenaContext, p: Placement): void {
   }
 }
 
-/**
- * A pattern of thin lines on the ground, Hoenn-style (the sea's diagonal
- * wave lines, the desert's rows of little ripples): a pixel is on a line where
- * `phase` crosses a whole number between it and its right or lower neighbor.
- * Too far away (lines closer than `maxStep` apart) they fade out.
- */
-function linePattern(ctx: ArenaContext, phase: (x: number, z: number) => number, color: (base: Rgb, sx: number, sy: number) => Rgb | null, maxStep = 0.4): void {
-  const { ground, view } = ctx;
-  const W = ground.width;
-  let prev: Float64Array | null = null;
-  // Phases row by row (one row ahead) so each pixel is computed once.
-  const rowPhase = (sy: number) => {
-    const out = new Float64Array(W + 1);
-    for (let i = 0; i <= W; i++) {
-      const g = view.ground(ground.ox + i, sy);
-      out[i] = g ? phase(g.x, g.z) : NaN;
-    }
-    return out;
-  };
-  let cur = rowPhase(ground.oy);
-  for (let sy = ground.oy; sy < ground.oy + ground.height; sy++) {
-    const next = rowPhase(sy + 1);
-    for (let i = 0; i < W; i++) {
-      const p = cur[i], r = cur[i + 1], d = next[i];
-      if (Number.isNaN(p)) continue;
-      const cross = (q: number) => !Number.isNaN(q) && Math.abs(q - p) < maxStep && Math.floor(q) !== Math.floor(p);
-      if (!cross(r) && !cross(d)) continue;
-      const sx = ground.ox + i;
-      const base = ground.get(sx, sy);
-      if (!base) continue;
-      const c = color(base, sx, sy);
-      if (c) ground.set(sx, sy, c, ground.material(sx, sy));
-    }
-    prev = cur;
-    cur = next;
-  }
-  void prev;
-}
-
 // --- ROUTE 111: the desert ------------------------------------------------
 
 // Route 111's sand (the general tileset's desert yellows) with shadows cooling
@@ -476,48 +437,97 @@ function desert(ctx: ArenaContext): void {
 
 // --- ROUTE 124: the open sea ------------------------------------------------
 
-const SEA = ramp('#29418b', '#39529c', '#415abd', '#526ad5', '#6a83d5', '#8ba4de', '#acc5e6');
-const FOAM = hex('#dee6ee');
+// Hoenn's sea (the general tileset's blues), deepest first, up to the foam.
+const SEA = ramp('#213a7b', '#29418b', '#39529c', '#415abd', '#526ad5', '#6a83d5', '#8ba4de', '#acc5e6', '#dee6ee');
 
+/**
+ * Route 124's open sea: deep blue near, lighter far off where the sky lies on
+ * it; long swells and rows of wavelets that shrink and crowd with distance,
+ * calm over the battle; pink-brown sea stacks framing the sides with surf
+ * ringing their feet and their dark reflections under them, rocky islets
+ * far out, a path of sparkles toward the sun.
+ */
 function sea(ctx: ArenaContext): void {
+  const { view, ground } = ctx;
   const W = SEA;
+  const cx = (ctx.player.x + ctx.enemy.x) / 2, cz = (ctx.player.z + ctx.enemy.z) / 2 + 1;
+  const calm = (x: number, z: number) => 1 - smoothstep(0.45, 1.15, Math.hypot((x - cx) / 3.3, (z - cz) / 4.8));
+  // Rows of waves rolling in: long gentle crests (lit on top, the trough dark under them), their spacing
+  // shrinking with distance; broken into long runs, sparse in the calm over the battle.
+  const wave = (x: number, z: number) => z / 0.62 + Math.sin(x * 0.42 + z * 0.2) * 0.75 + Math.sin(x * 1.1 - z * 0.5) * 0.18;
+  const run = (x: number, row: number) => Math.sin(x * 0.9 + row * 2.3) + Math.sin(x * 0.37 - row * 1.1) * 0.8;
+  const crestAt = (sx: number, sy: number) => {
+    const g = view.ground(sx, sy);
+    if (!g || g.z > 19) return false;
+    if (!onLine(ctx, sx, sy, wave, 0.42)) return false;
+    return run(g.x, Math.floor(wave(g.x, g.z))) > -0.2 + calm(g.x, g.z) * 1.4;
+  };
   fill(ctx, (sx, sy, g) => {
-    // Darker where it is deep, lighter far away (the sky on the water), and
-    // long swells rolling in: a lit face and a shadowed trough.
-    const swell = Math.sin(g.z * 1.5 + g.x * 0.22 + Math.sin(g.x * 0.3) * 1.2);
-    const v = 3 + (fbm(g.x * 0.1, g.z * 0.18, 13) - 0.5) * 1.4 + smoothstep(12, 26, g.z) * 1.8 + (swell > 0.55 ? 0.9 : swell < -0.6 ? -0.7 : 0);
-    return [band(W, v, sx, sy, 0.3), MAT.WATER];
+    // Lighter far off (the sky on the water), a slow swell of light and shade.
+    const far = smoothstep(9, 26, g.z);
+    let v = 2.8 + far * 2.7 + (fbm(g.x * 0.12, g.z * 0.2, 13) - 0.5) * 0.7;
+    if (crestAt(sx, sy)) v += far > 0.5 ? 1 : 1.6;
+    else if (crestAt(sx, sy - 1)) v -= 1;
+    return [band(W, v, sx, sy, 0.12), MAT.WATER];
   });
-  // Hoenn's sea: long diagonal wave lines, a shade lighter, gently zigzagging.
-  linePattern(ctx, (x, z) => (x * 0.55 + z) * 1.35 + Math.sin((x - z * 0.55) * 7) * 0.12, (base) => {
-    const i = indexIn(W, base);
-    return i < 0 ? null : W[Math.min(W.length - 1, i + 1)];
-  }, 0.38);
-  // Sea stacks at the sides and a few boulders, foam at their feet.
-  const rocks = [];
-  for (const [x, z, size] of [[11, 17.5, 3.4], [7.5, 20, 2.6], [-9, 16.5, 3], [-13, 19.5, 3.6], [2.5, 21, 1.6], [-4.5, 14.2, 1.1], [4.2, 13.2, 0.9]] as const) {
-    const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    const w = ppu * size * ctx.rng.range(0.9, 1.1);
-    rocks.push({ sprite: rock(w, w * ctx.rng.range(0.75, 1.05), { shades: ROCK, outline: ROCK_OUTLINE }, ctx.rng.int(1, 1e6)), x, z });
-  }
+  // A path of sparkles toward the sun (up and to the left), thickest far off.
+  scatter(ctx, 5, 73, (x, z, sx, sy, ppu, r) => {
+    const path = Math.abs(sx - (sy + 24) * 1.1 - 10);
+    if (path > 40 || r > 0.07 * (1 - path / 40) || ppu > 30) return;
+    ground.set(sx, sy, W[8], MAT.WATER);
+    if (r < 0.03 && ppu < 26) {
+      ground.set(sx - 1, sy, W[7], MAT.WATER);
+      ground.set(sx + 1, sy, W[7], MAT.WATER);
+    }
+    void x; void z;
+  });
+  // Sea stacks and rocks, surf ringing their feet, their reflections darkening the water under them.
+  const rockPal = { shades: ROCK, outline: ROCK_OUTLINE };
+  const rocks: { sprite: Sprite; x: number; z: number }[] = [];
+  const stack = (x: number, z: number, w: number, h: number, facets = 7) => {
+    const ppu = view.ppu(view.depth(x, 0, z));
+    rocks.push({ sprite: crag(ppu * w, ppu * h, rockPal, ctx.rng.int(1, 1e6), facets), x, z });
+  };
+  // Framing: a tall stack cropped by the left edge, another past the right; islets far out.
+  stack(2.6, 8.3, 1.3, 1.7, 9);
+  stack(2.2, 9.6, 0.5, 0.45);
+  stack(-3.9, 12.2, 1.2, 1.5, 8);
+  stack(-3.1, 13.4, 0.5, 0.4);
+  for (const [x, z, w, h] of [[6, 18, 2.4, 1.6], [-8, 17, 3, 2.1], [1.2, 22, 1.4, 0.8], [-3.6, 24, 2.2, 1.2], [9.5, 23, 2.8, 1.5], [-12, 21, 2.6, 1.8], [14, 16, 2.4, 2.4], [-16, 15, 2.6, 2.6]] as const) stack(x, z, w, h, 8);
   for (const r of rocks) {
-    const [sx, sy] = ctx.view.screen(r.x, 0, r.z);
-    const x0 = Math.round(sx - r.sprite.w / 2);
-    for (let k = -2; k <= r.sprite.w + 2; k++) {
-      if (bayer(x0 + k, Math.floor(sy)) < 0.75) ctx.ground.set(x0 + k, Math.floor(sy), FOAM, MAT.WATER);
-      if (bayer(x0 + k, Math.floor(sy) + 1) < 0.35) ctx.ground.set(x0 + k, Math.floor(sy) + 1, W[5], MAT.WATER);
+    const [px, py] = view.screen(r.x, 0, r.z);
+    const base = Math.floor(py);
+    const x0 = Math.round(px - r.sprite.w / 2);
+    // The reflection: the rock's silhouette mirrored under its foot in darker water, broken into lines, fading.
+    const depth = Math.round(r.sprite.h * 0.55);
+    for (let k = 1; k <= depth; k++) {
+      if (k % 3 === 0 || (k > depth * 0.6 && k % 2)) continue;
+      const row = r.sprite.h - 1 - k;
+      if (row < 0) break;
+      for (let i = 0; i < r.sprite.w; i++) {
+        if (!r.sprite.data[(row * r.sprite.w + i) * 4 + 3]) continue;
+        const x = x0 + i + (k % 4 === 1 ? 1 : 0), y = base + k;
+        const c = ground.get(x, y);
+        if (c && ground.material(x, y) === MAT.WATER) ground.set(x, y, shift([W], c, -2), MAT.WATER);
+      }
+    }
+    // Surf at the waterline: a bright line along the foot, lighter water lapping around it, flecks drifting right.
+    const rx = r.sprite.w * 0.58, ry = Math.max(1.5, rx * 0.16);
+    for (let y = Math.floor(py - ry * 1.5); y <= py + ry * 1.5; y++) {
+      for (let x = Math.floor(px - rx * 1.5); x <= px + rx * 1.5; x++) {
+        const d = Math.hypot((x + 0.5 - px) / rx, (y + 0.5 - py) / ry);
+        if (d > 1.5 || ground.material(x, y) !== MAT.WATER) continue;
+        if (d < 1.12 && d > 0.8) ground.set(x, y, W[8], MAT.WATER);
+        else if ((1.5 - d) * 1.4 > bayer(x, y)) ground.set(x, y, shift([W], ground.get(x, y)!, 2), MAT.WATER);
+      }
+    }
+    for (let k = 0; k < r.sprite.w / 4; k++) {
+      const fx = Math.round(px + rx * ctx.rng.range(0.9, 2.4)), fy = Math.round(py + ry * ctx.rng.range(-0.5, 1.8));
+      ground.set(fx, fy, W[7], MAT.WATER);
+      if (ctx.rng.chance(0.5)) ground.set(fx + 1, fy, W[7], MAT.WATER);
     }
   }
   stand(ctx, rocks, darker([W, ROCK]));
-  place(ctx, {
-    region: [-40, 290, 40, 112],
-    count: 2,
-    clear: 1.4,
-    make: (ppu) => {
-      const w = ppu * ctx.rng.range(0.5, 0.8);
-      return { sprite: rock(w, w * 0.7, { shades: ROCK, outline: ROCK_OUTLINE }, ctx.rng.int(1, 1e6)), sink: 2 };
-    },
-  });
 }
 
 // --- SEAFLOOR (underwater) --------------------------------------------------
@@ -1189,7 +1199,7 @@ export const ARENAS: Record<string, ArenaDesign> = {
     name: 'ROUTE 124',
     about: 'The open sea off LILYCOVE CITY.',
     ambience: 'water',
-    look: { waveLight: [172, 197, 230], waveDark: [57, 82, 156], waveDensity: 0.14 },
+    look: { waveLight: [172, 197, 230], waveDark: [57, 82, 156], waveDensity: 0.06 },
     ripples: 0.9,
     paint: sea,
   },
