@@ -7,8 +7,12 @@
 //   inspecting motion; the game uses 1)
 //   &mark=mouth (or any emitter: cannons, flower, hands...) marks where the
 //   attacker's effects start
+//   &drain=0.4 takes that share of the target's HP at each hit, the bar
+//   draining 1 HP per frame as in battle (for films); &hp=0.3 and &foeHp=0.5
+//   start the side playing the clip and the other side with that share of HP
 //
 // window.__clip = { start(), step(frames), grab(): PNG data URL, done,
+//   frame, hits (the frames the move's hits landed on),
 //   tick(frames) (no rendering), joints(names) } — the last two feed
 //   tools/gauntlet/motion.mjs
 
@@ -41,6 +45,9 @@ declare global {
       joints: (names: string[]) => Record<string, [number, number, number] | null>;
       grab: () => string;
       done: boolean;
+      /** Frames stepped so far, and the frames a move's hits (or a faint's thud) landed on. */
+      frame: number;
+      hits: number[];
       label: string;
       /** The clip that plays, its length and events. */
       info: { clip: string; duration: number; events: { t: number; name: string }[] };
@@ -94,6 +101,8 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
     hb.gender = mon.gender;
     hb.level = mon.level;
     hb.maxHp = hb.hp = hb.shownHp = mon.stats.hp;
+    const share = params.get(side === attackerSide ? 'hp' : 'foeHp');
+    if (share !== null) hb.hp = hb.shownHp = Math.round(mon.stats.hp * Math.min(1, Math.max(0, Number(share))));
   }
   const name = createMon(attackerSide === 'player' ? species : enemySlug).name;
   const who = attackerSide === 'player' ? name : `Wild ${name}`;
@@ -116,11 +125,14 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
     }
   }
 
+  const drain = Number(params.get('drain') ?? 0);
   const update = () => {
     stage.update(DT);
     vfx.update(DT);
     player.update(DT);
     enemy.update(DT);
+    // MoveBattleBar: the bar drains 1 HP per frame.
+    for (const hb of [boxes.player, boxes.enemy]) if (hb.shownHp > hb.hp) hb.shownHp--;
   };
   const render = () => {
     stage.render();
@@ -145,6 +157,8 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
   const clip = attacker.profile.clips[playing];
   const api = {
     done: false,
+    frame: 0,
+    hits: [] as number[],
     label,
     info: { clip: playing, duration: clip?.duration ?? 0, events: clip?.events ?? [] },
     start() {
@@ -152,16 +166,28 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
         api.done = true;
         if (clipName === 'faint' && !moveName) boxes[attackerSide].visible = false;
       };
-      if (moveName) void performMove(attacker, defender, moveData(moveName), vfx).then(finish);
+      const target = boxes[attackerSide === 'player' ? 'enemy' : 'player'];
+      const onHit = () => {
+        api.hits.push(api.frame);
+        if (drain > 0) target.hp = Math.max(0, target.hp - Math.round(target.maxHp * drain));
+      };
+      if (moveName) void performMove(attacker, defender, moveData(moveName), vfx, { onHit }).then(finish);
       else if (clipName === 'idle') finish();
       else {
-        // A hit plays with the knock-back the move director adds in battle.
+        // A hit plays with the knock-back the move director adds in battle,
+        // a faint with the scene's shake as the body hits the ground.
         if (clipName === 'hit') attacker.recoil(1);
+        attacker.onEvent = (e) => {
+          if (e !== 'thud') return;
+          api.hits.push(api.frame);
+          vfx.shake(0.03, 0.25);
+        };
         void attacker.play(clipName).then(finish);
       }
     },
     async step(frames: number) {
       for (let i = 0; i < frames; i++) {
+        api.frame++;
         update();
         await macrotask();
       }
