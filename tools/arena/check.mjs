@@ -6,7 +6,8 @@
 //   node tools/arena/check.mjs --render     + each arena in the browser, battlers and
 //                                           UI up, screenshots in build/arenas/ (needs npm run dev)
 //
-//   - every arena is a named Hoenn place, and the playtest lists them all;
+//   - every arena is a named Hoenn place, the playtest lists them all, and
+//     every place a link or tool names (env=, --env) exists;
 //   - arenas are painted, never Emerald's battle backgrounds projected (no
 //     platforms under the Pokémon);
 //   - the whole screen is painted (no holes), with a pixel-art palette;
@@ -17,6 +18,7 @@
 //     the battle shows it, within a stated margin: the Pokémon are the focus.
 // Exits non-zero if any check fails.
 
+import { execSync } from 'node:child_process';
 import { readFile, readdir, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { importTs } from '../gauntlet/tsimport.mjs';
@@ -65,6 +67,16 @@ const enemy = groundPointAt(camera, ...BATTLE_CAMERA.anchors.enemy);
 for (const [id, d] of Object.entries(ARENAS)) gate(`${id}: names its place`, /^[A-Z0-9 .é']+$/.test(d.name ?? '') && (d.about ?? '').length > 8 && (d.about ?? '').length <= 64, `${d.name}: ${d.about}`);
 const playtest = await readFile(join(ROOT, 'src/demo/playtest.ts'), 'utf8');
 gate('the playtest lists every arena', /PLACES[^=]*=\s*Object\.entries\(ARENAS\)/.test(playtest));
+
+// Every place a link, a tool's usage or a trailer names (env=, --env) is one
+// of them: a removed place's name falls back to Route 101 without a word.
+const named = [];
+for (const file of execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' }).split('\n')) {
+  if (!/\.(md|mjs|ts|json|html|py)$/.test(file) || /^(public|decomp)\//.test(file)) continue;
+  const text = await readFile(join(ROOT, file), 'utf8').catch(() => '');
+  for (const m of text.matchAll(/(?:[?&]env=|--env[ =])([a-z_]+)/g)) if (!ARENAS[m[1]]) named.push(`${file}: ${m[1]}`);
+}
+gate('every place named in links and tools exists', named.length === 0, named.slice(0, 4).join(', '));
 
 // No projected Emerald backgrounds anywhere in the app (they are reference for
 // the arenas' art, public/assets/gba/battle_env/, never drawn).

@@ -27,7 +27,9 @@ export interface PaintedArena {
  * everything standing (for tools that measure the Pokémon alone).
  */
 export function paintArena(name: string, camera: THREE.PerspectiveCamera, player: { x: number; z: number }, enemy: { x: number; z: number }, opts: { props?: boolean } = {}): PaintedArena {
-  const design = ARENAS[name] ?? ARENAS.grass;
+  // An unknown place (an old link) is Route 101 itself, seeded as Route 101.
+  if (!ARENAS[name]) name = 'grass';
+  const design = ARENAS[name];
   const ctx: ArenaContext = {
     view: new ArenaView(camera),
     ground: newPaint(),

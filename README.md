@@ -55,7 +55,7 @@ that press starts the music; on an iPhone it plays even with the silent switch o
 video does, and a tap brings it back after a call), and `sound=0` turns it off. It plays like an emulator: the GBA screen as large as the window allows, the keyboard on a
 computer, and on a phone an on-screen D-pad, A/B and START/SELECT (beside the screen when
 the phone is held sideways; "Add to Home Screen" runs it full screen). Shareable setups
-skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY&env=sand&go=1`
+skip the menus: `demo.html?player=sceptile&enemy=swampert&moves=LEAF_BLADE,AGILITY&env=cave&go=1`
 (`title=0` skips only the title screen).
 
 - `npm run demo` builds the static site into `build/demo/pages/`

@@ -5,7 +5,7 @@
 //
 //   node tools/shots/move_sheet.mjs --moves FLAMETHROWER,EMBER --attacker enemy \
 //        [--species blaziken] [--enemy blaziken] [--every 6] [--frames 16] [--density 1] \
-//        [--crop x,y,w,h] [--env sand] [--poseRate 0] --out build/sheets/blaziken.png
+//        [--crop x,y,w,h] [--env cave] [--poseRate 0] --out build/sheets/blaziken.png
 //
 // --poseRate 0 shows smooth motion instead of the game's stop motion (15 poses a second).
 //
