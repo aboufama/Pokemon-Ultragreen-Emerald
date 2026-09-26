@@ -92,6 +92,8 @@ function bladeTooth(sx: number, ppu: number): number {
 
 /** A mix of each color of a ramp toward another color (for haze and tints). */
 const tint = (r: Ramp, c: Rgb, t: number): Ramp => r.map((k) => mix(k, c, t));
+/** A ramp with a half-step between each shade and the next (the two mixed): its own shades at the even indices. */
+const halves = (r: Ramp): Ramp => r.flatMap((c, i) => (i < r.length - 1 ? [c, mix(c, r[i + 1], 0.5)] : [c]));
 /** The far bank's trees mirrored in the water, softened toward the water's blue: a quiet band behind the wild Pokémon. */
 const POND_REFLECT = tint(REFLECT, POND[3], 0.45);
 
@@ -748,97 +750,101 @@ function chimney(ctx: ArenaContext): void {
     if (g.z > 23) {
       const billow = fbm(g.x * 0.05 + sy * 0.02, sy * 0.09, 27);
       const v = 2.4 + smoothstep(-24, 12, sy) * 1.6 + (billow - 0.5) * 2.2;
-      return [band(SMOKE, v, sx, sy, 0.2), MAT.BACKDROP];
+      return [band(SMOKE, v, sx, sy, 0.1), MAT.BACKDROP];
     }
     const gr = view.ground(sx + 1, sy)!, gd = view.ground(sx, sy + 1)!;
     const d = river(g.x, g.z);
     if (d < 0) {
-      // The flow: molten down its middle with a few long bright currents; toward the banks it crusts into dark plates with glowing seams.
+      // The flow: molten down its middle with a few long bright currents; toward the banks it crusts into
+      // darker plates with glowing seams (a shade or two apart, not black on white-hot: it stays behind the wild Pokémon).
       const depth = Math.min(1, -d / riverW(g.x));
-      const crusted = depth + (fbm(g.x * 0.8, g.z * 1.6, 3) - 0.5) * 0.6 < 0.4;
+      const crusted = depth + (fbm(g.x * 0.8, g.z * 1.6, 3) - 0.5) * 0.6 < 0.32;
       if (crusted) {
         const id = plate(g.x, g.z);
         const seam = plate(gr.x, gr.z) !== id || plate(gd.x, gd.z) !== id;
-        if (seam) return [LAVA[4], MAT.LAVA];
-        return [LAVA[id < 0.35 ? 0 : 1], MAT.LAVA];
+        if (seam) return [LAVA[3], MAT.LAVA];
+        return [LAVA[id < 0.35 ? 1 : 2], MAT.LAVA];
       }
       const current = Math.sin(g.x * 0.8 + Math.sin(g.z * 1.7) * 1.5 + g.z * 0.3);
-      const v = 2.6 + depth * 1.9 + (current > 0.93 ? 1.2 : 0);
-      return [band(LAVA, v, sx, sy, 0.1), MAT.LAVA];
+      const v = 2.7 + depth * 1.7 + (current > 0.96 ? 1 : 0);
+      return [band(LAVA, v, sx, sy, 0.08), MAT.LAVA];
     }
     // The bank: a lip of black rock, glowing where the lava licks it.
     if (d < 0.06 + 1.1 / g.ppu) return [d < 0.05 ? LAVA[3] : BASALT[0], d < 0.05 ? MAT.LAVA : MAT.SOLID];
     const glow = 1 - smoothstep(0, 2.4, d);
     if (rockAt(g.x, g.z)) {
-      // Basalt: columns of dark rock, each a shade of its own, their joints glowing near the lava; a lit rim where the ash begins.
+      // Basalt: columns of dark rock, each a shade of its own, their joints glowing right by the lava; a lit rim where the ash begins.
       if (!rockAt(gd.x, gd.z) || !rockAt(gr.x, gr.z)) return [BASALT[4], MAT.SOLID];
       const id = joint(g.x, g.z);
       const seam = joint(gr.x, gr.z) !== id || joint(gd.x, gd.z) !== id;
-      if (seam) return glow > 0.62 ? [LAVA[glow > 0.8 ? 4 : 3], MAT.LAVA] : [BASALT[0], MAT.SOLID];
-      // Each column's top catches the light along its upper-left edge.
-      const gu = view.ground(sx, sy - 1)!, gl = view.ground(sx - 1, sy)!;
-      if (joint(gu.x, gu.z) !== id || joint(gl.x, gl.z) !== id) return [BASALT[3], MAT.SOLID];
+      if (seam) return glow > 0.72 ? [LAVA[glow > 0.86 ? 4 : 3], MAT.LAVA] : [BASALT[0], MAT.SOLID];
+      // Each column's top catches the light along its upper edge.
+      const gu = view.ground(sx, sy - 1)!;
+      if (joint(gu.x, gu.z) !== id) return [BASALT[3], MAT.SOLID];
       return [BASALT[1 + (id < 0.55 ? 0 : 1)], MAT.SOLID];
     }
     // Ash: lit over the battle, darker toward the sides, in soft mounds; warmed by the lava near it.
     const light = 1 - smoothstep(0.5, 1.3, Math.hypot((g.x - cx) / 3.3, (g.z - cz) / 4.5));
     const e = 0.08;
     const slope = -(mound(g.x + e, g.z) - mound(g.x - e, g.z)) / (2 * e) * 0.9 + (mound(g.x, g.z + e) - mound(g.x, g.z - e)) / (2 * e) * 0.7;
-    let v = 2.9 + light * 1.5 + slope * 1.2;
+    let v = 2.9 + light * 1.4 + slope * 1.0;
     if (sideRock(g.x, g.z) > 0.55) v -= 0.8; // thin ash over the rock
-    if (glow > 0.42 || (glow > 0.3 && (glow - 0.3) * 8 > bayer(sx, sy))) return [band(WARM, v - 1.7 + glow * 1.3, sx, sy, 0.12), MAT.SOLID];
-    return [band(ASH, v, sx, sy, 0.12), MAT.SOLID];
+    if (glow > 0.42 || (glow > 0.3 && (glow - 0.3) * 8 > bayer(sx, sy))) return [band(WARM, v - 1.7 + glow * 1.3, sx, sy, 0.1), MAT.SOLID];
+    return [band(ASH, v, sx, sy, 0.1), MAT.SOLID];
   });
-  // Cinders on the ash, sparse.
+  // A few cinders on the ash, a shade or two darker than it, none around the wild Pokémon.
   scatter(ctx, 11, 29, (_x, _z, sx, sy, ppu, r) => {
-    if (r < 0.9 || ground.material(sx, sy) !== MAT.SOLID || indexIn(ASH, ground.get(sx, sy)) < 0) return;
-    ground.set(sx, sy, BASALT[2]);
-    if (ppu > 34) ground.set(sx + 1, sy, BASALT[3]);
+    const i = indexIn(ASH, ground.get(sx, sy));
+    if (r < 0.95 || ground.material(sx, sy) !== MAT.SOLID || i < 2 || foeCalm(ctx, sx, sy) > 0) return;
+    ground.set(sx, sy, ASH[i - 2]);
+    if (ppu > 34) ground.set(sx + 1, sy, ASH[i - 1]);
   });
-  // The crater's wall rising behind the lava: dark rock, lit along its crests, the far rim hazier.
+  // The crater's wall rising behind the lava: dark rock, lit along its crests, faintly layered, the far rim hazier.
   hills(ctx, [
-    { z: 21, height: 1.5, shades: WALL, crest: hex('#bd948b'), freq: 0.3, rough: 0.9, seed: 13 },
-    { z: 18.6, height: 0.9, shades: BASALT, crest: ASH[1], freq: 0.5, rough: 0.9, seed: 17 },
+    { z: 21, height: 1.5, shades: WALL, crest: hex('#bd948b'), freq: 0.3, rough: 0.9, seed: 13, soft: 0.15, layers: 0.4 },
+    { z: 18.6, height: 0.9, shades: BASALT, crest: ASH[1], freq: 0.5, rough: 0.9, seed: 17, soft: 0.15, layers: 0.4 },
   ]);
-  // Steam rising off the lava, drifting right, before the crater wall.
+  // Steam rising off the lava, drifting right, before the crater wall: a few wisps, none right behind the wild Pokémon.
   const steam = [];
-  for (let x = -14; x < 14; x += ctx.rng.range(1.5, 3)) {
+  for (let x = -14, k = 0; x < 14; x += ctx.rng.range(1.5, 3), k++) {
     const z = riverZ(x) + ctx.rng.range(-0.4, 0.6);
     const ppu = view.ppu(view.depth(x, 0, z));
-    steam.push({ sprite: wisp(ppu * ctx.rng.range(0.1, 0.16), ppu * ctx.rng.range(0.8, 1.5), STEAM, ctx.rng.int(1, 1e6), ctx.rng.range(0.1, 0.3)), x, z });
+    const sprite = wisp(ppu * ctx.rng.range(0.1, 0.16), ppu * ctx.rng.range(0.8, 1.5), STEAM, ctx.rng.int(1, 1e6), ctx.rng.range(0.1, 0.3));
+    const [wx] = view.screen(x, 0, z);
+    if (k % 2 === 0 && (wx < 128 || wx > 228)) steam.push({ sprite, x, z });
   }
-  // The lava's glow on the foot of the crater wall.
+  // The lava's glow on the foot of the crater wall: a band a shade lighter, its top edge checkered.
   for (let sx = ground.ox; sx < ground.ox + ground.width; sx++) {
     let top = -1;
     for (let sy = ground.oy; sy < ground.oy + ground.height; sy++) if (ground.material(sx, sy) === MAT.LAVA) { top = sy; break; }
     if (top < 0) continue;
-    for (let k = 1; k <= 7; k++) {
+    for (let k = 1; k <= 4; k++) {
       const y = top - k;
-      if (ground.material(sx, y) !== MAT.BACKDROP || (1 - k / 8) * 0.9 <= bayer(sx, y)) continue;
+      if (ground.material(sx, y) !== MAT.BACKDROP || (k === 4 && bayer(sx, y) > 0.5)) continue;
       ground.set(sx, y, shift([WALL, BASALT], ground.get(sx, y)!, 1), MAT.BACKDROP);
     }
   }
   stand(ctx, steam, (c) => c);
   // Steam vents on the slope: a crack glowing in the ash, a wisp wavering up out of it (one between the
-  // wild Pokémon's healthbox and the wild Pokémon, one at the right edge, more beyond for the intro).
-  for (const [vsx, vsy] of [[114, 50], [245, 66], [-60, 70], [300, 60]] as const) {
+  // wild Pokémon's healthbox and the wild Pokémon, one at the right edge).
+  for (const [vsx, vsy] of [[112, 52], [245, 66]] as const) {
     const g = view.ground(vsx, vsy)!;
     const w = Math.max(3, Math.round(g.ppu * 0.2));
     for (let i = -w; i <= w; i++) {
       const y = vsy + Math.round(Math.sin(i * 0.9) * 0.6);
       const x = vsx + i;
-      ground.set(x, y, Math.abs(i) < w * 0.4 ? LAVA[4] : LAVA[1], MAT.LAVA);
-      ground.set(x, y + 1, BASALT[0], MAT.SOLID);
-      if (Math.abs(i) < w * 0.7) ground.set(x, y - 1, BASALT[1], MAT.SOLID);
+      ground.set(x, y, Math.abs(i) < w * 0.4 ? LAVA[4] : LAVA[2], MAT.LAVA);
+      ground.set(x, y + 1, BASALT[2], MAT.SOLID);
+      if (Math.abs(i) < w * 0.7) ground.set(x, y - 1, BASALT[3], MAT.SOLID);
     }
-    // Grey against the pale ash, so it reads.
-    addProp(ctx, { sprite: wisp(g.ppu * 0.12, g.ppu * 1.1, ramp('#8b7373', '#a49494', '#c5b4b4'), ctx.rng.int(1, 1e6), 0.15), x: g.x, z: g.z, sway: 2 });
+    // A soft grey against the pale ash: it reads, and stays behind the Pokémon.
+    addProp(ctx, { sprite: wisp(g.ppu * 0.12, g.ppu * 1.1, ramp('#a48b8b', '#bdacac', '#d5c5c5'), ctx.rng.int(1, 1e6), 0.15), x: g.x, z: g.z, sway: 2 });
   }
-  // Basalt boulders and spires at the sides, the biggest framing the foreground at the left.
+  // Basalt boulders and spires at the sides, the biggest framing the foreground at the left, none behind the wild Pokémon.
   const pal = { shades: BASALT, outline: BASALT[0] };
   const lit = { shades: ramp('#411418', '#623931', '#833120', '#9c6252', '#bd8373'), outline: BASALT[0] };
   const standing = [];
-  for (const [x, z, w, h] of [[2.45, 7.2, 1.2, 0.75], [2.05, 6.3, 0.6, 0.4], [3.0, 9.8, 1.1, 0.8], [2.6, 12.4, 0.8, 0.5], [-3.3, 11.2, 1.2, 0.85], [-2.7, 12.6, 0.7, 0.45], [-3.2, 9.2, 0.8, 0.5]] as const) {
+  for (const [x, z, w, h] of [[2.45, 7.2, 1.2, 0.75], [2.05, 6.3, 0.6, 0.4], [3.0, 9.8, 1.1, 0.8], [2.6, 12.4, 0.8, 0.5], [-3.3, 11.2, 1.2, 0.85], [-3.2, 9.2, 0.8, 0.5]] as const) {
     const ppu = view.ppu(view.depth(x, 0, z));
     standing.push({ sprite: crag(ppu * w, ppu * h, x > 0 ? pal : lit, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * w * 0.6, ry: ppu * w * 0.13 } });
   }
@@ -934,16 +940,17 @@ function cave(ctx: ArenaContext): void {
   /**
    * Rock faces: irregular layers of rock (each a little lighter or darker, a
    * lit edge along its top and a dark seam under it), bulging here and there,
-   * split now and then by a dark crack.
+   * split now and then by a dark crack. Kept to a shade or so either way: the
+   * ledge stands right behind the wild Pokémon.
    */
   const rockFace = (along: number, y: number, base: number, px: number) => {
     const L = y / 0.3 + (noise(along * 0.8, y * 0.6, 92) - 0.5) * 0.9 + Math.sin(along * 1.3) * 0.15;
     const layer = Math.floor(L), f = L - layer;
-    let v = base + (hash2(layer, 7, 93) - 0.5) * 0.9 + (noise(along * 1.6, layer * 3.1, 94) - 0.5) * 1.1;
-    if (f < px * 1.2) v -= 1.5;
-    else if (f > 1 - px * 1.2) v += 0.9;
+    let v = base + (hash2(layer, 7, 93) - 0.5) * 0.6 + (noise(along * 1.6, layer * 3.1, 94) - 0.5) * 0.8;
+    if (f < px * 1.2) v -= 1.0;
+    else if (f > 1 - px * 1.2) v += 0.6;
     const c = along / 0.9 + hash2(layer, 3, 95) * 5;
-    if (Math.abs(c - Math.round(c)) < px * 0.2 && hash2(layer, Math.round(c), 96) < 0.45) v -= 1.6;
+    if (Math.abs(c - Math.round(c)) < px * 0.2 && hash2(layer, Math.round(c), 96) < 0.3) v -= 1.1;
     return v;
   };
   fill(ctx, (sx, sy) => {
@@ -959,39 +966,40 @@ function cave(ctx: ArenaContext): void {
       // The walls' feet: a shadow along the back ledge and the sides.
       const ao = Math.max(smoothstep(back(x) - 1.1, back(x), z), smoothstep(left(z) - 0.9, left(z), x), smoothstep(right(z) + 0.9, right(z), x));
       const v = 3.2 + L * 2.9 - ao * 1.3 + (fbm(x * 0.6, z * 0.8, 5) - 0.5) * 0.5;
-      return [band(GC, v, sx, sy, 0.12), MAT.SOLID];
+      return [band(GC, v, sx, sy, 0.08), MAT.SOLID];
     }
     if (kind === 1) {
       // A terrace: a pale lip along its edge, darker sand behind.
       if (down >= 0 && (KIND[down] !== 1 || LEVEL[down] !== lv)) return [GC[lv === 1 ? 7 : 5], MAT.BACKDROP];
       const v = 4.4 - lv * 1.3 - dark * 1.6 + (fbm(x * 0.7, z * 0.9, 6) - 0.5) * 0.6;
-      return [band(GC, v, sx, sy, 0.15), MAT.BACKDROP];
+      return [band(GC, v, sx, sy, 0.08), MAT.BACKDROP];
     }
     if (kind >= 3) {
       // The left wall faces away from the light, the right one into it.
       let v = rockFace(z * 1.4, y, kind === 3 ? 3.3 : 4.9, px) - dark * 0.8;
       if (y < 0.08) v -= 1;
-      return [band(GC, v, sx, sy, 0.15), MAT.BACKDROP];
+      return [band(GC, v, sx, sy, 0.1), MAT.BACKDROP];
     }
     // A ledge's face, lit by the daylight's spill near the spot; the lip along its top catches the light.
     if (up >= 0 && KIND[up] === 1 && LEVEL[up] === lv + 1) return [GC[Math.max(2, Math.round(7 - lv - dark * 1.5))], MAT.BACKDROP];
     const spill = 1 - smoothstep(0.8, 3.6, Math.abs(x - spot.x - 0.3));
     let v = rockFace(x, y, 3.7 - lv * 1.1 + spill * (lv === 0 ? 1.0 : 0.3), px) - dark * (1.2 + lv * 0.4);
     if (y < 0.06) v -= 1.2;
-    return [band(GC, v, sx, sy, 0.15), MAT.BACKDROP];
+    return [band(GC, v, sx, sy, 0.1), MAT.BACKDROP];
   });
-  // The floor's texture: Emerald's cave hatching (short light strokes up to the right) in the light, and rubble.
+  // The floor's texture: Emerald's cave hatching (short light strokes up to the right) in a few patches of
+  // the light, and a little rubble; none around the wild Pokémon.
   scatter(ctx, 7, 31, (x, z, sx, sy, ppu, r) => {
-    if (ground.material(sx, sy) !== MAT.SOLID) return;
+    if (ground.material(sx, sy) !== MAT.SOLID || foeCalm(ctx, sx, sy) > 0) return;
     const i = indexIn(GC, ground.get(sx, sy));
-    if (i >= 5 && r < 0.3 && fbm(x * 0.5, z * 0.7, 77) > 0.47) {
+    if (i >= 6 && r < 0.12 && fbm(x * 0.5, z * 0.7, 77) > 0.52) {
       const len = ppu > 50 ? 3 : 2;
       for (let k = 0; k < len; k++) {
         const c = ground.get(sx + k, sy - k);
         if (c && ground.material(sx + k, sy - k) === MAT.SOLID) ground.set(sx + k, sy - k, shift([GC], c, 1));
       }
-    } else if (r > 0.93 && i >= 0) {
-      ground.set(sx, sy, GC[Math.max(0, i - 2)]);
+    } else if (r > 0.97 && i >= 1) {
+      ground.set(sx, sy, GC[i - 1]);
       if (ppu > 34) ground.set(sx + 1, sy, GC[Math.min(9, i + 1)]);
     }
   });
@@ -999,27 +1007,29 @@ function cave(ctx: ArenaContext): void {
   const [spx, spy] = view.screen(spot.x, 0, spot.z);
   const slope = 0.3;
   shafts(ctx, [
-    { x: spx - (spy - ground.oy) * slope - 16, w: 30, lean: slope, bottom: spy + 5, strength: 0.9, lift: 2 },
-    { x: spx - (spy - ground.oy) * slope + 18, w: 6, lean: slope, bottom: spy - 8, strength: 0.6, lift: 1 },
+    { x: spx - (spy - ground.oy) * slope - 16, w: 30, lean: slope, bottom: spy + 5, strength: 1, lift: 2, banded: true },
+    { x: spx - (spy - ground.oy) * slope + 18, w: 6, lean: slope, bottom: spy - 8, strength: 0.6, lift: 1, banded: true },
   ], [GC]);
-  // Boulders heaped at the walls' feet and on the terraces; stalagmites along the sides.
-  const pale = { shades: ramp('#522931', '#734a39', '#946a5a', '#ac8b6a', '#cdac7b', '#e6c58b'), outline: GC[1] };
-  const dim = { shades: ramp('#2c1826', '#412941', '#522931', '#734a39', '#946a5a'), outline: GC[0] };
+  // Boulders heaped at the walls' feet and on the terraces; stalagmites along the sides. None right behind
+  // the wild Pokémon (a calm wall behind it), each with a crack at most, the lit ones outlined a shade softer.
+  const pale = { shades: ramp('#522931', '#734a39', '#946a5a', '#ac8b6a', '#cdac7b', '#e6c58b'), outline: GC[2], cracks: 1 };
+  const dim = { shades: ramp('#2c1826', '#412941', '#522931', '#734a39', '#946a5a'), outline: GC[0], cracks: 1 };
   const heap = [];
   for (let x = -2.9; x < 2.9; x += ctx.rng.range(0.7, 1.5)) {
     const z = back(x) - ctx.rng.range(0.15, 0.5);
-    // Clear of the daylight's spot, and of the wild Pokémon's head and shoulders (a calm wall behind it).
-    if (Math.abs(x - spot.x) < 0.8 || (x > ctx.enemy.x - 1.3 && x < ctx.enemy.x + 0.45)) continue;
+    const [bx, by] = view.screen(x, 0, z);
+    // Clear of the daylight's spot, and of the wild Pokémon.
+    if (Math.abs(x - spot.x) < 0.8 || foeCalm(ctx, bx, by, 4) > 0) continue;
     const ppu = view.ppu(view.depth(x, 0, z));
     const w = ppu * ctx.rng.range(0.35, 0.75);
     const pal = Math.abs(x - spot.x) < 2.4 ? pale : dim;
     heap.push({ sprite: rock(w, w * ctx.rng.range(0.6, 0.8), pal, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: w * 0.6, ry: w * 0.14 } });
-    if (ctx.rng.chance(0.6)) {
+    if (ctx.rng.chance(0.35)) {
       const w2 = w * ctx.rng.range(0.4, 0.6);
       heap.push({ sprite: rock(w2, w2 * 0.7, pal, ctx.rng.int(1, 1e6)), x: x + ctx.rng.range(-0.45, 0.45), z: z - ctx.rng.range(0.2, 0.5) });
     }
   }
-  for (const [x, z, s] of [[2.55, 11.2, 0.7], [2.45, 9.4, 0.5], [-2.7, 11.6, 0.8], [-2.65, 10.3, 0.55], [2.6, 7.3, 0.9], [-2.7, 8.2, 0.9]] as const) {
+  for (const [x, z, s] of [[2.55, 11.2, 0.7], [2.45, 9.4, 0.5], [2.6, 7.3, 0.9], [-2.7, 8.2, 0.9]] as const) {
     const ppu = view.ppu(view.depth(x, 0, z));
     heap.push({ sprite: rock(ppu * s, ppu * s * 0.65, dim, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: ppu * s * 0.6, ry: ppu * s * 0.13 } });
   }
@@ -1035,7 +1045,7 @@ function cave(ctx: ArenaContext): void {
     const ppu = view.ppu(view.depth(x, LEDGES[0].h, z));
     const w = ppu * ctx.rng.range(0.4, 0.8);
     const i = idx(Math.round(bx), Math.floor(by));
-    if (i < 0 || KIND[i] !== 1 || LEVEL[i] !== 1) continue;
+    if (i < 0 || KIND[i] !== 1 || LEVEL[i] !== 1 || foeCalm(ctx, bx, by, 4) > 0) continue;
     // Not right behind a stalagmite's tip (it would read as a cap).
     if (spikes.some((sp) => Math.abs(view.screen(sp[0], 0, sp[1])[0] - bx) < w * 0.5 + 4)) continue;
     ground.sprite(rock(w, w * 0.7, dim, ctx.rng.int(1, 1e6)), Math.round(bx), Math.floor(by) + 1);
@@ -1058,13 +1068,16 @@ const BT_TEAL = ramp('#00bd8b', '#52ffff', '#bdffff');
  * glowing sconces, raised panels, a rail, niches, red banners hanging from
  * above), the yellow grid floor receding to it, lit from above (tile by tile
  * brightest down the middle, dimmer toward the sides and under the wall), a
- * polished slate court with white lines between the battlers, and the pillars
- * and lights mirrored in the polish.
+ * polished slate court with pale lines between the battlers, and the pillars
+ * and lights mirrored in the polish. Grout, seams and edges step half a shade
+ * (the ramps' in-between colors) and highlights stop short of white: the
+ * architecture reads without drawing the eye from the Pokémon.
  */
 function tower(ctx: ArenaContext): void {
   const { view, ground } = ctx;
   const cam = view.camera.position;
   const G = BT_GREY, F = BT_FLOOR;
+  const G2 = halves(G), F2 = halves(F);
   const WZ = 14.2;
   const PIL = 2.6, PHW = 0.21, PX0 = 0.2;
   const T = 0.75;
@@ -1132,27 +1145,29 @@ function tower(ctx: ArenaContext): void {
       if (Math.abs(u) > 0.9) return BT_GOLD[1]; // gold edging
       return BT_RED[u > 0.5 ? 3 : u < -0.45 || Math.abs(u + 0.02) < 0.09 ? 1 : 2];
     }
+    // From here on in half-steps of the grey ramp (G2: G[k] is G2[2k]).
     if (z === 10) {
+      // A round pillar: lit on the left, a shade softer than white, its shadowed right edge a mid grey.
       const u = pillarU(w.x, w.y);
-      if (zr !== 10 && zr !== 30) return G[1];
-      if (w.y < 0.2 && zu !== 10) return G[7]; // the foot's top edge
-      let v = u > 0.5 ? 7 : u > 0.05 ? 6 : u > -0.45 ? 5 : u > -0.8 ? 3 : 2;
-      if (sconce(w.x, w.y) < 2 && v > 2 && v < 7) v += 1; // the sconce's light on the pillar
-      return G[Math.max(0, v - dim)];
+      if (zr !== 10 && zr !== 30) return G2[4];
+      if (w.y < 0.2 && zu !== 10) return G2[12]; // the foot's top edge
+      let v = u > 0.5 ? 12 : u > 0.05 ? 11 : u > -0.45 ? 10 : u > -0.8 ? 8 : 6;
+      if (sconce(w.x, w.y) < 2 && v < 12) v = Math.min(12, v + 2); // the sconce's light on the pillar
+      return G2[Math.max(0, v - 2 * dim)];
     }
     if (z === 9) return BT_RED[w.y > 1.7 ? 3 : w.y > 1.66 ? 2 : 1];
     // Pillars and banners shade the wall to their right.
     const pu = pillarU(w.x, w.y), bu = bannerU(w.x);
     const shade = (pu < -1 && pu > -1.7) || (bu < -1 && bu > -1.25 && w.y > bannerBottom(1) - 0.05) ? 1 : 0;
-    let c = [0, 1, -1, 5, 4, 6, 5, 4, 1][z] ?? 5;
-    if (z === 4 && (zr !== 4 || zd !== 4)) c = 3; // panels: shadowed bottom-right edges
-    else if (z === 3 && (zr === 4 || zd === 4)) c = 7; // lit top-left edges
-    if (z === 5 && zu !== 5) c = 7; // the rail's lip
-    if (z === 3 && zu === 5) c = 3; // the rail's shadow
-    if (z === 1 && zu !== 1) c = 2; // the skirting's top
-    if (z === 7) c = zu !== 7 || zl !== 7 ? 3 : zd !== 7 || zr !== 7 ? 6 : 4; // niches: shadowed at the top left, lit at the bottom right
-    if ((z === 6 || z === 5) && sconce(w.x, w.y) < 2.4 && bayer(sx, sy) < 0.5) c = Math.min(7, c + 1);
-    return G[Math.max(0, c - shade - (dim && c > 1 ? 1 : 0))];
+    let c = 2 * ([0, 1, -1, 5, 4, 6, 5, 4, 1][z] ?? 5);
+    if (z === 4 && (zr !== 4 || zd !== 4)) c = 7; // panels: shadowed bottom-right edges
+    else if (z === 3 && (zr === 4 || zd === 4)) c = 12; // lit top-left edges
+    if (z === 5 && zu !== 5) c = 12; // the rail's lip
+    if (z === 3 && zu === 5) c = 7; // the rail's shadow
+    if (z === 1 && zu !== 1) c = 4; // the skirting's top
+    if (z === 7) c = zu !== 7 || zl !== 7 ? 7 : zd !== 7 || zr !== 7 ? 11 : 8; // niches: shadowed at the top left, lit at the bottom right
+    if ((z === 6 || z === 5) && sconce(w.x, w.y) < 2.4) c = Math.min(12, c + 1); // the sconce's glow on the wall
+    return G2[Math.max(0, c - 2 * shade - (dim && c > 2 ? 2 : 0))];
   };
 
   // --- the floor ---
@@ -1171,30 +1186,30 @@ function tower(ctx: ArenaContext): void {
     if (w) return [wallColor(sx, sy, w), MAT.BACKDROP];
     const gr = view.ground(sx + 1, sy)!, gd = view.ground(sx, sy + 1)!;
     if (inCourt(g.x, g.z)) {
-      // White lines around the court (wider near the camera), down its middle and across its far end.
+      // Pale lines around the court (wider near the camera), down its middle and across its far end.
       const lw = Math.max(0.06, 1.05 / g.ppu), lz = Math.max(0.03, 0.55 / g.ppu);
-      if (Math.min(g.x - court.x0, court.x1 - g.x) < lw || Math.min(g.z - court.z0, court.z1 - g.z) < lz) return [G[7], MAT.SOLID];
+      if (Math.min(g.x - court.x0, court.x1 - g.x) < lw || Math.min(g.z - court.z0, court.z1 - g.z) < lz) return [G[6], MAT.SOLID];
       const midX = (court.x0 + court.x1) / 2;
-      if (Math.abs(g.x - midX) < lw * 0.5 || (Math.abs(g.z - (court.z1 - 1.5)) < lz * 0.6 && Math.abs(g.x - midX) > lw * 2)) return [G[6], MAT.SOLID];
-      // Polished slate slabs, a darker seam between them.
+      if (Math.abs(g.x - midX) < lw * 0.5 || (Math.abs(g.z - (court.z1 - 1.5)) < lz * 0.6 && Math.abs(g.x - midX) > lw * 2)) return [G[5], MAT.SOLID];
+      // Polished slate slabs, a seam half a shade darker between them.
       const k = slab(g.x, g.z);
       const seam = (inCourt(gr.x, gr.z) && slab(gr.x, gr.z) !== k) || (inCourt(gd.x, gd.z) && slab(gd.x, gd.z) !== k);
       // The far slabs catch the light at a glancing angle.
       const far = g.z > court.z1 - SLAB_Z ? 1 : 0;
-      return [G[(seam ? 2 : 3) + far], MAT.SOLID];
+      return [G2[2 * (3 + far) - (seam ? 1 : 0)], MAT.SOLID];
     }
     // A dark inlay around the court.
-    if (inCourt(gr.x, gr.z) || inCourt(gd.x, gd.z)) return [G[1], MAT.SOLID];
-    // Tiles aligned with the court and the wall, light grout on each tile's left and far sides.
+    if (inCourt(gr.x, gr.z) || inCourt(gd.x, gd.z)) return [G2[3], MAT.SOLID];
+    // Tiles aligned with the court and the wall, grout half a shade lighter on each tile's left and far sides.
     const tx = (g.x - court.x1) / T, tz = (g.z - court.z1) / T, tzd = (gd.z - court.z1) / T;
     const rowsPx = 1 / Math.max(1e-6, tz - tzd);
     // Far away the rows crowd together: keep every other grout line.
     const step = rowsPx < 3 ? 2 : 1;
     const lineX = Math.floor(tx) !== Math.floor((gr.x - court.x1) / T);
     const lineZ = Math.floor(tz / step) !== Math.floor(tzd / step);
-    const v = tileLight(Math.floor(tx), Math.floor(tz)) + (lineX || lineZ ? 1 : 0);
     if (g.z > WZ - 0.04) return [F[1], MAT.SOLID];
-    return [F[Math.max(0, Math.min(F.length - 1, v))], MAT.SOLID];
+    const v = Math.max(0, Math.min(F.length - 2, tileLight(Math.floor(tx), Math.floor(tz))));
+    return [F2[2 * v + (lineX || lineZ ? 1 : 0)], MAT.SOLID];
   });
 
   // Reflections in the polish: a streak under each bright thing, a shade lighter,
@@ -1207,9 +1222,9 @@ function tower(ctx: ArenaContext): void {
       for (let xx = Math.round(x0); xx <= Math.round(x1); xx++) {
         const c = ground.get(xx, yy);
         if (!c || ground.material(xx, yy) === MAT.BACKDROP) continue;
-        const i = indexIn(F, c), j = indexIn(G, c);
-        if (i >= 0) ground.set(xx, yy, F[Math.min(F.length - 1, i + lift)]);
-        else if (j >= 0 && j < 7) ground.set(xx, yy, G[Math.min(6, j + lift)]);
+        const i = indexIn(F2, c), j = indexIn(G2, c);
+        if (i >= 0) ground.set(xx, yy, F2[Math.min(F2.length - 1, i + 2 * lift)]);
+        else if (j >= 0 && j < 12) ground.set(xx, yy, G2[Math.min(12, j + 2 * lift)]);
       }
     }
   };
@@ -1280,7 +1295,7 @@ export const ARENAS: Record<string, ArenaDesign> = {
     paint: (ctx) => meadow(ctx, { grass: MEADOW, blades: BLADES, leaves: LEAVES, pond: { x: -0.8, z: 12.5, rx: 4.2, rz: 1.8 }, tallGrass: 8, treeLine: 16.2 }),
   },
   underwater: { name: 'SEAFLOOR', about: 'Deep below the waves of ROUTE 128.', ambience: 'underwater', paint: seafloor },
-  mountain: { name: 'MT. CHIMNEY', about: 'Rocky slopes dusted with volcanic ash.', ambience: 'mountain', look: { lavaHot: [255, 190, 80] }, paint: chimney },
+  mountain: { name: 'MT. CHIMNEY', about: 'Rocky slopes dusted with volcanic ash.', ambience: 'mountain', look: { lavaHot: [255, 160, 64] }, paint: chimney },
   cave: { name: 'GRANITE CAVE', about: 'A dim cave on DEWFORD ISLAND.', ambience: 'cave', paint: cave },
   building: { name: 'BATTLE TOWER', about: 'Where trainers test their POKéMON.', ambience: 'building', paint: tower },
 };

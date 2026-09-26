@@ -208,6 +208,8 @@ export function shrub(w: number, h: number, twig: Ramp, leaves: Ramp, seed: numb
 export interface RockPalette {
   shades: Ramp; // dark .. light (3-5)
   outline: Rgb;
+  /** At most this many cracks on a rock() (default: two on a big rock, one on a small one). */
+  cracks?: number;
 }
 
 /** A rock or boulder: an irregular lump lit from the upper left, a few broad facets, a crack or two. */
@@ -246,7 +248,7 @@ export function rock(w: number, h: number, pal: RockPalette, seed: number): Spri
     }
   }
   // Cracks: short dark lines from the edge inward.
-  for (let c = 0; c < (rw > 12 ? 2 : rw > 6 ? 1 : 0); c++) {
+  for (let c = 0; c < Math.min(pal.cracks ?? 2, rw > 12 ? 2 : rw > 6 ? 1 : 0); c++) {
     let x = cx + rng.range(-rw * 0.3, rw * 0.3), y = cy - rh * rng.range(0.2, 0.5);
     const dx = rng.range(-0.6, 0.6);
     for (let i = 0; i < rh * 0.35; i++) {
