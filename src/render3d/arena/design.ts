@@ -146,6 +146,8 @@ export interface DuneRow {
   lit: Ramp;
   shade: Ramp;
   crest: Rgb;
+  /** How wide the dither between shades spreads (band softness, default 0.3): lower is calmer. */
+  soft?: number;
 }
 
 /**
@@ -188,10 +190,10 @@ export function dunes(ctx: ArenaContext, rows: DuneRow[]): void {
         if (d.up) {
           // The windward face: brightest just under the crest, a little darker toward the trough.
           const v = (r.lit.length - 1) * (0.45 + d.t * 0.55) - down * 1.2;
-          c = band(r.lit, v, sx, sy, 0.3);
+          c = band(r.lit, v, sx, sy, r.soft ?? 0.3);
         } else {
           const v = (r.shade.length - 1) * (0.12 + (1 - d.t) * 0.55) - down * 0.5;
-          c = band(r.shade, v, sx, sy, 0.3);
+          c = band(r.shade, v, sx, sy, r.soft ?? 0.3);
         }
         // The crest line along the lit face's top.
         if (sy === y0 && d.up && d.t > 0.25) c = r.crest;
@@ -211,6 +213,12 @@ export interface Shaft {
   strength: number;
   /** Shades its core is lifted (its edges one less); default 1. */
   lift?: number;
+  /**
+   * Banded instead of dithered: the core lifted `lift` shades and the sides
+   * one, both solid, and the foot narrowing to nothing instead of thinning
+   * out in dither (calm, where it lands near a battler).
+   */
+  banded?: boolean;
 }
 
 /**
@@ -222,6 +230,10 @@ export interface Shaft {
 export function shafts(ctx: ArenaContext, list: Shaft[], ramps: Ramp[], only?: (sx: number, sy: number) => boolean): void {
   const { ground } = ctx;
   for (const s of list) {
+    if (s.banded) {
+      bandedShaft(ctx, s, ramps, only);
+      continue;
+    }
     for (let sy = ground.oy; sy < Math.min(s.bottom, ground.oy + ground.height); sy++) {
       const t = (sy - ground.oy) / (s.bottom - ground.oy);
       const fade = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35;
@@ -237,6 +249,27 @@ export function shafts(ctx: ArenaContext, list: Shaft[], ramps: Ramp[], only?: (
         const lift = core && fade > 0.6 ? s.lift ?? 1 : 1;
         if (c) ground.set(sx, sy, shift(ramps, c, lift), ground.material(sx, sy));
       }
+    }
+  }
+}
+
+/** A light shaft in solid bands (see Shaft.banded). */
+function bandedShaft(ctx: ArenaContext, s: Shaft, ramps: Ramp[], only?: (sx: number, sy: number) => boolean): void {
+  const { ground } = ctx;
+  for (let sy = ground.oy; sy < Math.min(s.bottom, ground.oy + ground.height); sy++) {
+    const t = (sy - ground.oy) / (s.bottom - ground.oy);
+    // Full width down to 65% of its length, then narrowing about its middle.
+    const w = s.w * (t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35);
+    if (w < 1) continue;
+    const mid = s.x + (sy - ground.oy) * s.lean + s.w / 2;
+    const x0 = mid - w / 2, x1 = mid + w / 2;
+    for (let sx = Math.floor(x0); sx < x1; sx++) {
+      if (sx + 0.5 < x0 || sx + 0.5 > x1) continue;
+      if (only && !only(sx, sy)) continue;
+      const c = ground.get(sx, sy);
+      const u = (sx + 0.5 - x0) / w;
+      const lift = u > 0.25 && u < 0.75 ? s.lift ?? 1 : 1;
+      if (c) ground.set(sx, sy, shift(ramps, c, lift), ground.material(sx, sy));
     }
   }
 }
@@ -264,6 +297,18 @@ export function battlerBox(ctx: ArenaContext, who: 'player' | 'enemy'): [number,
   const p = ctx[who];
   const [sx, sy] = ctx.view.screen(p.x, 0, p.z);
   return who === 'enemy' ? [sx - 46, sy - 70, sx + 46, sy + 10] : [sx - 64, sy - 120, sx + 64, sy + 10];
+}
+
+/**
+ * How deep screen pixel (sx, sy) is in the calm around the wild Pokémon: 1
+ * inside its battler box widened by `pad` px, falling to 0 over `fade` px
+ * more. The ground right behind and around it stays quiet (no marks,
+ * ripples or clutter), so the Pokémon reads against the place.
+ */
+export function foeCalm(ctx: ArenaContext, sx: number, sy: number, pad = 8, fade = 16): number {
+  const [x0, y0, x1, y1] = battlerBox(ctx, 'enemy');
+  const dx = Math.max(x0 - pad - sx, 0, sx - x1 - pad), dy = Math.max(y0 - pad - sy, 0, sy - y1 - pad);
+  return 1 - Math.min(1, Math.hypot(dx, dy) / fade);
 }
 
 /** True if a prop would cover a battler or stand in front of it (where it is drawn, sway included). */
@@ -322,6 +367,9 @@ export interface HillRow {
   freq: number;
   rough?: number;
   seed: number;
+  /** How wide the dither between shades spreads (band softness, default 0.35), and how much darker rock's layer lines are (shades, default 0.7): lower is calmer. */
+  soft?: number;
+  layers?: number;
 }
 
 /**
@@ -355,8 +403,8 @@ export function hills(ctx: ArenaContext, rows: HillRow[]): void {
         const depthIn = (sy - y0) / Math.max(1, y1 - y0); // 0 at the top .. 1 at the foot
         let v = top * 0.5 + lit * top * 0.42 - depthIn * 0.8;
         // Rock shows its layers.
-        if (rough > 0.5 && (sy + Math.round(noise(x * 0.8, r.seed) * 3)) % 5 === 0) v -= 0.7;
-        const c = sy === y0 && r.crest ? r.crest : band(r.shades, v, sx, sy, 0.35);
+        if (rough > 0.5 && (sy + Math.round(noise(x * 0.8, r.seed) * 3)) % 5 === 0) v -= r.layers ?? 0.7;
+        const c = sy === y0 && r.crest ? r.crest : band(r.shades, v, sx, sy, r.soft ?? 0.35);
         ground.set(sx, sy, c, MAT.BACKDROP);
       }
     }

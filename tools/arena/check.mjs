@@ -12,13 +12,16 @@
 //   - the whole screen is painted (no holes), with a pixel-art palette;
 //   - nothing standing in an arena covers a battler;
 //   - an arena always paints the same (seeded) and quickly (it paints when a
-//     battle loads, on phones too).
+//     battle loads, on phones too);
+//   - every place is as calm as the open sea (Route 124, the benchmark) where
+//     the battle shows it, within a stated margin: the Pokémon are the focus.
 // Exits non-zero if any check fails.
 
 import { readFile, readdir, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { importTs } from '../gauntlet/tsimport.mjs';
 import { ROOT } from '../gauntlet/species.mjs';
+import { calm, compose, propsShowing, shownMask } from './screen.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, all) => (a.startsWith('--') ? [a.slice(2), all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? true : all[i + 1]] : null)).filter(Boolean));
 const results = [];
@@ -29,6 +32,27 @@ const warn = (name, detail) => results.push({ level: 'warn', name, detail });
 const MAX_COLORS = 96;
 /** Painting time budget in node (ms); phones are a few times slower. */
 const MAX_PAINT_MS = 700;
+
+/**
+ * Calm, measured on what a battle shows of an arena at rest (above the text
+ * box, outside the healthboxes and the player's Pokémon: screen.mjs calm()).
+ * The open sea (Route 124) is the benchmark: every limit is the sea's own
+ * value with the margin stated here, so the sea passes by construction and
+ * no other place may be busier. Most measures get 10%; scattered marks 30%
+ * (land keeps small things the open sea has none of: pebbles, flowers,
+ * ripples in rows); open ground is a floor, at most 10% less than the sea's.
+ */
+const BENCHMARK = 'water';
+const CALM = [
+  { key: 'busy', label: 'busy', margin: 0.1 },
+  { key: 'strong', label: 'strong edges', margin: 0.1, unit: '%' },
+  { key: 'specks', label: 'specks/1k', margin: 0.1 },
+  { key: 'marks', label: 'marks/1k', margin: 0.3 },
+  { key: 'foe', label: 'behind the wild Pokémon', margin: 0.1 },
+  { key: 'open', label: 'open ground', margin: -0.1, unit: '%' },
+];
+/** Props that show (24+ pixels): the sea shows none, and props frame only the edges, so at most 3. */
+const MAX_PROPS_SHOWING = 3;
 
 const app = await importTs('tools/arena/entry.ts');
 const { ARENAS, paintArena, battlerBox, propRect, BATTLE_CAMERA, groundPointAt, makeBattleCamera } = app;
@@ -58,6 +82,14 @@ const walk = async (dir) => {
 };
 await walk(join(ROOT, 'src'));
 gate('arenas are painted, not Emerald backgrounds projected (entry layers aside)', offenders.length === 0, offenders.join(', '));
+
+/** How calm an arena is where the battle shows it, and how many props show. */
+const measure = (ctx) => {
+  const mask = shownMask(battlerBox(ctx, 'player'));
+  return { ...calm(compose(ctx, propRect, 0, 0, 240, 160), mask, battlerBox(ctx, 'enemy')), props: propsShowing(ctx, propRect, mask) };
+};
+const sea = measure(paintArena(BENCHMARK, camera, player, enemy).ctx);
+const limits = Object.fromEntries(CALM.map((m) => [m.key, sea[m.key] * (1 + m.margin)]));
 
 for (const name of Object.keys(ARENAS)) {
   const t0 = performance.now();
@@ -93,6 +125,19 @@ for (const name of Object.keys(ARENAS)) {
     }
   }
   gate(`${name}: nothing stands over a battler`, covering.length === 0, covering.slice(0, 3).join('; ') || `${ctx.props.length} props`);
+  // As calm as the sea where the battle shows it: each measure against its limit (the sea's value and its margin).
+  const m = measure(ctx);
+  const over = [];
+  const shown = CALM.map((c) => {
+    const least = c.margin < 0;
+    const ok = least ? m[c.key] >= limits[c.key] : m[c.key] <= limits[c.key];
+    const text = `${c.label} ${m[c.key].toFixed(1)}${c.unit ?? ''} ${least ? '>=' : '<='} ${limits[c.key].toFixed(1)}${c.unit ?? ''}`;
+    if (!ok) over.push(text);
+    return text;
+  });
+  if (m.props > MAX_PROPS_SHOWING) over.push(`props showing ${m.props} <= ${MAX_PROPS_SHOWING}`);
+  shown.push(`props showing ${m.props} <= ${MAX_PROPS_SHOWING}`);
+  gate(`${name}: as calm as the sea`, over.length === 0, over.length ? `over: ${over.join('; ')}` : shown.join(', '));
 }
 
 if (args.render) {
