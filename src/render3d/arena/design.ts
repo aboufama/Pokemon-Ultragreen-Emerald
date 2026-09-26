@@ -1,12 +1,11 @@
 // What an arena is made of, and the painting helpers the arenas share: fill
 // the ground pixel by pixel from its ground point, scatter marks (tufts,
-// pebbles, flowers) sized for their distance, stand rows of trees in the
-// far view with their shadows, and place props around the battlers without
-// covering them.
+// sparkles) sized for their distance, draw crisp pattern lines (wave
+// crests), and stand things in the far view (trees, rocks) farthest first.
 
 import { MAT, Paint, Rng, type Ramp, type Rgb, type Sprite, bayer, hash2 } from './art';
 import type { GroundLook } from './ground';
-import { type PropSpec, propRect } from './props';
+import type { PropSpec } from './props';
 import type { ArenaView, GroundPoint } from './view';
 
 /**
@@ -136,77 +135,6 @@ export function onLine(ctx: ArenaContext, sx: number, sy: number, phase: (x: num
   return Math.abs(s - p) < maxStep && Math.floor(s) !== Math.floor(p);
 }
 
-export interface Shaft {
-  /** Screen x where the shaft leaves the top of the painted area, its width, and its lean (pixels right per row). */
-  x: number;
-  w: number;
-  lean: number;
-  /** Rows it reaches down to (it fades out over the last third). */
-  bottom: number;
-  strength: number;
-  /** Shades its core is lifted (its edges one less); default 1. */
-  lift?: number;
-  /**
-   * Banded instead of dithered: the core lifted `lift` shades and the sides
-   * one, both solid, and the foot narrowing to nothing instead of thinning
-   * out in dither (calm, where it lands near a battler).
-   */
-  banded?: boolean;
-}
-
-/**
- * Light shafts falling through water or a cave's gloom: slanted bands that
- * lift what they cross a shade along its ramp (`lift` shades in their core),
- * solid in the middle, checkered along their soft edges and thinning out
- * toward their foot. `only` limits them to some pixels (e.g. the far view).
- */
-export function shafts(ctx: ArenaContext, list: Shaft[], ramps: Ramp[], only?: (sx: number, sy: number) => boolean): void {
-  const { ground } = ctx;
-  for (const s of list) {
-    if (s.banded) {
-      bandedShaft(ctx, s, ramps, only);
-      continue;
-    }
-    for (let sy = ground.oy; sy < Math.min(s.bottom, ground.oy + ground.height); sy++) {
-      const t = (sy - ground.oy) / (s.bottom - ground.oy);
-      const fade = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35;
-      const x0 = s.x + (sy - ground.oy) * s.lean;
-      for (let sx = Math.floor(x0); sx <= x0 + s.w; sx++) {
-        const u = (sx + 0.5 - x0) / s.w;
-        if (u < 0 || u > 1) continue;
-        const core = u > 0.22 && u < 0.78;
-        const density = (core ? s.strength : 0.5) * fade;
-        if (density <= bayer(sx, sy)) continue;
-        if (only && !only(sx, sy)) continue;
-        const c = ground.get(sx, sy);
-        const lift = core && fade > 0.6 ? s.lift ?? 1 : 1;
-        if (c) ground.set(sx, sy, shift(ramps, c, lift), ground.material(sx, sy));
-      }
-    }
-  }
-}
-
-/** A light shaft in solid bands (see Shaft.banded). */
-function bandedShaft(ctx: ArenaContext, s: Shaft, ramps: Ramp[], only?: (sx: number, sy: number) => boolean): void {
-  const { ground } = ctx;
-  for (let sy = ground.oy; sy < Math.min(s.bottom, ground.oy + ground.height); sy++) {
-    const t = (sy - ground.oy) / (s.bottom - ground.oy);
-    // Full width down to 65% of its length, then narrowing about its middle.
-    const w = s.w * (t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35);
-    if (w < 1) continue;
-    const mid = s.x + (sy - ground.oy) * s.lean + s.w / 2;
-    const x0 = mid - w / 2, x1 = mid + w / 2;
-    for (let sx = Math.floor(x0); sx < x1; sx++) {
-      if (sx + 0.5 < x0 || sx + 0.5 > x1) continue;
-      if (only && !only(sx, sy)) continue;
-      const c = ground.get(sx, sy);
-      const u = (sx + 0.5 - x0) / w;
-      const lift = u > 0.25 && u < 0.75 ? s.lift ?? 1 : 1;
-      if (c) ground.set(sx, sy, shift(ramps, c, lift), ground.material(sx, sy));
-    }
-  }
-}
-
 export interface StandSpec {
   sprite: Sprite;
   x: number;
@@ -225,63 +153,15 @@ export function stand(ctx: ArenaContext, items: StandSpec[], dark: (c: Rgb) => R
   }
 }
 
-/** Screen-space box a battler's sprite occupies (with room around it). */
+/**
+ * Screen-space box a battler's sprite occupies (with room around it): what
+ * nothing standing may cover, and, for the wild Pokémon, the calm the arena
+ * keeps around it (no marks, clutter or busy far view there).
+ */
 export function battlerBox(ctx: ArenaContext, who: 'player' | 'enemy'): [number, number, number, number] {
   const p = ctx[who];
   const [sx, sy] = ctx.view.screen(p.x, 0, p.z);
   return who === 'enemy' ? [sx - 46, sy - 70, sx + 46, sy + 10] : [sx - 64, sy - 120, sx + 64, sy + 10];
-}
-
-/**
- * How deep screen pixel (sx, sy) is in the calm around the wild Pokémon: 1
- * inside its battler box widened by `pad` px, falling to 0 over `fade` px
- * more. The ground right behind and around it stays quiet (no marks,
- * ripples or clutter), so the Pokémon reads against the place.
- */
-export function foeCalm(ctx: ArenaContext, sx: number, sy: number, pad = 8, fade = 16): number {
-  const [x0, y0, x1, y1] = battlerBox(ctx, 'enemy');
-  const dx = Math.max(x0 - pad - sx, 0, sx - x1 - pad), dy = Math.max(y0 - pad - sy, 0, sy - y1 - pad);
-  return 1 - Math.min(1, Math.hypot(dx, dy) / fade);
-}
-
-/** True if a prop would cover a battler or stand in front of it (where it is drawn, sway included). */
-export function blocksBattler(ctx: ArenaContext, prop: PropSpec): boolean {
-  const r = propRect(ctx.view, prop);
-  for (const who of ['player', 'enemy'] as const) {
-    const b = battlerBox(ctx, who);
-    if (r[0] < b[2] && r[2] > b[0] && r[1] < b[3] && r[3] > b[1]) return true;
-  }
-  return false;
-}
-
-/** Stand a prop in the arena unless it would cover a battler; true if it was placed. */
-export function addProp(ctx: ArenaContext, prop: PropSpec): boolean {
-  if (blocksBattler(ctx, prop)) return false;
-  ctx.props.push(prop);
-  return true;
-}
-
-/**
- * Frame the view with a prop: stand it with its foot at screen pixel
- * (sx, sy), nudged outward (dir -1 toward the left edge, +1 toward the right)
- * until it clears the battlers, so it ends up cropped by the frame; true if placed.
- */
-export function frameProp(ctx: ArenaContext, sx: number, sy: number, dir: -1 | 1, make: (ppu: number) => Omit<PropSpec, 'x' | 'z'>): boolean {
-  const g0 = ctx.view.ground(sx, sy);
-  if (!g0) return false;
-  const made = make(g0.ppu);
-  for (let k = 0; k < 60; k++) {
-    const g = ctx.view.ground(sx + dir * k, sy);
-    if (!g) return false;
-    if (addProp(ctx, { ...made, x: g.x, z: g.z })) return true;
-  }
-  return false;
-}
-
-/** The ground point under screen pixel (sx, sy). */
-export function at(ctx: ArenaContext, sx: number, sy: number): { x: number; z: number } {
-  const g = ctx.view.ground(sx, sy)!;
-  return { x: g.x, z: g.z };
 }
 
 export function newPaint(): Paint {

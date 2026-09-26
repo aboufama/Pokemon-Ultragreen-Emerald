@@ -19,15 +19,10 @@ export function bayer(x: number, y: number): number {
   return (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
 }
 
-/** Pick a ramp entry for a continuous shade (0 = darkest), dithering between neighbors. */
-export function shade(r: Ramp, v: number, x: number, y: number): Rgb {
-  const n = r.length - 1;
-  const c = Math.max(0, Math.min(n, v));
-  const i = Math.floor(c);
-  return c - i > bayer(x, y) ? r[Math.min(n, i + 1)] : r[i];
-}
-
-/** Same, but only dithered inside a narrow band around each step (clean bands, soft edges). */
+/**
+ * Pick a ramp entry for a continuous shade (0 = darkest), dithered only
+ * inside a narrow band around each step (clean bands, soft edges).
+ */
 export function band(r: Ramp, v: number, x: number, y: number, softness = 0.35): Rgb {
   const n = r.length - 1;
   const c = Math.max(0, Math.min(n, v));
@@ -35,10 +30,6 @@ export function band(r: Ramp, v: number, x: number, y: number, softness = 0.35):
   const f = c - i;
   const t = Math.max(0, Math.min(1, (f - 0.5) / softness + 0.5));
   return t > bayer(x, y) ? r[Math.min(n, i + 1)] : r[i];
-}
-
-export function mix(a: Rgb, b: Rgb, t: number): Rgb {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t].map(Math.round) as unknown as Rgb;
 }
 
 export class Rng {
