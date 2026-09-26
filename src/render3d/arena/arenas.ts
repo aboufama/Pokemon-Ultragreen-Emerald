@@ -943,7 +943,7 @@ function cave(ctx: ArenaContext): void {
   /** Light on the chamber floor: the daylight's spot, the battle around it, dark toward the walls. */
   const floorLight = (x: number, z: number) => {
     const s = Math.hypot((x - spot.x) / 1.3, (z - spot.z) / 1.0) + (fbm(x * 1.3, z * 1.3, 83) - 0.5) * 0.3;
-    const a = Math.hypot((x - cx) / 2.7, (z - cz) / 4.0) + (fbm(x * 0.5, z * 0.5, 84) - 0.5) * 0.35;
+    const a = Math.hypot((x - cx) / 2.8, (z - cz) / 4.1) + (fbm(x * 0.32, z * 0.4, 84) - 0.5) * 0.9 + (fbm(x * 1.1, z * 1.3, 85) - 0.5) * 0.25;
     const inSpot = s < 1 ? 1 : s < 1.2 ? 0.55 : 0;
     return Math.max(inSpot * 1.75 + (s < 0.5 ? 0.4 : 0), 1 - smoothstep(0.35, 1.15, a));
   };
