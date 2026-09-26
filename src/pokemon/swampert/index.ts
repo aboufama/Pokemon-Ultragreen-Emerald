@@ -48,8 +48,9 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     ],
     moveClips: {},
     // Clips by move motif (src/battle3d/motifs.ts). quake, wave, shield,
-    // punch, strike, glare, kick_sand and heal have clips of their own name;
-    // these motifs are performed by other clips.
+    // punch, strike, glare, kick_sand, heal, toss, burrow, fling and
+    // afterimage have clips of their own name; these motifs are performed by
+    // other clips.
     motifClips: {
       // Heaving boulders up and hurling them is the same body action as
       // raising a wave (the Pokédex: it piles up boulders).
