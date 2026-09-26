@@ -424,7 +424,7 @@ function desert(ctx: ArenaContext): void {
     const far = smoothstep(12, 22, g.z);
     const light = 1 - smoothstep(0.55, 1.35, Math.hypot((g.x - cx) / 3.4, (g.z - cz) / 5));
     const slope = lightOn(g.x, g.z) * (1 - far);
-    let v = 3.3 + light * 1.2 + slope * 1.1 + far * 0.9 - smoothstep(3, 6, Math.abs(g.x - cx)) * 0.7;
+    let v = 2.95 + light * 1.45 + slope * 1.1 + far * 1.1 - smoothstep(2.8, 6, Math.abs(g.x - cx)) * 0.8;
     const r = ridgeAt(g.x, g.z);
     if (r && !r.lit) return [band(SAND_SHADE, 1.2 + r.t * 1.6, sx, sy, 0.2), MAT.SOLID];
     if (r && r.u < 1.2 / g.ppu) return [S[6], MAT.SOLID];
