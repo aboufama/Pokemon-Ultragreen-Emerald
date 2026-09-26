@@ -479,6 +479,188 @@ const statusTargetKick: Clip = {
   events: [{ t: 0.3, name: 'emit' }],
 };
 
+/** Both arms reaching out at chest height (grabbing). */
+const REACH: Pose = {
+  aim: {
+    armR: { dir: [-0.18, -0.1, 0.98] },
+    forearmR: { dir: [0.12, 0.02, 0.99] },
+    armL: { dir: [0.18, -0.1, 0.98] },
+    forearmL: { dir: [-0.12, 0.02, 0.99] },
+  },
+};
+
+/** Arms locked around what it holds, low in front. */
+const GRIP: Pose = {
+  aim: {
+    armR: { dir: [-0.28, -0.45, 0.85] },
+    forearmR: { dir: [0.4, -0.12, 0.91] },
+    armL: { dir: [0.28, -0.45, 0.85] },
+    forearmL: { dir: [-0.4, -0.12, 0.91] },
+  },
+};
+
+/** Holding it up in front, arms raised (overhead would carry the foe off the screen). */
+const HEAVE: Pose = {
+  aim: {
+    armR: { dir: [-0.22, 0.45, 0.87] },
+    forearmR: { dir: [0.18, 0.62, 0.76] },
+    armL: { dir: [0.22, 0.45, 0.87] },
+    forearmL: { dir: [-0.18, 0.62, 0.76] },
+  },
+};
+
+/** Driving it down into the ground in front. */
+const SLAM_DOWN: Pose = {
+  aim: {
+    armR: { dir: [-0.15, -0.5, 0.85] },
+    forearmR: { dir: [0.12, -0.78, 0.62] },
+    armL: { dir: [0.15, -0.5, 0.85] },
+    forearmL: { dir: [-0.12, -0.78, 0.62] },
+  },
+};
+
+/**
+ * Seismic Toss (toss): rush in and seize the foe, sink with it, spring up
+ * and back toward mid-field holding it high, spinning round with it in the
+ * air, then hurl it back down into its own place (throw) and land; it
+ * crashes there (impact), where both camera views see it. Hop home. The foe
+ * rides in the grip from the grab to the throw (src/battle3d/director.ts);
+ * hands trail the hips by ~0.07 s.
+ */
+const toss: Clip = {
+  name: 'toss',
+  duration: 2.3,
+  keys: [
+    key(0),
+    // Wind up: crouch, elbows back.
+    key(0.14, pelvis(0, -0.05), bend(20, 4, 0, -10), ELBOWS_BACK, ANGRY),
+    // Rush in low, arms reaching.
+    key(0.3, { advance: 0.65, root: { y: 0.06 } }, TUCK, bend(22, 4, 0, -12), REACH, ANGRY),
+    // Seize: land at the foe, hands on it, then lock on low.
+    key(0.4, { advance: 1 }, LAND, bend(18, 4, 0, -10), REACH, ANGRY),
+    key(0.52, { advance: 1 }, pelvis(0, -0.07), bend(24, 6, 0, -12), GRIP, ANGRY, FISTS),
+    // Load: sink deeper with it.
+    key(0.64, { advance: 1 }, pelvis(0, -0.095), bend(20, 6, 0, -14), GRIP, ANGRY, FISTS, flames(0.6)),
+    // Spring up and back, heaving the foe up in front.
+    key(0.8, { advance: 0.86, root: { y: 0.22, yaw: 40 } }, HOP, pelvis(0, 0.02), bend(-10, -8, -4, -16), HEAVE, ANGRY, FISTS, flames(1)),
+    // Spinning round with it at the top of the leap.
+    key(0.96, { advance: 0.66, root: { y: 0.3, yaw: 210 } }, HOP, pelvis(0, 0.02), bend(-12, -8, -4, -18), HEAVE, ANGRY, FISTS, flames(1)),
+    // Facing its place again, leaning back to hurl.
+    key(1.08, { advance: 0.5, root: { y: 0.3, yaw: 360 } }, HOP, pelvis(0, 0.02), bend(-18, -10, -6, -20), HEAVE, ANGRY, FISTS, flames(1)),
+    // The hurl: the body whips forward, arms driving down at the foe's place.
+    snap(1.17, { advance: 0.4, root: { y: 0.2, yaw: 360 } }, HOP, pelvis(0, -0.01), bend(34, 16, 4, 4), SLAM_DOWN, ANGRY, flames(1)),
+    // Land deep, arms still down; watch it crash.
+    key(1.3, { advance: 0.32, root: { yaw: 360 } }, LAND, pelvis(0, -0.08), bend(30, 12, 2, 2), SLAM_DOWN, ANGRY, flames(0.9)),
+    key(1.52, { advance: 0.32, root: { yaw: 360 } }, pelvis(0, -0.06), bend(22, 8, 2, -2), SLAM_DOWN, ANGRY, flames(0.7)),
+    // Straighten, then hop home.
+    key(1.7, { advance: 0.32, root: { yaw: 360 } }, pelvis(0, -0.03), bend(10, 2, 0, 0), GUARD, ANGRY, flames(0.5)),
+    key(1.86, { advance: 0.15, root: { y: 0.06, yaw: 360 } }, HOP, bend(8, 0, 0, 0), GUARD, ANGRY, flames(0.3)),
+    key(2.0, { advance: 0, root: { yaw: 360 } }, LAND, GUARD, ANGRY, flames(0.1)),
+    key(2.3, { root: { yaw: 360 } }, flames(0), OPEN_EYES),
+  ],
+  events: [{ t: 0.47, name: 'grab' }, { t: 1.2, name: 'throw' }, { t: 1.42, name: 'impact' }],
+};
+
+/** Claws driven down into the ground in front (digging). */
+const DIG_ARMS: Pose = {
+  aim: {
+    armR: { dir: [-0.22, -0.84, 0.5] },
+    forearmR: { dir: [0.05, -0.95, 0.3] },
+    armL: { dir: [0.22, -0.84, 0.5] },
+    forearmL: { dir: [-0.05, -0.95, 0.3] },
+  },
+};
+
+/** A rising knee: right knee driven up, left leg trailing, arms swept back. */
+const RISING_KNEE: Pose = {
+  plantFeet: 0,
+  aim: {
+    thighR: { dir: [-0.15, 0.35, 0.92] }, shinR: { dir: [-0.1, -0.88, 0.45] },
+    thighL: { dir: [0.25, -0.92, -0.3] }, shinL: { dir: [0.12, -0.6, -0.79] },
+    armR: { dir: [-0.35, -0.5, -0.8] }, forearmR: { dir: [-0.25, -0.3, -0.92] }, armL: { dir: [0.35, -0.5, -0.8] }, forearmL: { dir: [0.25, -0.3, -0.92] },
+  },
+};
+
+/**
+ * Dig (burrow): crouch and drive the claws into the ground, sink out of
+ * sight (dig), tunnel over to the foe, then burst up out of the ground under
+ * it with a rising knee (impact as the knee breaks the surface), come down
+ * in front of it and hop home.
+ */
+const burrow: Clip = {
+  name: 'burrow',
+  duration: 2.2,
+  keys: [
+    key(0),
+    // Crouch, eyes on the ground.
+    key(0.12, pelvis(0, -0.06), bend(28, 6, 0, 18), CHAMBER, FISTS, ANGRY),
+    // Claws into the ground: the dirt flies (dig) and it sinks, gathering speed.
+    key(0.22, { root: { y: -0.1 } }, pelvis(0, -0.09), bend(42, 8, 2, 24), DIG_ARMS, ANGRY),
+    key(0.48, { root: { y: -1.3 } }, pelvis(0, -0.09), bend(42, 8, 2, 24), DIG_ARMS, ANGRY),
+    // Underground (nothing to stand on): tunnel over to the foe.
+    key(0.62, { advance: 0.2, plantFeet: 0, root: { y: -1.3 } }, pelvis(0, -0.09), bend(40, 8, 2, 20), DIG_ARMS, ANGRY),
+    key(0.84, { advance: 1, plantFeet: 0, root: { y: -1.25 } }, pelvis(0, -0.1), bend(26, 6, 0, -10), CHAMBER, FISTS, ANGRY),
+    // Burst up under the foe, knee first.
+    snap(1.0, { advance: 1, root: { y: 0.3 } }, pelvis(0, 0.02), bend(-8, -6, -4, -16), RISING_KNEE, ANGRY, flames(1)),
+    key(1.14, { advance: 0.92, root: { y: 0.38 } }, pelvis(0, 0.02), bend(-10, -6, -4, -18), RISING_KNEE, ANGRY, flames(1)),
+    // Come down in front of it and hold the crouch.
+    fall(1.3, { advance: 0.8 }, LAND, pelvis(0, -0.06), bend(20, 4, 0, -6), GUARD, ANGRY, flames(0.7)),
+    key(1.64, { advance: 0.8 }, pelvis(0, -0.03), bend(10, 2, 0, 0), GUARD, ANGRY, flames(0.5)),
+    // Hop home.
+    key(1.8, { advance: 0.38, root: { y: 0.07 } }, HOP, bend(8, 0, 0, 0), GUARD, ANGRY, flames(0.3)),
+    key(1.94, { advance: 0 }, LAND, GUARD, ANGRY, flames(0.1)),
+    key(2.2, flames(0), OPEN_EYES),
+  ],
+  events: [{ t: 0.21, name: 'dig' }, { t: 0.93, name: 'impact' }],
+};
+
+/**
+ * Mud-Slap (fling): weight back, the right foot scoops the ground and flicks
+ * a clod of mud at the foe (release from the foot: legs have no overlap).
+ */
+const fling: Clip = {
+  name: 'fling',
+  duration: 1.15,
+  keys: [
+    key(0),
+    key(0.22, { plantLeft: 1, plantRight: 0.6 }, pelvis(0.02, -0.045, -0.012), { bones: { spine: { x: 24, y: -10 }, head: { x: -10, y: 8 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.3, -0.9, -0.3] }, shinR: { dir: [-0.15, -0.78, -0.61] } } }),
+    snap(0.34, { plantLeft: 1, plantRight: 0 }, pelvis(0.015, -0.03, 0.012), { bones: { spine: { x: 4, y: 8 }, head: { x: -10, y: 2 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.22, -0.25, 0.94] }, shinR: { dir: [-0.12, 0.02, 0.99] } } }),
+    key(0.44, { plantLeft: 1, plantRight: 0 }, pelvis(0.012, -0.03, 0.01), { bones: { spine: { x: 2, y: 9 }, head: { x: -10 } } }, GUARD, ANGRY,
+      { aim: { thighR: { dir: [-0.22, -0.28, 0.93] }, shinR: { dir: [-0.12, -0.12, 0.98] } } }),
+    key(0.64, pelvis(0, -0.04), { bones: { spine: { x: 14 } } }, GUARD, ANGRY),
+    key(1.15, OPEN_EYES),
+  ],
+  events: [{ t: 0.34, name: 'release' }],
+};
+
+/**
+ * Double Team, Agility (afterimage): dart from side to side faster than the
+ * eye (quick hops, root.x), guard up; the afterimages start at the aura and
+ * run 1.4 s (src/battle3d/director.ts).
+ */
+const afterimage: Clip = {
+  name: 'afterimage',
+  duration: 1.75,
+  keys: [
+    key(0),
+    key(0.1, pelvis(0, -0.05), bend(14, 2, 0, -4), GUARD, ANGRY),
+    key(0.2, { root: { x: 0.24, y: 0.05 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
+    key(0.3, { root: { x: 0.3 } }, LAND, GUARD, ANGRY),
+    key(0.42, { root: { x: -0.05, y: 0.06 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
+    key(0.52, { root: { x: -0.3 } }, LAND, GUARD, ANGRY),
+    key(0.64, { root: { x: 0.02, y: 0.06 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
+    key(0.74, { root: { x: 0.26 } }, LAND, GUARD, ANGRY),
+    key(0.86, { root: { x: -0.02, y: 0.05 } }, HOP, bend(8, 0, 0, -4), GUARD, ANGRY),
+    key(0.96, { root: { x: -0.24 } }, LAND, GUARD, ANGRY),
+    key(1.1, { root: { x: -0.06, y: 0.04 } }, HOP, bend(6, 0, 0, -2), GUARD, ANGRY),
+    key(1.22, { root: { x: 0 } }, LAND, GUARD, ANGRY),
+    key(1.75, OPEN_EYES),
+  ],
+  events: [{ t: 0.18, name: 'aura' }],
+};
+
 /** Taking a hit: snap back and wince (the battler adds a sprung recoil), then shake it off. */
 const hit: Clip = {
   name: 'hit',
@@ -512,7 +694,7 @@ const faint: Clip = {
 };
 
 export const BLAZIKEN_CLIPS: Record<string, Clip> = Object.fromEntries(
-  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, peck, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
+  [idle, intro, physicalWeak, physicalWeakKick, physicalStrong, punch, tackle, peck, toss, burrow, fling, afterimage, specialWeak, specialStrong, statusSelf, statusTarget, statusTargetKick, hit, faint].map((c) => [c.name, c]),
 );
 
 /** Eye atlas (pm0257_00_Eye1): 2 columns x 4 rows of 128x64 cells. */

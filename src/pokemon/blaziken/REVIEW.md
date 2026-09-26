@@ -29,6 +29,10 @@ the text box) and the opponent's side, starts and ends on the stance.
 - [x] `punch` (punch): Sky Uppercut, Fire Punch, Mega Punch — dashes in low, coils with the fist at the hip, drives up through the foe with the feet leaving the ground, drops into a crouch, hops home
 - [x] `tackle` (tackle): Quick Attack, Take Down — a low dash with the right shoulder leading and arms swept back, bounces off the foe, hops home
 - [x] `peck` (peck): Peck — head cocked back, leaps in, the neck and head drive the beak down into the foe with the arms swept back, the head rebounds, hops home
+- [x] `toss` (toss): Seismic Toss — rushes in and seizes the foe (grab), sinks with it, springs up and back toward mid-field heaving it high and spinning round, hurls it back down into its own place (throw) and lands; the foe crashes there on its side (impact: rocks and dust), lies a moment and gets up. Both views see the crash: the foe lands in its own spot, Blaziken a third of the way home
+- [x] `burrow` (burrow): Dig — crouches and drives the claws in (dig: dirt bursts), sinks out of sight, a trail of heaving dirt runs to the foe, bursts up in front of it with a rising knee (impact as the knee breaks the surface), comes down and hops home
+- [x] `fling` (fling): Mud-Slap — weight back, the right foot scoops and flicks a spray of mud clods at the foe (emitterFor fling: feet)
+- [x] `afterimage` (afterimage): Double Team — darts left and right in quick hops, guard up; the two darkened afterimages swing out on both sides from the aura
 - Also mapped: kick_strong → `physical_strong`, breath and beam → `special_strong` (the stream from the beak), spit and orb → `special_weak` (the spat ember), strike → `physical_weak` (Slash), buff → `status_self`, roar → `status_target`
 
 ## Showcase moves in battle

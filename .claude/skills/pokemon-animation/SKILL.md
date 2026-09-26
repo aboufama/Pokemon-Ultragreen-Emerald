@@ -129,6 +129,9 @@ existing clips in `profile.motifClips`.
 | event | when | effect |
 |---|---|---|
 | `impact` | the hit connects (one per hit) | contact VFX by motif, target reaction, HP drain |
+| `grab` | a toss's hands close on the foe | the foe rides in the grip (between the hands, turned with the chest) |
+| `throw` | a toss hurls the foe | the foe flies back into its place, landing at the next `impact` |
+| `dig` | a burrow goes under | dirt (or a splash) at the feet; mounds heave along the way underground |
 | `release` | the projectile/stream/beam leaves | ranged VFX from the motif's emitter |
 | `releaseEnd` | a sustained stream/jet/beam stops | ends the spray (else it runs to the clip end) |
 | `charge` | power starts gathering | charge sprites that follow the emitter |

@@ -11,6 +11,12 @@
 // fps, so clips keep their timing and springs their feel; a clip event
 // (an impact, a release) shows its pose at once. What the GBA does to
 // sprites stays per frame: slides, bounces, blinks and palette flashes.
+//
+// Carried: a toss move's grab hands the foe to the attacker (grabbedBy):
+// the foe's body rides rigidly with the attacker's grip (between its hands,
+// turned with its chest) until it is thrown back down into its own place
+// (thrown: it lands on its side) or dropped where it is (release); it lies
+// there a moment, then gets up.
 
 import * as THREE from 'three';
 import { Animator } from '../anim/animator';
@@ -24,6 +30,8 @@ import { SLOT_PIXEL_ID, instantiatePokemon, type PokemonInstance } from '../poke
 import { GroundShadow } from '../render3d/shadow';
 
 const DEG = Math.PI / 180;
+/** Lying on its side (a thrown body lands so): rolled about its forward axis. */
+const ON_SIDE = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 80 * DEG);
 
 /** Poses a second from the page's ?poseRate= (0 or 60: every frame), 12 by default. */
 function pagePoseRate(): number {
@@ -77,6 +85,10 @@ export class Battler3D {
   private eyeMap: THREE.Texture | null = null;
   pose: Pose = {};
   onEvent: ((name: string) => void) | null = null;
+  /** Carried by a toss (see grabbedBy): who holds it, and the body relative to their grip. */
+  private carry: { by: Battler3D; rel: THREE.Matrix4 } | null = null;
+  /** Let go after a carry: where from (slot frame), how long it flies back to its place (0: dropped where it is), lies and gets up. */
+  private letGo: { from: THREE.Vector3; fromQ: THREE.Quaternion; t: number; flight: number; lie: number; back: number } | null = null;
   /** Stop motion: time since the shown pose, whether to show the next at once, and the shown pose. */
   private poseClock = 0;
   private snapPose = true;
@@ -286,6 +298,101 @@ export class Battler3D {
     }
   }
 
+  /** The id this battler's pixels have in the pixel pipeline. */
+  get pixelId(): number {
+    return SLOT_PIXEL_ID[this.slot];
+  }
+
+  /**
+   * Where this battler holds what it carries (world): between its hands (the
+   * `hands` emitter), turned with its chest.
+   */
+  gripMatrix(): THREE.Matrix4 {
+    const hands = this.emitterPoints('hands');
+    const at = hands.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(hands.length);
+    const chest = this.inst.rig.node('chest') ?? this.inst.root;
+    chest.updateWorldMatrix(true, false);
+    const turn = new THREE.Quaternion();
+    chest.matrixWorld.decompose(new THREE.Vector3(), turn, new THREE.Vector3());
+    return new THREE.Matrix4().compose(at, turn, new THREE.Vector3(1, 1, 1));
+  }
+
+  /** Seized by a toss (its `grab`): from now on the body rides with the carrier's grip. */
+  grabbedBy(carrier: Battler3D): void {
+    this.inst.root.updateWorldMatrix(true, false);
+    this.carry = { by: carrier, rel: carrier.gripMatrix().invert().multiply(this.inst.root.matrixWorld) };
+    this.letGo = null;
+  }
+
+  /**
+   * Hurled back down into its own place (a toss's `throw`): it lands on its
+   * side after `flight` seconds, lies there for `lie`, then gets up in `back`.
+   */
+  thrown(flight: number, lie = 0.3, back = 0.4): void {
+    if (!this.carry) return;
+    this.carry = null;
+    const root = this.inst.root;
+    this.letGo = { from: root.position.clone(), fromQ: root.quaternion.clone(), t: 0, flight: Math.max(0.05, flight), lie, back };
+  }
+
+  /** Dropped where it is (a slam's impact): it lies there for `lie`, then hops back to its place in `back`. */
+  release(lie = 0.22, back = 0.42): void {
+    if (!this.carry) return;
+    this.carry = null;
+    const root = this.inst.root;
+    this.letGo = { from: root.position.clone(), fromQ: root.quaternion.clone(), t: 0, flight: 0, lie, back };
+  }
+
+  get carried(): boolean {
+    return !!this.carry;
+  }
+
+  /**
+   * The body placed by its carrier's grip, or let go: flying back down to its
+   * place, lying on the ground, getting up (slot frame; the pose's root is
+   * where it belongs). Always on the ground, never in it.
+   */
+  private placeCarried(dt: number): void {
+    const root = this.inst.root;
+    const slot = this.stage.slots[this.slot];
+    slot.updateWorldMatrix(true, false);
+    let margin = 1;
+    if (this.carry) {
+      const local = slot.matrixWorld.clone().invert().multiply(this.carry.by.gripMatrix().multiply(this.carry.rel));
+      local.decompose(root.position, root.quaternion, new THREE.Vector3());
+    } else {
+      const g = this.letGo!;
+      g.t += dt;
+      // Stop motion: the flight and the getting up are posed too.
+      const rate = Battler3D.poseRate;
+      const t = rate > 0 ? Math.floor(g.t * rate + 1e-6) / rate : g.t;
+      const home = root.position.clone();
+      const upright = root.quaternion.clone();
+      // Thrown: it lands on its side in its own place; dropped: it lies where it fell.
+      const lieP = g.flight > 0 ? home : g.from;
+      const lieQ = g.flight > 0 ? upright.clone().multiply(ON_SIDE) : g.fromQ;
+      if (t < g.flight) {
+        const k = t / g.flight;
+        root.position.lerpVectors(g.from, lieP, k * k);
+        root.position.y += Math.sin(Math.PI * k) * this.height * 0.15;
+        root.quaternion.slerpQuaternions(g.fromQ, lieQ, k);
+      } else {
+        const k = Math.max(0, Math.min(1, (t - g.flight - g.lie) / g.back));
+        const e = k * k * (3 - 2 * k);
+        root.position.lerpVectors(lieP, home, e);
+        root.position.y += Math.sin(Math.PI * e) * this.height * (g.flight > 0 ? 0.18 : 0.3);
+        root.quaternion.slerpQuaternions(lieQ, upright, e);
+        margin = 1 - e;
+        if (k >= 1) this.letGo = null;
+      }
+    }
+    // Lying or carried low, the lowest joint stays a body's thickness above the ground.
+    root.updateMatrixWorld(true);
+    const ground = slot.getWorldPosition(new THREE.Vector3()).y + this.height * 0.12 * margin;
+    const lowest = Math.min(...this.posed!.nodes.map((n) => n.getWorldPosition(new THREE.Vector3()).y));
+    if (lowest < ground) root.position.y += ground - lowest;
+  }
+
   /** Distance a contact move travels so the attacker ends up in front of its target. */
   approachDistance(): number {
     if (!this.target) return 0;
@@ -475,6 +582,8 @@ export class Battler3D {
       root.rotation.copy(held.rotation);
       this.placeRoot(held.scale);
     }
+
+    if (this.carry || this.letGo) this.placeCarried(dt);
 
     // Shadow on the ground under the body on screen: follows the feet,
     // shrinks and fades in the air, gone when sunk (fainted) or not sent out.

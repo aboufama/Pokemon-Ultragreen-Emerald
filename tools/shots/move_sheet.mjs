@@ -5,7 +5,9 @@
 //
 //   node tools/shots/move_sheet.mjs --moves FLAMETHROWER,EMBER --attacker enemy \
 //        [--species blaziken] [--enemy blaziken] [--every 6] [--frames 16] [--density 1] \
-//        [--crop x,y,w,h] [--env sand] --out build/sheets/blaziken.png
+//        [--crop x,y,w,h] [--env sand] [--poseRate 0] --out build/sheets/blaziken.png
+//
+// --poseRate 0 shows smooth motion instead of the game's stop motion (12 poses a second).
 //
 // Prints page errors; exits non-zero if any move throws.
 
@@ -31,7 +33,7 @@ const frames = Number(args.frames ?? 16);
 const density = Number(args.density ?? 1);
 const crop = args.crop ? String(args.crop).split(',').map(Number) : [0, 0, 240, 160];
 const out = resolve(args.out ?? 'build/sheets/moves.png');
-const q = { species: args.species ?? 'blaziken', enemy: args.enemy ?? args.species ?? 'blaziken', attacker: args.attacker ?? 'enemy', density: String(density), ui: args.ui ?? '0', ...(args.env ? { env: String(args.env) } : {}) };
+const q = { species: args.species ?? 'blaziken', enemy: args.enemy ?? args.species ?? 'blaziken', attacker: args.attacker ?? 'enemy', density: String(density), ui: args.ui ?? '0', ...(args.env ? { env: String(args.env) } : {}), ...(args.poseRate !== undefined ? { poseRate: String(args.poseRate) } : {}) };
 
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 760, height: 520 } });

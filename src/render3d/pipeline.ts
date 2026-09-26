@@ -14,6 +14,8 @@ import * as THREE from 'three';
 import type { RGB } from '../gba/bitmap';
 
 export const MAX_PALETTES = 8;
+/** Afterimages shown at once (Double Team's two clones, Agility's trail). */
+export const MAX_ECHOES = 4;
 
 export interface PixelSettings {
   /** Output pixels per GBA pixel (1 = native 240x160). */
@@ -110,6 +112,14 @@ const compositeFrag = /* glsl */ `
   uniform float cameraNear;
   uniform float cameraFar;
   uniform float innerThreshold;
+  // Afterimages: copies of a Pokémon's pixels shown shifted (output pixels),
+  // blended over what is behind them like a GBA sprite clone in blend mode.
+  uniform int echoId[${MAX_ECHOES}];
+  uniform ivec2 echoOffset[${MAX_ECHOES}];
+  // x = the copy's weight (EVA / 16), y = what is behind it (EVB / 16).
+  uniform vec2 echoAlpha[${MAX_ECHOES}];
+  // The copy's palette blended toward rgb by a (Double Team darkens them).
+  uniform vec4 echoLook[${MAX_ECHOES}];
   // id layout: 0 environment, 1..8 palette slots (Pokémon), 9+ effects (no snap/outline)
   const int FIRST_FX_ID = ${MAX_PALETTES + 1};
 
@@ -161,11 +171,9 @@ const compositeFrag = /* glsl */ `
     return (c5 * 8.0 + floor(c5 / 4.0)) / 255.0;
   }
 
-  void main() {
-    ivec2 outPx = ivec2(gl_FragCoord.xy);
+  /** The object an output pixel shows: the majority id among its supersamples. */
+  int majorityId(ivec2 outPx) {
     ivec2 base = outPx * ss;
-
-    // Majority object among the supersamples.
     int counts[4];
     int ids[4];
     int nIds = 0;
@@ -183,7 +191,12 @@ const compositeFrag = /* glsl */ `
     for (int k = 1; k < 4; k++) {
       if (k < nIds && (counts[k] > bestCount || (counts[k] == bestCount && ids[k] > id))) { id = ids[k]; bestCount = counts[k]; }
     }
+    return id;
+  }
 
+  /** An output pixel's color as object \`id\`: averaged, outlined, palette-snapped and blended. */
+  vec3 objectColor(ivec2 outPx, int id) {
+    ivec2 base = outPx * ss;
     vec3 c = vec3(0.0);
     float nC = 0.0;
     float nearest = 1e9;
@@ -231,6 +244,24 @@ const compositeFrag = /* glsl */ `
     } else if (id == 0) {
       c = mix(c, envTint.rgb, envTint.a);
       c = mix(c, envFlash.rgb, envFlash.a);
+    }
+    return c;
+  }
+
+  void main() {
+    ivec2 outPx = ivec2(gl_FragCoord.xy);
+    int id = majorityId(outPx);
+    vec3 c = objectColor(outPx, id);
+
+    // Afterimages go behind their Pokémon and effects, over everything else.
+    ivec2 outSize = srcSize / ss;
+    for (int e = 0; e < ${MAX_ECHOES}; e++) {
+      int eid = echoId[e];
+      if (eid == 0 || id == eid || id >= FIRST_FX_ID) continue;
+      ivec2 q = outPx - echoOffset[e];
+      if (q.x < 0 || q.y < 0 || q.x >= outSize.x || q.y >= outSize.y || majorityId(q) != eid) continue;
+      vec3 copy = mix(objectColor(q, eid), echoLook[e].rgb, echoLook[e].a);
+      c = min(vec3(1.0), copy * echoAlpha[e].x + c * echoAlpha[e].y);
     }
     if (rgb555) c = toRgb555(c);
     gl_FragColor = vec4(c, 1.0);
@@ -287,6 +318,11 @@ export class PixelPipeline {
         cameraNear: { value: 0.1 },
         cameraFar: { value: 100 },
         innerThreshold: { value: 0.03 },
+        echoId: { value: new Array(MAX_ECHOES).fill(0) },
+        // ivec2 arrays go to WebGL as one flat list.
+        echoOffset: { value: new Int32Array(MAX_ECHOES * 2) },
+        echoAlpha: { value: Array.from({ length: MAX_ECHOES }, () => new THREE.Vector2()) },
+        echoLook: { value: Array.from({ length: MAX_ECHOES }, () => new THREE.Vector4()) },
       },
       vertexShader: /* glsl */ `void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: compositeFrag,
@@ -365,6 +401,22 @@ export class PixelPipeline {
   setEnvironmentBlend(kind: 'tint' | 'flash', color: RGB, amount: number): void {
     const u = this.composite.uniforms[kind === 'tint' ? 'envTint' : 'envFlash'];
     (u.value as THREE.Vector4).set(color[0] / 255, color[1] / 255, color[2] / 255, Math.max(0, Math.min(1, amount)));
+  }
+
+  /**
+   * Show an afterimage of object `id` (a Pokémon's pixel id; 0 = none)
+   * shifted by (dx, dy) GBA pixels (x right, y down), like a clone of its
+   * sprite in blend mode: `eva` / `evb` weigh the copy and what is behind it
+   * (BLDALPHA / 16), and `look` blends the copy's palette toward a color.
+   */
+  setEcho(index: number, id: number, dx = 0, dy = 0, eva = 12 / 16, evb = 8 / 16, look: { color: RGB; amount: number } = { color: [0, 0, 0], amount: 0 }): void {
+    const u = this.composite.uniforms;
+    const d = this.settings.density;
+    u.echoId.value[index] = id;
+    // Output rows count up from the bottom of the screen.
+    (u.echoOffset.value as Int32Array).set([Math.round(dx) * d, -Math.round(dy) * d], index * 2);
+    (u.echoAlpha.value as THREE.Vector2[])[index].set(eva, evb);
+    (u.echoLook.value as THREE.Vector4[])[index].set(look.color[0] / 255, look.color[1] / 255, look.color[2] / 255, look.amount);
   }
 
   /**

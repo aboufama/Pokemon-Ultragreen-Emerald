@@ -58,6 +58,33 @@ Flame Wheel: `fx` flames on. **grapple** — grab (arms forward), lift or
 squeeze, throw. **vine** (Vine Whip) — brace, the body jerks as vines lash out
 from under the flower/leaves (the VFX draws the vines at the foe).
 
+**toss** (Seismic Toss, Vital Throw, Submission) — events `grab`, `throw`, `impact`
+- Rush in (a leap, arms reaching), land at the foe (`advance: 1`) and `grab`
+  when the hands arrive (key + ~0.07 s). From then the foe rides rigidly in
+  the grip — between the hands, turned with the chest — so whatever the arms
+  and chest do moves the foe with them.
+- Sink with it (load), then spring up **and back toward mid-field** (advance
+  1 → ~0.5) holding it up in front — not overhead: the player's Pokémon is
+  close to the camera and leaves the screen if lifted high — spinning round
+  with it (`root.yaw` 0 → 360).
+- Facing the foe's place again, lean back, whip forward: `throw` on the hurl.
+  The foe flies back down into its own place, landing on its side at the
+  next `impact` (0.2–0.3 s later: rocks, dust, a heavy shake), lies there and
+  gets up. Land deep, watch it crash, hop home. Both views see the crash
+  because it happens in the foe's own spot while the attacker is at advance
+  ≤ 0.4.
+- Vital Throw: grab, turn (`root.yaw` ~180) and throw it over the shoulder.
+  An impact without a throw drops the foe where the grip is (a slam).
+
+**burrow** (Dig, Dive) — events `dig`, `impact`
+- Crouch, drive the claws or hands into the ground: `dig` (dirt bursts at the
+  feet; a splash for water moves), sink out of sight (`root.y` to about -1.3,
+  gathering speed; `plantFeet: 0` underground — nothing to stand on), travel
+  to the foe (advance 0 → 1: the director heaves mounds along the way), burst
+  up in front of it (`root.y` -1.25 → 0.3 in ~0.15 s) with a rising strike —
+  `impact` as it breaks the surface. Come down, hold the crouch ≥ 0.25 s, hop
+  home.
+
 ## Ranged (event: `release`, plus `releaseEnd` when sustained)
 
 **breath** (Flamethrower, Dragon Breath, Icy Wind) — the mouth
@@ -90,6 +117,11 @@ from under the flower/leaves (the VFX draws the vines at the foe).
   its fronds/flower (body twist and shimmy), Sceptile whips its arms across,
   Meganium swings its neck so the petals fling. `release` on the fling.
 
+**fling** (Mud-Slap) — scoop the ground with a hand (or a foot:
+`emitterFor: { fling: 'feet' }`) and hurl the clod: weight back, the
+scooping limb draws back along the ground, then snaps forward and up;
+`release` on the snap (plus the overlap for a hand).
+
 **wave** (Surf, Muddy Water) — rear up tall, arms or body raised, push
 forward and down; the wave rolls from the attacker's feet. **quake**
 (Earthquake, Magnitude) — rear up (quadrupeds: front feet off the ground), stomp
@@ -113,7 +145,14 @@ shut, then flex or pose, `aura` at the peak, tremor. **shield** (Withdraw,
 Protect, Harden) — brace or pull into the shell (head and limbs in), `aura`.
 **heal** (Synthesis, Rest) — face up to the light, eyes closed, calm sway,
 `aura`. **weather** (Rain Dance, Sunny Day) — look up and call. **charm** (Tail
-Whip) — turn and wag the tail at the foe, `emit`.
+Whip) — turn and wag the tail at the foe, `emit`. **afterimage** (Double
+Team, Agility) — quick darting hops side to side (`root.x` ±0.25–0.3, about
+0.1 s a hop, guard up), `aura` early (≈0.2 s): the afterimages run 1.4 s from
+it (Double Team: two darkened copies swinging out; Agility: a trail behind
+the darts, so the darts must move the body). **flash** (Flash) — gather
+(curl in, eyes shut), then flare up and open toward the foe (chest up,
+arms or leaves spread), `emit` on the flare: the screen turns white and both
+Pokémon black, then fade back (the director does it).
 
 ## Body-plan notes
 

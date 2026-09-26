@@ -8,6 +8,13 @@
 // (physical/special x weak/strong, status). Effects take their shape from the
 // motif, their look from the move's type, and leave from the species'
 // emitter for that motif (mouth, cannons, flower, hands...).
+//
+// Some motifs move more than the attacker: a toss's `grab` hands the foe to
+// the attacker's grip (Battler3D.grabbedBy) until its `throw` hurls it back
+// down into its place, landing on the `impact` (or the impact drops it);
+// a burrow's `dig` throws up the ground as the attacker sinks out of sight;
+// afterimages and Flash's white-out are drawn by the pixel pipeline, as
+// Emerald draws them with sprite clones and palette fades.
 
 import * as THREE from 'three';
 import type { MoveData } from '../data';
@@ -67,10 +74,20 @@ export function bonePoint(b: Battler3D, name: string): THREE.Vector3 {
   return new THREE.Vector3().setFromMatrixPosition(node.matrixWorld);
 }
 
+/**
+ * A point on the body's axis, a fraction of its height up from its feet
+ * along the body (so it stays on the body when it leans, flips or lies down).
+ */
 export function bodyPoint(b: Battler3D, heightFraction: number): THREE.Vector3 {
   b.inst.root.updateWorldMatrix(true, false);
-  const p = new THREE.Vector3().setFromMatrixPosition(b.inst.root.matrixWorld);
-  p.y += b.height * heightFraction;
+  // The root's local unit is the body's height.
+  return b.inst.root.localToWorld(new THREE.Vector3(0, heightFraction, 0));
+}
+
+/** The point on the ground under the middle of a battler's body (as shown: carried, lying, leaping or sunk). */
+export function groundPoint(b: Battler3D): THREE.Vector3 {
+  const p = bodyPoint(b, 0.4);
+  p.y = b.stage.slots[b.slot].getWorldPosition(new THREE.Vector3()).y;
   return p;
 }
 
@@ -259,6 +276,15 @@ function contactFx(move: MoveData, motif: Motif, target: Battler3D, vfx: VfxSyst
     case 'quake':
       quakeFx(target, vfx, strong);
       return;
+    case 'toss':
+      tossFx(move, target, vfx, strong);
+      return;
+    case 'burrow':
+      // Bursting up out of the ground (or the water) under the foe.
+      groundBurst(target, move, vfx, 1.5);
+      void vfx.sprite(fx.impact, at, { px: 40, life: 0.28, scaleFrom: 0.5, scaleTo: 1.2 });
+      vfx.shake(0.07, 0.4);
+      return;
     default:
       void vfx.sprite(fx.impact, at.clone().add(jitter), { px: strong ? 40 : 30, life: strong ? 0.28 : 0.2, scaleFrom: 0.5, scaleTo: 1.15 });
       extra();
@@ -279,6 +305,69 @@ function quakeFx(target: Battler3D, vfx: VfxSystem, strong: boolean): void {
   }
 }
 
+/**
+ * A thrown foe hits the ground (Seismic Toss's SeismicTossRockScatter): an
+ * impact on the body, dust and rocks bursting out where it landed, a heavy shake.
+ */
+function tossFx(move: MoveData, target: Battler3D, vfx: VfxSystem, strong: boolean): void {
+  const at = hitPoint(target);
+  const ground = groundPoint(target);
+  vfx.shake(strong ? 0.09 : 0.07, 0.45);
+  void vfx.sprite('SlamHit', at, { px: 44, fps: 20 });
+  void vfx.sprite(typeFx(move.type).impact, at, { px: strong ? 44 : 36, life: 0.28, scaleFrom: 0.5, scaleTo: 1.2 });
+  target.stage.ambience?.puff(ground, 1.8, target.height);
+  const h = target.height;
+  for (let i = 0; i < 4; i++) {
+    const side = i % 2 ? 1 : -1;
+    void vfx.sprite('Rocks', towardCamera(target, ground.clone().add(new THREE.Vector3(side * h * 0.2, h * 0.05, 0)), 0.3), {
+      px: 14 + (i % 3) * 4, fps: 0, frame: i % 4, life: 0.42, spin: side * 6, velocity: new THREE.Vector3(side * h * (0.8 + i * 0.25), h * (1.6 - i * 0.2), 0),
+    });
+  }
+}
+
+/**
+ * The ground bursting up under a battler: dirt mounds and clods (Dig), or a
+ * splash and droplets from water (Dive), with dust on dry ground.
+ */
+function groundBurst(b: Battler3D, move: MoveData, vfx: VfxSystem, size: number): void {
+  const water = move.type === 'TYPE_WATER';
+  const ground = groundPoint(b);
+  if (!water) b.stage.ambience?.puff(ground, size, b.height);
+  const n = Math.round(4 * size);
+  for (let i = 0; i < n; i++) {
+    vfx.after(i * 0.04, () => {
+      const p = ground.clone();
+      p.x += (i % 2 ? 1 : -1) * b.height * (0.1 + 0.06 * i);
+      const sheet = water ? (i % 2 ? 'Splash' : 'WaterDroplet') : i % 2 ? 'DirtMound' : 'FlyingDirt';
+      void vfx.sprite(sheet, towardCamera(b, p, 0.3), { px: 24 + 6 * size, life: 0.4, velocity: new THREE.Vector3(0, b.height * (0.6 + 0.3 * size), 0) });
+    });
+  }
+  if (water) void vfx.sprite('WaterColumn', towardCamera(b, ground.clone().add(new THREE.Vector3(0, b.height * 0.3, 0)), 0.3), { px: 36 + 8 * size, fps: 12, life: 0.45 });
+}
+
+/**
+ * While a battler travels underground, the ground heaves above it: small
+ * mounds of dirt (bubbles in water) where it passes. Returns a stop function.
+ */
+function tunnelFx(b: Battler3D, move: MoveData, vfx: VfxSystem): () => void {
+  let stopped = false;
+  let last: THREE.Vector3 | null = null;
+  const water = move.type === 'TYPE_WATER';
+  const tick = () => {
+    if (stopped) return;
+    const ground = groundPoint(b);
+    const under = bodyPoint(b, 0.9).y < ground.y;
+    if (under && (!last || last.distanceTo(ground) > b.height * 0.12)) {
+      last = ground;
+      void vfx.sprite(water ? 'SmallBubbles' : 'DirtMound', towardCamera(b, ground, 0.2), { px: 22, life: 0.3, scaleFrom: 0.6, scaleTo: 1 });
+    }
+    vfx.after(1 / 30, tick);
+  };
+  tick();
+  // Stopped by the impact, or when the clip ends (performMove).
+  return () => (stopped = true);
+}
+
 export async function performMove(attacker: Battler3D, target: Battler3D, move: MoveData, vfx: VfxSystem, hooks: PerformHooks = {}): Promise<void> {
   const clip = clipFor(attacker, move);
   const motif = motifOf(move);
@@ -287,6 +376,7 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
   let hits = 0;
   const pending: Promise<void>[] = [];
   let sustained: ReturnType<typeof spray> | null = null;
+  let tunnel: (() => void) | null = null;
   const landed = () => {
     hooks.onHit?.(hits++);
     hitReaction(target, vfx, strong, move);
@@ -303,9 +393,29 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
 
   attacker.onEvent = (name) => {
     if (name === 'impact') {
+      tunnel?.();
+      tunnel = null;
       if (motif === 'quake') fadeBackdrop();
+      // A toss that never threw the foe drops it where it is.
+      if (motif === 'toss') target.release();
       contactFx(move, motif, target, vfx, hits);
       landed();
+    } else if (name === 'grab') {
+      // From here the foe rides in the attacker's hands, flinching.
+      target.grabbedBy(attacker);
+      void target.perform('hit');
+    } else if (name === 'throw') {
+      // Hurled back down into its place, landing on the clip's impact after the throw.
+      const events = attacker.profile.clips[clip]?.events ?? [];
+      const at = events.find((e) => e.name === 'throw')?.t ?? 0;
+      const land = events.find((e) => e.name === 'impact' && e.t > at)?.t;
+      target.thrown(land === undefined ? 0.25 : land - at);
+    } else if (name === 'dig') {
+      // Going under: the ground bursts up around the attacker as it sinks,
+      // and heaves along its way while it travels underground.
+      groundBurst(attacker, move, vfx, 1);
+      vfx.shake(0.03, 0.3);
+      tunnel = tunnelFx(attacker, move, vfx);
     } else if (name === 'release') {
       fadeBackdrop();
       const r = releaseFx(attacker, target, move, motif, vfx);
@@ -321,7 +431,7 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
       fadeBackdrop();
       chargeFx(attacker, move, motif, vfx);
     } else if (name === 'aura') {
-      auraFx(attacker, motif, vfx);
+      auraFx(attacker, motif, move, vfx);
     } else if (name === 'emit') {
       pending.push(emitFx(attacker, target, move, motif, vfx));
     } else if (name === 'cry') {
@@ -329,6 +439,9 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
     }
   };
   await attacker.perform(clip);
+  // A clip that grabbed the foe and never threw it lets go at its end.
+  target.release();
+  (tunnel as (() => void) | null)?.();
   (sustained as ReturnType<typeof spray> | null)?.stop();
   await Promise.all(pending);
   resolveMove();
@@ -451,6 +564,20 @@ function releaseFx(attacker: Battler3D, target: Battler3D, move: MoveData, motif
         for (let i = 0; i < 6; i++) vfx.after(i * 0.07, () => void vfx.sprite(move.type === 'TYPE_ICE' ? 'Snowball' : 'Gust', to().add(new THREE.Vector3(((i % 3) - 1) * 0.1, 0, 0)), { px: 32, fps: 12, life: 0.35, spin: 5 }));
         await sleep(vfx, 0.45);
       })();
+    case 'fling':
+      return (async () => {
+        // Mud-Slap (MudSlapMud): a handful of mud flung in a spray that splatters on the foe.
+        const sheet = move.type === 'TYPE_GROUND' ? 'MudUnk' : fx.projectile;
+        const clods: Promise<void>[] = [];
+        for (let i = 0; i < 6; i++) {
+          clods.push(new Promise((resolve) => vfx.after(i * 0.03, () => {
+            const end = to().add(new THREE.Vector3(((i % 3) - 1) * 0.06, ((i % 2) - 0.5) * 0.08, 0));
+            void vfx.projectile(sheet, from()[0], end, 0.34, { px: 10 + (i % 3) * 4, fps: 12, arc: attacker.height * (0.16 + (i % 3) * 0.07), spin: 6 }).then(resolve);
+          })));
+        }
+        await Promise.all(clods);
+        void vfx.sprite(move.type === 'TYPE_GROUND' ? 'FlyingDirt' : fx.burst, to(), { px: 34, fps: 14, life: 0.36 });
+      })();
     case 'sound':
       return (async () => {
         const waves: Promise<void>[] = [];
@@ -467,7 +594,11 @@ function releaseFx(attacker: Battler3D, target: Battler3D, move: MoveData, motif
   }
 }
 
-function auraFx(attacker: Battler3D, motif: Motif, vfx: VfxSystem): void {
+function auraFx(attacker: Battler3D, motif: Motif, move: MoveData, vfx: VfxSystem): void {
+  if (motif === 'afterimage') {
+    afterimageFx(attacker, move, vfx);
+    return;
+  }
   if (motif === 'heal') {
     // Light gathering on the body.
     for (let i = 0; i < 8; i++) {
@@ -498,7 +629,67 @@ function auraFx(attacker: Battler3D, motif: Motif, vfx: VfxSystem): void {
   }
 }
 
+/** How long afterimages last from the aura event (seconds). */
+export const AFTERIMAGE_SECONDS = 1.4;
+
+/**
+ * Afterimages, drawn as Emerald draws them: clones of the Pokémon's sprite in
+ * blend mode (BLDALPHA 12/8). Double Team (AnimTask_DoubleTeam): two copies
+ * darkened 11/16 toward black swing from side to side on opposite phases,
+ * wider and faster until they vanish. Agility and others
+ * (AnimTask_TraceMonBlended): copies left where the body was a moment ago,
+ * a trail behind its dashes.
+ */
+function afterimageFx(attacker: Battler3D, move: MoveData, vfx: VfxSystem): void {
+  const pipe = attacker.stage.pipeline;
+  const id = attacker.pixelId;
+  const clear = () => {
+    for (let k = 0; k < 3; k++) pipe.setEcho(k, 0);
+  };
+  if (move.name === 'DOUBLE TEAM') {
+    let phase = 0;
+    let last = 0;
+    vfx.tween(AFTERIMAGE_SECONDS, (t) => {
+      // A quarter sine (gSineTable[0..64]) drives both the swing and its speed.
+      const s = Math.sin((t * Math.PI) / 2);
+      phase += (t - last) * AFTERIMAGE_SECONDS * 60 * ((s * 256) / 13) * ((2 * Math.PI) / 256);
+      last = t;
+      for (let k = 0; k < 2; k++) pipe.setEcho(k, id, Math.sin(phase + k * Math.PI) * 32 * s, 0, 12 / 16, 8 / 16, { color: [0, 0, 0], amount: 11 / 16 });
+    }, clear);
+    return;
+  }
+  // A trail: where the body was 4, 8 and 12 frames ago, relative to where it is.
+  const seen: [number, number][] = [];
+  vfx.tween(AFTERIMAGE_SECONDS, () => {
+    const now = toScreen(attacker.stage.homeCamera, bodyPoint(attacker, 0.5));
+    seen.unshift(now);
+    seen.length = Math.min(seen.length, 13);
+    for (let k = 0; k < 3; k++) {
+      const then = seen[Math.min(seen.length - 1, 4 * (k + 1))];
+      pipe.setEcho(k, id, then[0] - now[0], then[1] - now[1]);
+    }
+  }, clear);
+}
+
+/**
+ * Flash (AnimTask_Flash): the battle background turns white and every
+ * Pokémon black for 7 frames, then both fade back in 16 steps of 2 frames.
+ */
+function flashFx(attacker: Battler3D, target: Battler3D, vfx: VfxSystem): Promise<void> {
+  const env = attacker.stage.environment;
+  const set = (k: number) => {
+    if (env) env.whiteout = k;
+    for (const b of [attacker, target]) b.setTint([0, 0, 0], k);
+  };
+  set(1);
+  return new Promise((resolve) => vfx.after(7 / 60, () => vfx.tween(32 / 60, (t) => set(Math.ceil(16 * (1 - t)) / 16), () => {
+    set(0);
+    resolve();
+  })));
+}
+
 async function emitFx(attacker: Battler3D, target: Battler3D, move: MoveData, motif: Motif, vfx: VfxSystem): Promise<void> {
+  if (motif === 'flash') return flashFx(attacker, target, vfx);
   const to = hitPoint(target, 0.6);
   const { sheet: sprite, at } = statusSprite(move.name);
   if (at === 'feet' || motif === 'kick_sand') {

@@ -170,8 +170,15 @@ for (const [clipName, motif] of motifClipNames) {
   const info = data.MOTIFS[motif];
   const events = (c.events ?? []).map((e) => e.name);
   const main = info.kind === 'contact' ? 'impact' : info.kind === 'ranged' ? (motif === 'quake' ? 'impact' : 'release') : info.events[0];
-  const ok = !main || events.includes(main);
-  gate(`motif clip ${motif} -> ${clipName}`, ok && !c.generic, ok ? (c.generic ? 'generic placeholder' : events.join(' ')) : `needs a '${main}' event`);
+  const lacking = (info.requires ?? (main ? [main] : [])).filter((e) => !events.includes(e));
+  const ok = lacking.length === 0;
+  gate(`motif clip ${motif} -> ${clipName}`, ok && !c.generic, ok ? (c.generic ? 'generic placeholder' : events.join(' ')) : `needs ${lacking.map((e) => `a '${e}'`).join(' and ')} event`);
+  // A toss carries the foe from its grab to its impact: the grab comes first, with the attacker at the foe.
+  const at = (e) => (c.events ?? []).find((x) => x.name === e)?.t;
+  if (motif === 'toss' && ok) {
+    const order = at('grab') < at('impact') && (at('throw') === undefined || (at('grab') < at('throw') && at('throw') < at('impact')));
+    gate(`motif clip ${clipName}: grab, throw, impact in order`, order, `grab ${at('grab')} s, throw ${at('throw') ?? '-'} s, impact ${at('impact')} s`);
+  }
   if (['breath', 'jet', 'beam'].includes(motif) && !events.includes('releaseEnd')) warn(`motif clip ${clipName}`, 'sustained motif without releaseEnd: the stream runs until the clip ends');
 }
 
