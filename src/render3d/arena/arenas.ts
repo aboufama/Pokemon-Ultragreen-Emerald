@@ -4,9 +4,9 @@
 // Battle Tower's yellow grid floor). No platforms: the Pokémon stand on the
 // ground itself, with their shadows.
 
-import { MAT, type Rgb, type Sprite, band, bayer, fbm, hex, ramp, smoothstep } from './art';
-import { type ArenaContext, type ArenaDesign, addProp, at, darker, fill, hills, scatter, stand } from './design';
-import { bush, coral, kelp, lampPost, lightShaft, reeds, rock, rockWall, stalagmite, tallGrass, tree } from './sprites';
+import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, fbm, hex, ramp, smoothstep } from './art';
+import { type ArenaContext, type ArenaDesign, addProp, at, darker, fill, frameProp, hills, scatter, shafts, shift, stand } from './design';
+import { anemone, bush, coralHead, lampPost, seaFan, staghorn, reeds, rock, rockWall, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
 
 // Hoenn's greens (general tileset): route grass, tall grass and tree leaves.
 const MEADOW = ramp('#287a54', '#3c9f72', '#56b98b', '#73c5a4', '#8dd3b4', '#a9e0c8');
@@ -65,6 +65,25 @@ function grassMark(ctx: ArenaContext, sx: number, sy: number, ppu: number, dark:
     g.set(sx + 1, sy - 1, dark, mat);
     g.set(sx, sy, dark, mat);
     if (light) g.set(sx, sy - 2, light, mat);
+  }
+}
+
+/**
+ * A short sand ripple: a crest arching a pixel up in the middle, a shade
+ * lighter along its ramp, its shadow a shade darker below and to the right.
+ */
+function rippleMark(ctx: ArenaContext, sx: number, sy: number, len: number, ramps: Ramp[]): void {
+  const g = ctx.ground;
+  const tweak = (x: number, y: number, steps: number) => {
+    const c = g.get(x, y);
+    if (c && g.material(x, y) !== MAT.BACKDROP) g.set(x, y, shift(ramps, c, steps), g.material(x, y));
+  };
+  const x0 = sx - Math.floor(len / 2);
+  for (let i = 0; i < len; i++) {
+    const inner = i > 0 && i < len - 1;
+    const y = sy - (len >= 5 && inner ? 1 : 0);
+    tweak(x0 + i, y, 1);
+    if (inner) tweak(x0 + i + 1, y + 1, -1);
   }
 }
 
@@ -382,64 +401,142 @@ function sea(ctx: ArenaContext): void {
 
 // --- SEAFLOOR (underwater) --------------------------------------------------
 
-const SEABED = ramp('#23306a', '#2f4282', '#3e5a9c', '#5276b6', '#6c94cc', '#8cb2de', '#b0d0ee');
-const DEEP = ramp('#15204e', '#1a285c', '#20316a');
-const KELP = ramp('#12463e', '#1f6a52', '#3c9270');
-const CORAL = [ramp('#8a2a5a', '#c84a7a', '#f08ab0'), ramp('#8a4a1a', '#d0782a', '#f8b060'), ramp('#4a2a8a', '#7a5ac8', '#b09cf0')];
-const SEA_ROCK = ramp('#1a1f40', '#2c355e', '#434d80', '#606ca0', '#8591c0');
+// Emerald's underwater tileset: lavender sand lit from above, fading through
+// violet into the blue of deep water; teal-blue seaweed; violet-grey rock;
+// coral in pinks, oranges and purples.
+const UW = ramp('#18186a', '#26268f', '#3434b0', '#4a4ade', '#5f4fd6', '#734acd', '#9473de', '#b494ff', '#c5a4ff', '#d5d5ff');
+const UW_WEED = ramp('#142050', '#20316a', '#395283', '#52739c', '#7394bd');
+const UW_ROCK = ramp('#1c1450', '#2c226c', '#40348a', '#5a4ca6', '#7a6cc6', '#9c90e0', '#bcb4f4');
+const UW_CORAL = [
+  ramp('#5a1040', '#a82a64', '#e0609a', '#ffa8d0'), // pink
+  ramp('#6a2a0c', '#bc5414', '#f0923a', '#ffd084'), // orange
+  ramp('#6a4a08', '#b88a10', '#ecc83a', '#fff09a'), // yellow
+  ramp('#0e4a44', '#1f7a62', '#48b48a', '#a4e8c0'), // sea green
+];
+const SHELL = ramp('#9c6ab8', '#ffc0dc', '#fff0f8');
+// Deep water and what stands in it, darkest first (the far sand fades into #4a4ade).
+const DEEP = ramp('#12124e', '#18186a', '#20207e', '#26268f', '#2e2ea4', '#3838ba', '#4a4ade', '#6262e8', '#7c7cf2');
+const STAR = ramp('#7a2010', '#d8502c', '#f88a4a', '#ffd8a0');
 
 function seafloor(ctx: ArenaContext): void {
-  const S = SEABED;
+  const { view } = ctx;
+  const cx = (ctx.player.x + ctx.enemy.x) / 2, cz = (ctx.player.z + ctx.enemy.z) / 2 + 1.6;
+  const far = (z: number) => smoothstep(9.8, 16.5, z);
   fill(ctx, (sx, sy, g) => {
-    // The floor fades into the deep blue with distance.
-    const fog = smoothstep(12, 21, g.z);
-    if (fog > 0.02 && fog * 1.15 > bayer(sx, sy) + 0.25) return [band(DEEP, 2 - fog * 2, sx, sy, 0.4), MAT.BACKDROP];
-    const v = 4.4 + (fbm(g.x * 0.16, g.z * 0.24, 3) - 0.5) * 2 - fog * 2.2;
-    return [band(S, v, sx, sy, 0.3), MAT.SOLID];
+    // Light from the surface pooling over the battle, dappled; the floor sinks into the blue with distance.
+    const d = Math.hypot((g.x - cx) * 0.75, (g.z - cz) * 0.55) + (fbm(g.x * 0.45, g.z * 0.6, 71) - 0.5) * 1.6;
+    const light = 1 - smoothstep(1.6, 4.6, d);
+    const mound = (fbm(g.x * 0.32, g.z * 0.5, 3) - 0.5) * (1 - far(g.z));
+    const v = 5.3 + light * 1.75 + mound * 1.0 - far(g.z) * 2.6;
+    return [band(UW, v, sx, sy, 0.07), MAT.SOLID];
   });
-  const drift = (x: number, z: number) => fbm(x * 0.25, z * 0.5, 14);
-  linePattern(ctx, (x, z) => z * 2.6 + Math.sin(x * 2.2 + z * 0.5) * 0.35, (base, sx, sy) => {
-    const g = ctx.view.ground(sx, sy)!;
-    if (drift(g.x, g.z) < 0.46 || ctx.ground.material(sx, sy) !== MAT.SOLID) return null;
-    const i = indexIn(S, base);
-    return i < 0 ? null : S[Math.min(S.length - 1, i + 1)];
-  }, 0.34);
-  scatter(ctx, 14, 23, (_x, _z, sx, sy, ppu, r) => {
-    if (r > 0.18 || ctx.ground.material(sx, sy) !== MAT.SOLID) return;
-    ctx.ground.set(sx, sy, SEA_ROCK[1]);
-    if (ppu > 30) ctx.ground.set(sx + 1, sy, SEA_ROCK[3]);
+  // Sand ripples: short crests in rows, lit on top with their shadow under them, in patches.
+  const rippled = (x: number, z: number) => fbm(x * 0.34 + 3, z * 0.5, 44);
+  scatter(ctx, 8, 61, (x, z, sx, sy, ppu, r) => {
+    const f = rippled(x, z);
+    if (z > 12 || f < 0.45 || r > (f - 0.45) * 5) return;
+    const len = ppu > 52 ? 7 + Math.round(r * 5) : ppu > 38 ? 5 + Math.round(r * 3) : 3;
+    rippleMark(ctx, sx, sy, len, [UW]);
   });
-  // Reefs looming out of the blue behind.
+  // Reefs looming out of the blue behind, the nearer ones darker, their crests catching the light.
   hills(ctx, [
-    { z: 16, height: 2.6, shades: ramp('#161f4c', '#1b2656', '#212e62', '#27366e'), freq: 0.5, rough: 0.8, seed: 5 },
-    { z: 13.8, height: 1.5, shades: ramp('#1b2556', '#243268', '#2e3f7c', '#3a4e90'), crest: hex('#4a60a2'), freq: 0.7, rough: 0.9, seed: 9 },
+    { z: 22, height: 3.6, shades: DEEP.slice(3, 6), crest: DEEP[6], freq: 0.3, rough: 0.6, seed: 5 },
+    { z: 16.8, height: 2.1, shades: DEEP.slice(1, 5), crest: DEEP[5], freq: 0.5, rough: 0.7, seed: 9 },
   ]);
-  // Kelp swaying, coral, rocks; light shafts from the surface far behind.
-  place(ctx, {
-    region: [-60, 300, 22, 112],
-    count: 14,
-    make: (ppu) => ({ sprite: kelp(ppu * ctx.rng.range(0.3, 0.6), ppu * ctx.rng.range(1, 2), KELP, KELP[0], ctx.rng.int(1, 1e6)), sway: ppu * 0.06 + 1 }),
+  // A kelp forest standing in the blue: dim silhouettes, dimmer the farther.
+  const farKelp = [];
+  for (let x = -18; x < 18; x += ctx.rng.range(1.6, 3.4)) {
+    // Clumps of a few fronds.
+    const z0 = ctx.rng.range(14.4, 18.5);
+    for (let k = ctx.rng.int(2, 4); k > 0; k--) {
+      const xx = x + ctx.rng.range(-0.5, 0.5), z = z0 + ctx.rng.range(-0.3, 0.3);
+      const ppu = view.ppu(view.depth(xx, 0, z));
+      const c = z > 16.4 ? DEEP[4] : DEEP[2];
+      farKelp.push({ sprite: seaweed(ppu * ctx.rng.range(0.2, 0.32), ppu * ctx.rng.range(1.2, 2.8), [c, c, c], null, ctx.rng.int(1, 1e6)), x: xx, z });
+    }
+  }
+  stand(ctx, farKelp, (c) => c);
+  // Light shafts from the surface, slanting down from the upper left through the far water onto the sand.
+  const shaftList = [
+    // Two in the view (one left of the wild Pokémon, one past it), more beyond for the intro's slide.
+    { x: 40, w: 16, lean: 0.42, bottom: 58, strength: 0.9, lift: 2 },
+    { x: 196, w: 11, lean: 0.42, bottom: 52, strength: 0.8, lift: 2 },
+  ];
+  for (let x = -250; x < 500; x += ctx.rng.range(70, 120)) if (x < 0 || x > 240) shaftList.push({ x, w: ctx.rng.range(9, 20), lean: 0.42, bottom: ctx.rng.range(44, 66), strength: ctx.rng.range(0.7, 0.95), lift: 2 });
+  const farWater = (sx: number, sy: number) => ctx.ground.material(sx, sy) === MAT.BACKDROP || (view.ground(sx, sy)?.z ?? 0) > 11;
+  shafts(ctx, shaftList, [DEEP, UW], farWater);
+  // Shells, pebbles and a starfish on the sand, sparse, clear of the battlers.
+  scatter(ctx, 15, 23, (x, z, sx, sy, ppu, r) => {
+    if (r > 0.14 || z > 12.2) return;
+    if (Math.hypot(x - ctx.enemy.x, z - ctx.enemy.z) < 1.3) return;
+    const g = ctx.ground;
+    if (r < 0.045 && ppu > 34) {
+      g.set(sx - 1, sy, SHELL[1]);
+      g.set(sx, sy, SHELL[2]);
+      g.set(sx + 1, sy, SHELL[1]);
+      g.set(sx, sy + 1, SHELL[0]);
+    } else {
+      g.set(sx, sy, UW[4]);
+      if (ppu > 30) g.set(sx + 1, sy, UW[8]);
+    }
   });
-  place(ctx, {
-    region: [-60, 300, 30, 112],
-    count: 9,
-    make: (ppu) => {
-      const c = CORAL[ctx.rng.int(0, CORAL.length - 1)];
-      return { sprite: coral(ppu * ctx.rng.range(0.5, 0.9), ppu * ctx.rng.range(0.45, 0.8), c, c[0], ctx.rng.int(1, 1e6)) };
-    },
+  // Reefs: rocks with coral growing on and around them, framing the sides (the
+  // biggest in the foreground at the left), none near the battlers.
+  const rockPal = { shades: UW_ROCK, outline: UW_ROCK[0] };
+  type Piece = { k: 'rock' | 'head' | 'stag' | 'fan' | 'anem' | 'star'; x: number; z: number; s: number; c?: number };
+  const pieces: Piece[] = [
+    // Foreground, left.
+    { k: 'fan', x: 2.75, z: 7.5, s: 0.62, c: 0 },
+    { k: 'rock', x: 2.5, z: 7.1, s: 1.3 },
+    { k: 'stag', x: 2.2, z: 7.25, s: 0.55, c: 1 },
+    { k: 'head', x: 2.85, z: 6.95, s: 0.45, c: 2 },
+    { k: 'rock', x: 2.0, z: 6.25, s: 0.7 },
+    { k: 'anem', x: 1.72, z: 6.55, s: 0.3, c: 0 },
+    { k: 'head', x: 1.85, z: 6.1, s: 0.34, c: 0 },
+    // Midground, left.
+    { k: 'rock', x: 3.1, z: 9.7, s: 1.0 },
+    { k: 'stag', x: 2.8, z: 9.95, s: 0.42, c: 2 },
+    { k: 'anem', x: 2.55, z: 9.5, s: 0.24, c: 2 },
+    { k: 'head', x: 2.2, z: 12.6, s: 0.4, c: 0 },
+    { k: 'fan', x: 1.4, z: 13.1, s: 0.45, c: 2 },
+    // Behind the enemy, far right.
+    { k: 'rock', x: -3.6, z: 11.8, s: 1.3 },
+    { k: 'fan', x: -3.2, z: 12.2, s: 0.5, c: 0 },
+    { k: 'stag', x: -4.0, z: 12.0, s: 0.5, c: 1 },
+    { k: 'head', x: -3.1, z: 11.7, s: 0.36, c: 2 },
+    { k: 'rock', x: -2.4, z: 13.4, s: 0.8 },
+    { k: 'anem', x: -2.1, z: 13.2, s: 0.26, c: 0 },
+    // On the sand.
+    { k: 'star', x: 1.55, z: 8.2, s: 0.28 },
+    { k: 'star', x: -2.6, z: 10.1, s: 0.26 },
+  ];
+  const standing = pieces.map((p) => {
+    const ppu = view.ppu(view.depth(p.x, 0, p.z));
+    const c = UW_CORAL[p.c ?? 0];
+    const seed = ctx.rng.int(1, 1e6);
+    const w = ppu * p.s;
+    switch (p.k) {
+      case 'rock': return { sprite: rock(w, w * 0.56, rockPal, seed), x: p.x, z: p.z, shadow: { rx: w * 0.62, ry: w * 0.13 } };
+      case 'head': return { sprite: coralHead(w * 1.2, w * 0.8, c, c[0], seed), x: p.x, z: p.z };
+      case 'stag': return { sprite: staghorn(w, w * 1.1, c, c[0], seed), x: p.x, z: p.z };
+      case 'fan': return { sprite: seaFan(w, w * 1.05, c, c[0], seed), x: p.x, z: p.z };
+      case 'anem': return { sprite: anemone(w * 1.3, w, c, c[0], seed), x: p.x, z: p.z };
+      default: return { sprite: starfish(w, STAR, seed), x: p.x, z: p.z };
+    }
   });
-  place(ctx, {
-    region: [-60, 300, 30, 112],
-    count: 5,
-    make: (ppu) => {
-      const w = ppu * ctx.rng.range(0.4, 0.9);
-      return { sprite: rock(w, w * 0.7, { shades: SEA_ROCK, outline: SEA_ROCK[0] }, ctx.rng.int(1, 1e6)), sink: 1 };
-    },
-  });
-  for (let i = 0; i < 6; i++) {
-    const x = ctx.rng.range(-9, 9), z = ctx.rng.range(12.8, 15.5);
-    const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-    addProp(ctx, { sprite: lightShaft(ppu * ctx.rng.range(0.5, 1), ppu * 5, hex('#5f82c4'), 0.55, i * 3.1), x, z });
+  stand(ctx, standing, darker([UW, UW_ROCK]));
+  // Seaweed swaying at the edges of the view and beyond, and a few fronds farther back.
+  const weed = (ppu: number, tall: number) => ({ sprite: seaweed(ppu * ctx.rng.range(0.3, 0.5), ppu * tall * ctx.rng.range(0.8, 1.2), UW_WEED.slice(1, 4), UW_WEED[0], ctx.rng.int(1, 1e6)), sway: ppu * 0.05 + 1 });
+  // Framing the view: fronds at its left and right edges, cropped by the frame.
+  frameProp(ctx, 2, 84, -1, (ppu) => weed(ppu, 2.3));
+  frameProp(ctx, 12, 64, -1, (ppu) => weed(ppu, 1.7));
+  frameProp(ctx, 232, 70, 1, (ppu) => weed(ppu, 2.4));
+  frameProp(ctx, 238, 52, 1, (ppu) => weed(ppu, 1.9));
+  place(ctx, { region: [-240, -10, 30, 112], count: 10, make: (ppu) => weed(ppu, 1.7) });
+  place(ctx, { region: [250, 480, 30, 112], count: 10, make: (ppu) => weed(ppu, 1.7) });
+  for (const [sx, sy] of [[28, 30], [214, 24], [104, 22]] as const) {
+    const g = view.ground(sx, sy)!;
+    addProp(ctx, { x: g.x, z: g.z, ...weed(g.ppu, 1.2) });
   }
 }
 

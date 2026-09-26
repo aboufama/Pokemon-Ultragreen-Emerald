@@ -283,6 +283,170 @@ export function kelp(w: number, h: number, shades: Ramp, outlineColor: Rgb, seed
   return s;
 }
 
+/**
+ * Seaweed: a few ribbon fronds waving up from the floor, each a flat blade
+ * that twists as it rises (lit edge on the left, shaded on the right, the
+ * blade's face showing where it turns toward the light), tapering to its tip.
+ * With a one-color ramp it is a silhouette far off in the blue.
+ */
+export function seaweed(w: number, h: number, shades: Ramp, outlineColor: Rgb | null, seed: number): Sprite {
+  const rng = new Rng(seed);
+  const kw = Math.max(3, Math.round(w)), kh = Math.max(6, Math.round(h));
+  const s = createSprite(kw + 8, kh + 2);
+  const n = Math.max(1, Math.min(3, Math.round(kw / 3.5)));
+  const top = shades.length - 1;
+  for (let i = 0; i < n; i++) {
+    const x0 = 4 + ((i + 0.5) / n) * kw + rng.range(-0.6, 0.6);
+    const sh = kh * rng.range(0.6, 1);
+    const ph = rng.range(0, 6), amp = rng.range(1, 2.2), per = rng.range(0.1, 0.16);
+    const bw = Math.max(1.5, Math.min(4, kw / n)) * rng.range(0.8, 1.1);
+    for (let k = 0; k < sh; k++) {
+      const t = k / sh;
+      const cx = x0 + Math.sin(k * per + ph) * amp * (0.35 + t);
+      // The blade twists: its width breathes, and it faces the light where the wave bends left.
+      const twist = Math.cos(k * per * 1.7 + ph);
+      const half = Math.max(0.5, (bw / 2) * (1 - t * 0.55) * (0.55 + 0.45 * Math.abs(twist)));
+      const y = s.h - 1 - k;
+      const xa = Math.round(cx - half), xb = Math.round(cx + half);
+      for (let x = xa; x <= xb; x++) {
+        const face = twist > 0.3 ? top : top - 1;
+        put(s, x, y, shades[x === xa ? top : x === xb && xb > xa ? 0 : Math.max(0, Math.min(top, face))]);
+      }
+    }
+  }
+  if (outlineColor) outline(s, outlineColor, { bottom: false });
+  return s;
+}
+
+/** A coral head: a mound of round lumps in coral colors, pocked with polyps, a few fingers on top. */
+export function coralHead(w: number, h: number, shades: Ramp, outlineColor: Rgb, seed: number): Sprite {
+  const rng = new Rng(seed);
+  const cw = Math.max(6, Math.round(w)), ch = Math.max(4, Math.round(h));
+  const s = createSprite(cw + 2, ch + 2);
+  const list: Lump[] = [];
+  const n = cw < 10 ? 2 : cw < 18 ? 3 : 4;
+  for (let i = 0; i < n; i++) {
+    const r = (cw / n) * rng.range(0.6, 0.75);
+    list.push({ cx: 1 + ((i + 0.5) / n) * cw + rng.range(-1, 1), cy: 1 + ch - r * rng.range(0.7, 0.95), r });
+  }
+  list.push({ cx: 1 + cw * rng.range(0.35, 0.65), cy: 1 + ch * 0.45, r: Math.min(cw, ch) * 0.38 });
+  list.sort((a, b) => a.cy - b.cy);
+  lumps(s, list, shades, seed, 0.02);
+  // Polyps: a sprinkle of dark pits and light rims on the lit side.
+  for (let k = 0; k < (cw * ch) / 14; k++) {
+    const x = rng.int(1, cw), y = rng.int(1, ch);
+    if (!opaque(s, x, y) || !opaque(s, x + 1, y) || !opaque(s, x, y + 1)) continue;
+    put(s, x, y, shades[0]);
+    put(s, x + 1, y + 1, shades[shades.length - 1]);
+  }
+  for (let y = ch + 1; y < s.h; y++) for (let x = 0; x < s.w; x++) s.data[(y * s.w + x) * 4 + 3] = 0;
+  outline(s, outlineColor, { bottom: false });
+  return s;
+}
+
+/** Staghorn coral: thick branches forking upward with rounded tips, lit on the left. */
+export function staghorn(w: number, h: number, shades: Ramp, outlineColor: Rgb, seed: number): Sprite {
+  const rng = new Rng(seed);
+  const cw = Math.max(6, Math.round(w)), chh = Math.max(6, Math.round(h));
+  const s = createSprite(cw + 4, chh + 3);
+  const top = shades.length - 1;
+  const thick = Math.max(1, Math.round(cw / 9));
+  const branch = (x: number, y: number, ang: number, len: number, depth: number) => {
+    for (let i = 0; i < len; i++) {
+      x += Math.sin(ang) * 0.9;
+      y -= Math.cos(ang) * 0.9;
+      for (let d = -thick; d <= thick; d++) {
+        const px = Math.round(x + d), py = Math.round(y);
+        put(s, px, py, shades[d < 0 ? top : d > 0 || thick === 0 ? Math.max(0, top - 2) : top - 1]);
+      }
+      ang += rng.range(-0.06, 0.06);
+    }
+    if (depth > 0 && len > 2) {
+      branch(x, y, ang - rng.range(0.35, 0.65), len * rng.range(0.55, 0.75), depth - 1);
+      branch(x, y, ang + rng.range(0.35, 0.65), len * rng.range(0.55, 0.75), depth - 1);
+    } else {
+      // A pale rounded tip.
+      put(s, Math.round(x), Math.round(y) - 1, shades[top]);
+    }
+  };
+  const n = cw > 14 ? 3 : 2;
+  for (let i = 0; i < n; i++) branch(2 + ((i + 0.5) / n) * cw, s.h - 1, (i - (n - 1) / 2) * 0.45 + rng.range(-0.1, 0.1), chh * 0.42, 2);
+  outline(s, outlineColor, { bottom: false });
+  return s;
+}
+
+/** A sea fan: a flat fan of lattice on a short stalk, facing the viewer. */
+export function seaFan(w: number, h: number, shades: Ramp, outlineColor: Rgb, seed: number): Sprite {
+  const rng = new Rng(seed);
+  const fw = Math.max(6, Math.round(w)), fh = Math.max(6, Math.round(h));
+  const s = createSprite(fw + 2, fh + 2);
+  const cx = 1 + fw / 2, base = s.h - 1;
+  const top = shades.length - 1;
+  const ph = rng.range(0, 6);
+  for (let y = 0; y < s.h; y++) {
+    for (let x = 0; x < s.w; x++) {
+      const dx = (x + 0.5 - cx) / (fw / 2), dy = (base - y - 0.5) / fh;
+      const r = Math.hypot(dx, dy * 1.05);
+      if (dy < 0.12) {
+        if (Math.abs(x + 0.5 - cx) < 1) put(s, x, y, shades[1]);
+        continue;
+      }
+      if (r > 0.98 + Math.sin(Math.atan2(dy, dx) * 9 + ph) * 0.04) continue;
+      // Ribs fanning out from the stalk, crossed by rings: a lattice with holes.
+      const a = Math.atan2(dy, dx) * 7, ring = r * 7;
+      const rib = Math.abs(a - Math.round(a)) < 0.18, hoop = Math.abs(ring - Math.round(ring)) < 0.2;
+      if (!rib && !hoop && r > 0.25) continue;
+      put(s, x, y, shades[dx < -0.2 ? top : dx > 0.3 ? 1 : top - 1]);
+    }
+  }
+  outline(s, outlineColor, { bottom: false });
+  return s;
+}
+
+/** A sea anemone: a squat column with a crown of soft tentacles, tips lit. */
+export function anemone(w: number, h: number, shades: Ramp, outlineColor: Rgb, seed: number): Sprite {
+  const rng = new Rng(seed);
+  const aw = Math.max(5, Math.round(w)), ah = Math.max(4, Math.round(h));
+  const s = createSprite(aw + 4, ah + 2);
+  const top = shades.length - 1;
+  const n = Math.max(3, Math.round(aw / 1.6));
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    const x0 = 2 + t * aw;
+    const lean = (t - 0.5) * 2 * rng.range(0.6, 1.2);
+    const len = ah * rng.range(0.7, 1) * (1 - Math.abs(t - 0.5) * 0.6);
+    for (let k = 0; k < len; k++) {
+      const u = k / len;
+      const x = Math.round(x0 + lean * u * u * ah * 0.4), y = s.h - 1 - k;
+      put(s, x, y, u > 0.75 ? shades[top] : shades[t < 0.45 ? top - 1 : Math.max(0, top - 2)]);
+    }
+  }
+  outline(s, outlineColor, { bottom: false });
+  return s;
+}
+
+/** A starfish lying on the sand: five arms, a lit upper-left half, a pale middle. */
+export function starfish(size: number, shades: Ramp, seed: number): Sprite {
+  const rng = new Rng(seed);
+  const d = Math.max(5, Math.round(size));
+  const s = createSprite(d + 2, Math.max(4, Math.round(d * 0.6)) + 2);
+  const cx = s.w / 2, cy = s.h / 2, rx = d / 2, ry = (s.h - 2) / 2;
+  const rot = rng.range(0, Math.PI * 2);
+  for (let y = 0; y < s.h; y++) {
+    for (let x = 0; x < s.w; x++) {
+      const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+      const r = Math.hypot(dx, dy), a = Math.atan2(dy, dx) + rot;
+      // Arms: the radius swells five times around.
+      const arm = 0.38 + 0.62 * Math.pow(Math.abs(Math.cos((a * 5) / 2)), 3);
+      if (r > arm) continue;
+      const lit = -dx * 0.5 - dy * 0.7 > 0 ? 1 : 0;
+      put(s, x, y, shades[r < 0.25 ? shades.length - 1 : 1 + lit]);
+    }
+  }
+  outline(s, shades[0], { bottom: false });
+  return s;
+}
+
 /** Branching coral. */
 export function coral(w: number, h: number, shades: Ramp, outlineColor: Rgb, seed: number): Sprite {
   const rng = new Rng(seed);
