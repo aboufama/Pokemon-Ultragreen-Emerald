@@ -5,7 +5,8 @@
 //
 // Writes src/pokemon/<slug>/calibration.json (species fit), and with
 // --fitCamera also src/data/battle_camera.json (global battle camera).
-// A report screenshot goes to reference/calibration/<slug>.png.
+// A report screenshot goes to reference/calibration/<slug>.png; with --dry
+// nothing tracked is written (the report goes to build/calibration/<slug>.png).
 
 import { chromium } from 'playwright';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -35,8 +36,9 @@ if (phase === 'color') {
   result = await page.evaluate(() => window.calibrate.run());
 }
 if (phase !== 'color') console.log(JSON.stringify(result, null, 2));
-await mkdir(resolve(ROOT, 'reference/calibration'), { recursive: true });
-await page.screenshot({ path: resolve(ROOT, `reference/calibration/${slug}.png`) });
+const reports = resolve(ROOT, args.dry ? 'build/calibration' : 'reference/calibration');
+await mkdir(reports, { recursive: true });
+await page.screenshot({ path: resolve(reports, `${slug}.png`) });
 await browser.close();
 
 if (!args.dry) {
