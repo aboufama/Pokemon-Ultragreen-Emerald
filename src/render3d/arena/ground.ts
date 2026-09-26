@@ -6,7 +6,8 @@
 // The ground's life is computed per GBA pixel (at the pixel's own ground
 // point) so it stays crisp: grass leaning and rippling in the wind, waves
 // drifting across water with glints and ripples at the battlers' feet,
-// churning lava, caustics on the sea floor, and cloud shadows.
+// churning lava, caustics on the sea floor, heat haze over the far view,
+// and cloud shadows.
 
 import * as THREE from 'three';
 import { MAT, type Paint } from './art';
@@ -33,6 +34,7 @@ const fragmentShader = /* glsl */ `
   uniform float clouds;
   uniform float glints;
   uniform float caustics;
+  uniform float haze;
   uniform vec3 arena;
   uniform vec3 waveLight;
   uniform vec3 waveDark;
@@ -151,6 +153,14 @@ const fragmentShader = /* glsl */ `
       float k = abs(sin(p.x + time * 0.9 + sin(p.y * 1.3 + time * 0.6)) + sin(p.y * 1.1 - time * 0.7 + sin(p.x * 0.9)));
       if (k < 0.2 * near && bayer(screen) < 0.7) c = min(c * 1.12 + 0.03, 1.0);
     }
+    if (haze > 0.0 && mat == ${MAT.BACKDROP}) {
+      // Heat haze: rows of the far view wobble a pixel, in bands drifting up.
+      float wob = sin(screen.y * 1.7 + time * 5.0) * sin(screen.y * 0.31 - time * 1.3 + screen.x * 0.02);
+      if (abs(wob) > 0.55) {
+        vec4 n = painted(screen + vec2(wob > 0.0 ? 1.0 : -1.0, 0.0));
+        if (materialOf(n) == ${MAT.BACKDROP}) c = n.rgb;
+      }
+    }
     if (clouds > 0.0 && mat != ${MAT.BACKDROP}) {
       // Cloud shadows drifting with the wind across the arena, edges dithered.
       float n = noise(w.xz * 0.11 + windOffset) * 0.7 + noise(w.xz * 0.3 + windOffset * 1.7) * 0.3;
@@ -197,6 +207,7 @@ export class ArenaGround {
         clouds: { value: 0 },
         glints: { value: 0 },
         caustics: { value: 0 },
+        haze: { value: 0 },
         arena: { value: new THREE.Vector3(0, 0, 1000) },
         waveLight: { value: rgb(look.waveLight, [240, 248, 255]) },
         waveDark: { value: rgb(look.waveDark, [40, 80, 160]) },

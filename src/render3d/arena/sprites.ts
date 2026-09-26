@@ -164,6 +164,43 @@ export function tallGrass(w: number, h: number, pal: GrassPalette, seed: number,
   return s;
 }
 
+/**
+ * A dry desert shrub: thin twigs fanning up from the sand, forking, tufts of
+ * dusty leaves at their tips, lit on the left.
+ */
+export function shrub(w: number, h: number, twig: Ramp, leaves: Ramp, seed: number): Sprite {
+  const rng = new Rng(seed);
+  const sw = Math.max(5, Math.round(w)), sh = Math.max(4, Math.round(h));
+  const s = createSprite(sw + 4, sh + 3);
+  const tips: [number, number][] = [];
+  const branch = (x: number, y: number, ang: number, len: number, depth: number) => {
+    for (let i = 0; i < len; i++) {
+      x += Math.sin(ang);
+      y -= Math.cos(ang);
+      put(s, Math.round(x), Math.round(y), twig[ang < 0 ? twig.length - 1 : 0]);
+    }
+    if (depth > 0) {
+      branch(x, y, ang - rng.range(0.3, 0.6), len * 0.6, depth - 1);
+      branch(x, y, ang + rng.range(0.3, 0.6), len * 0.6, depth - 1);
+    } else tips.push([x, y]);
+  };
+  const n = sw > 10 ? 4 : 3;
+  for (let i = 0; i < n; i++) branch(2 + sw / 2 + rng.range(-1, 1), s.h - 1, ((i + 0.5) / n - 0.5) * 1.6, sh * 0.45, 1);
+  const top = leaves.length - 1;
+  for (const [tx, ty] of tips) {
+    const r = Math.max(1, sw * 0.12);
+    for (let y = Math.floor(ty - r); y <= ty + r; y++) {
+      for (let x = Math.floor(tx - r); x <= tx + r; x++) {
+        const d = Math.hypot(x + 0.5 - tx, (y + 0.5 - ty) * 1.2) / r;
+        if (d > 1 || hash2(x, y, seed) < 0.15) continue;
+        put(s, x, y, leaves[Math.max(0, Math.min(top, Math.round(sphereLight(x, y, tx, ty, r) * (top + 0.3))))]);
+      }
+    }
+  }
+  outline(s, twig[0], { bottom: false });
+  return s;
+}
+
 /** A few short blades (a tuft of grass or weeds), no outline. */
 export function tuft(h: number, pal: GrassPalette, seed: number): Sprite {
   const rng = new Rng(seed);
