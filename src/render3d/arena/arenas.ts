@@ -522,8 +522,12 @@ function sea(ctx: ArenaContext): void {
     const d = deep(g.x, g.z);
     if (d < 0) v -= 1.4;
     else if (d < 1.3 / g.ppu + 0.03) v += 0.9;
-    if (crestAt(sx, sy)) v += far > 0.5 ? 1 : 1.6;
-    else if (crestAt(sx, sy - 1)) v -= 1;
+    if (crestAt(sx, sy)) {
+      // Now and then a crest breaks white, out in the open water.
+      const row = Math.floor(wave(g.x, g.z)), seg = Math.floor(g.x / 0.7);
+      if (g.z > 9.5 && g.z < 18 && calm(g.x, g.z) < 0.2 && hash2(row, seg, 77) < 0.14) return [W[8], MAT.WATER];
+      v += far > 0.5 ? 1 : 1.6;
+    } else if (crestAt(sx, sy - 1)) v -= 1;
     return [band(W, v, sx, sy, 0.12), MAT.WATER];
   });
   // A path of sparkles toward the sun (up and to the left), thickest far off.
