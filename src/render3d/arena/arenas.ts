@@ -649,12 +649,10 @@ function seafloor(ctx: ArenaContext): void {
   stand(ctx, farKelp, (c) => c);
   // Light shafts from the surface, slanting down from the upper left through the far water onto the sand.
   const shaftList = [
-    // Two in the view where it shows them (between the wild Pokémon's healthbox and the wild Pokémon,
-    // and past its right), more beyond for the intro's slide.
+    // Two in the view where it shows them: between the wild Pokémon's healthbox and the wild Pokémon, and past its right.
     { x: 88, w: 15, lean: 0.42, bottom: 54, strength: 0.9, lift: 2 },
     { x: 206, w: 12, lean: 0.42, bottom: 46, strength: 0.8, lift: 2 },
   ];
-  for (let x = -250; x < 500; x += ctx.rng.range(70, 120)) if (x < 0 || x > 240) shaftList.push({ x, w: ctx.rng.range(9, 20), lean: 0.42, bottom: ctx.rng.range(44, 66), strength: ctx.rng.range(0.7, 0.95), lift: 2 });
   const farWater = (sx: number, sy: number) => ctx.ground.material(sx, sy) === MAT.BACKDROP || (view.ground(sx, sy)?.z ?? 0) > 11;
   shafts(ctx, shaftList, [DEEP, UW], farWater);
   // Shells, pebbles and a starfish on the sand, sparse, clear of the battlers.
@@ -1248,7 +1246,7 @@ function tower(ctx: ArenaContext): void {
     streak(cx - 1, cx, s0, s1 - s0, 1);
   }
 
-  // The lamp posts at the edges of the view (and beyond, for the intro's slide), mirrored below them.
+  // The lamp posts at the edges of the view, mirrored below them.
   const metal = ramp('#52526a', '#737383', '#9494a4', '#cdbdc5', '#ded5e6', '#ffffff');
   for (const [x, z] of [[3.0, 9.4], [-3.45, 11.6], [court.x0 - 0.5, 7.4], [court.x1 + 0.7, 6.4], [court.x1 + 1.4, 12.2], [court.x0 - 1.4, 12.4]] as const) {
     const ppu = view.ppu(view.depth(x, 0, z));

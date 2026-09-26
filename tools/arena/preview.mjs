@@ -5,8 +5,7 @@
 //
 //   node tools/arena/preview.mjs [arena,arena|all] [--wide] [--boxes] [--scale 3] [--out build/arenas]
 //
-//   --wide    the whole painted area (three screens wide: the intro slide; the
-//             camera shake's margins above and below)
+//   --wide    the whole painted area (the screen and the camera shake's margins)
 //   --boxes   outline the battlers' boxes (props never enter them) and dim what
 //             the healthboxes and the text box cover
 //
@@ -14,9 +13,9 @@
 // browser too (/?mode=stage&env=<arena>): the ground's life, the Pokémon and
 // their shadows are only there.
 
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import sharp from 'sharp';
+import { deflateSync } from 'node:zlib';
 import { importTs } from '../gauntlet/tsimport.mjs';
 import { ROOT } from '../gauntlet/species.mjs';
 
@@ -82,11 +81,44 @@ function overlay(ctx, img, x0, y0, w, h) {
   }
 }
 
+const CRC = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+const crc32 = (buf) => {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+};
+const chunk = (type, data) => {
+  const out = Buffer.alloc(12 + data.length);
+  out.writeUInt32BE(data.length, 0);
+  out.write(type, 4, 'ascii');
+  data.copy(out, 8);
+  out.writeUInt32BE(crc32(out.subarray(4, 8 + data.length)), 8 + data.length);
+  return out;
+};
+
+/** Write RGBA pixels as a PNG, each pixel `scale` x `scale` (nearest neighbor). */
 async function save(img, w, h, path) {
-  await sharp(Buffer.from(img.buffer), { raw: { width: w, height: h, channels: 4 } })
-    .resize(w * scale, h * scale, { kernel: 'nearest' })
-    .png()
-    .toFile(path);
+  const W = w * scale, H = h * scale;
+  const raw = Buffer.alloc(H * (W * 4 + 1));
+  for (let y = 0; y < H; y++) {
+    const row = y * (W * 4 + 1);
+    for (let x = 0; x < W; x++) {
+      const i = (Math.floor(y / scale) * w + Math.floor(x / scale)) * 4;
+      raw[row + 1 + x * 4] = img[i];
+      raw[row + 2 + x * 4] = img[i + 1];
+      raw[row + 3 + x * 4] = img[i + 2];
+      raw[row + 4 + x * 4] = img[i + 3];
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(W, 0);
+  header.writeUInt32BE(H, 4);
+  header.set([8, 6, 0, 0, 0], 8);
+  await writeFile(path, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]));
 }
 
 for (const name of names) {

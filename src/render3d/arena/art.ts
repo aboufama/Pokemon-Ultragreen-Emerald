@@ -165,8 +165,8 @@ export function opaque(s: Sprite, x: number, y: number): boolean {
 
 /**
  * The painted ground: GBA screen pixels from (ox, oy), wider and taller than
- * the screen so the intro slide and camera shake find ground beyond the
- * edges. Color in RGB, material in A.
+ * the screen so the camera shake finds ground beyond the edges. Color in
+ * RGB, material in A.
  */
 export class Paint {
   readonly data: Uint8ClampedArray;
