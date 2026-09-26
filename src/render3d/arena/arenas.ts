@@ -4,7 +4,7 @@
 // Battle Tower's yellow grid floor). No platforms: the Pokémon stand on the
 // ground itself, with their shadows.
 
-import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, cells, fbm, hash2, hex, noise, ramp, smoothstep } from './art';
+import { MAT, type Ramp, type Rgb, type Sprite, band, bayer, cells, fbm, hash2, hex, mix, noise, ramp, smoothstep } from './art';
 import { type ArenaContext, type ArenaDesign, addProp, at, darker, dunes, fill, frameProp, hills, onLine, scatter, shafts, shift, stand } from './design';
 import { anemone, bush, coralHead, crag, lampPost, shrub, wisp, seaFan, staghorn, reeds, rock, seaweed, stalagmite, starfish, tallGrass, tree } from './sprites';
 
@@ -14,59 +14,47 @@ const BLADES = ramp('#398b31', '#83c562', '#b4ff83');
 const LEAVES = ramp('#1d5a20', '#398b31', '#5ea846', '#83c562', '#b4ff83');
 const TREE_OUTLINE = hex('#233f0c');
 const TRUNK = ramp('#413931', '#6a5a5a', '#9c7373');
+// Route flowers: petals and their middles.
 const FLOWERS: Rgb[][] = [
-  [hex('#e8505a'), hex('#ffd89c')], // red, yellow middle
+  [hex('#e8505a'), hex('#ffd89c')], // red
   [hex('#f8f8f8'), hex('#ffe070')], // white
   [hex('#f0a0c8'), hex('#fff0a0')], // pink
+  [hex('#f8d838'), hex('#f89830')], // yellow
 ];
-
-const PATH = ramp('#b98f4c', '#cda462', '#decd83', '#eee6a4');
+const PATH = ramp('#9c7b4a', '#b98f4c', '#cda462', '#decd83', '#eee6a4');
+/** The sky's haze the far trees fade toward. */
+const HAZE = hex('#c8ecf0');
 
 interface MeadowOptions {
   grass: typeof MEADOW;
   blades: typeof BLADES;
   leaves: typeof LEAVES;
+  /** Flower beds. */
   flowers?: number;
   /** Where the tree line starts (z). */
   treeLine?: number;
+  /** Clumps of tall grass (props) around the sides. */
   tallGrass?: number;
+  /** Taller clumps of tall grass (1 = knee high). */
+  tallGrassHeight?: number;
   /** A sandy path across the field behind the wild Pokémon. */
   path?: boolean;
   /** A pond behind the wild Pokémon (world center and radii). */
   pond?: { x: number; z: number; rx: number; rz: number };
-  /** Rain puddles scattered in the grass. */
-  puddles?: number;
-  /** Taller clumps of tall grass (1 = knee high). */
-  tallGrassHeight?: number;
+  /** Rain puddles (world center and radius), clear of the battlers. */
+  puddles?: { x: number; z: number; r: number }[];
 }
 
-// Pond water (Hoenn's fresh water): deep edge to sunlit middle.
-const POND = ramp('#2b4c8a', '#3f67a8', '#4f86c8', '#63a6e6', '#7cc0f4', '#a6daf8');
+// Pond water (Hoenn's fresh water), deepest shade first; its banks' wet earth.
+const POND = ramp('#1f3a70', '#2b4c8a', '#3f67a8', '#4f86c8', '#63a6e6', '#7cc0f4', '#a6daf8', '#d8f0fc');
+const BANK = ramp('#3a4a2a', '#5a6a3a', '#7b8b4a');
+const REFLECT = ramp('#1f4a4a', '#2a6058', '#3c7a62');
 const LILY = ramp('#2d6a1f', '#4f9a33', '#83c562');
 const REED_STEM = ramp('#2d5a1a', '#4a8a2a', '#83b552');
 const REED_HEAD = ramp('#5a3a21', '#8a5a31');
 
 /** Index of a color in a ramp (-1 if absent). */
 const indexIn = (r: readonly Rgb[], c: Rgb | null) => (c ? r.findIndex((k) => k[0] === c[0] && k[1] === c[1] && k[2] === c[2]) : -1);
-
-/** A 1-2 row mark ("v" of two blades, or a dot far away) sized for its distance. */
-function grassMark(ctx: ArenaContext, sx: number, sy: number, ppu: number, dark: Rgb, light: Rgb | null, mat: number): void {
-  const g = ctx.ground;
-  if (ppu < 24) {
-    g.set(sx, sy, dark, mat);
-  } else if (ppu < 44) {
-    g.set(sx - 1, sy - 1, dark, mat);
-    g.set(sx + 1, sy - 1, dark, mat);
-    g.set(sx, sy, dark, mat);
-  } else {
-    g.set(sx - 2, sy - 2, dark, mat);
-    g.set(sx - 1, sy - 1, dark, mat);
-    g.set(sx + 1, sy - 2, dark, mat);
-    g.set(sx + 1, sy - 1, dark, mat);
-    g.set(sx, sy, dark, mat);
-    if (light) g.set(sx, sy - 2, light, mat);
-  }
-}
 
 /**
  * A short sand ripple: a crest arching a pixel up in the middle, a shade
@@ -87,150 +75,253 @@ function rippleMark(ctx: ArenaContext, sx: number, sy: number, len: number, ramp
   }
 }
 
-/** A Hoenn route meadow: mint grass in soft patches, little blade marks, flowers, a path, a tree line behind. */
+/**
+ * Grass blades along a border: the height (pixels) a blade of the nearer
+ * grass pokes up into the farther at column sx, blades a few pixels wide and
+ * of random heights, taller near the camera.
+ */
+function bladeTooth(sx: number, ppu: number): number {
+  const max = ppu > 56 ? 3 : ppu > 40 ? 2 : ppu > 26 ? 1 : 0;
+  if (!max) return 0;
+  const b = Math.floor(sx / 4), u = sx - b * 4;
+  const h = 1 + Math.floor(hash2(b, 3, 71) * max);
+  return Math.round(h * (1 - Math.abs(u - 1.5) / 2));
+}
+
+/** A mix of each color of a ramp toward another color (for haze and tints). */
+const tint = (r: Ramp, c: Rgb, t: number): Ramp => r.map((k) => mix(k, c, t));
+
+/**
+ * A Hoenn route meadow: mint grass in patches whose borders are drawn as
+ * blades, lit over the battle and shaded toward the sides and under the trees
+ * (sun flecks through their leaves); blade tufts, clover and flower beds in
+ * clusters, big tufts and flowers framing the left; a path, a pond or rain
+ * puddles; round trees in rows behind, the far ones hazy.
+ */
 function meadow(ctx: ArenaContext, o: MeadowOptions): void {
+  const { view, ground } = ctx;
   const G = o.grass;
+  const line = o.treeLine ?? 15.2;
+  const cx = (ctx.player.x + ctx.enemy.x) / 2, cz = (ctx.player.z + ctx.enemy.z) / 2 + 1.2;
+  // --- where things are ---
   const pathZ = (x: number) => 12.6 + Math.sin(x * 0.21 + 1.3) * 1.2 + Math.sin(x * 0.53) * 0.3;
-  const pathHalf = 1.25;
-  const onPath = (x: number, z: number) => (o.path ? Math.abs(z - pathZ(x)) - pathHalf : 1);
-  // Water: the pond (a blob with a wobbly shore) and puddles.
+  const pathHalf = 1.1 + 0.15 * Math.sin(0.7);
+  const onPath = (x: number, z: number) => (o.path ? Math.abs(z - pathZ(x)) - (pathHalf + Math.sin(x * 1.7) * 0.08) : 1);
   const pondD = (x: number, z: number) => {
     if (!o.pond) return 1;
     const p = o.pond;
     const a = Math.atan2(z - p.z, x - p.x);
-    const wob = 1 + Math.sin(a * 3 + 1.1) * 0.08 + Math.sin(a * 5 + 0.4) * 0.05;
+    const wob = 1 + Math.sin(a * 3 + 1.1) * 0.07 + Math.sin(a * 5 + 0.4) * 0.04;
     return Math.hypot((x - p.x) / p.rx, (z - p.z) / p.rz) - wob;
   };
-  const puddles: { x: number; z: number; r: number }[] = [];
-  for (let i = 0; i < (o.puddles ?? 0); i++) {
-    const c = at(ctx, ctx.rng.range(-100, 340), ctx.rng.range(28, 112));
-    if (Math.hypot(c.x - ctx.enemy.x, c.z - ctx.enemy.z) < 1.2 || Math.hypot(c.x - ctx.player.x, c.z - ctx.player.z) < 1.5) continue;
-    puddles.push({ x: c.x, z: c.z, r: ctx.rng.range(0.35, 0.75) });
-  }
+  const puddles = o.puddles ?? [];
   const puddleD = (x: number, z: number) => {
     let d = 1;
-    for (const p of puddles) d = Math.min(d, Math.hypot((x - p.x) / p.r, (z - p.z) / (p.r * 0.7)) - 1 + Math.sin(Math.atan2(z - p.z, x - p.x) * 4 + p.x) * 0.12);
+    for (const p of puddles) {
+      const a = Math.atan2(z - p.z, x - p.x);
+      d = Math.min(d, Math.hypot((x - p.x) / p.r, (z - p.z) / (p.r * 0.85)) - 1 + Math.sin(a * 3 + p.x * 2) * 0.1 + Math.sin(a * 5 + p.z) * 0.06);
+    }
     return d;
   };
+  const water = (x: number, z: number) => Math.min(pondD(x, z), puddleD(x, z));
+  // --- light ---
+  /** Grass tone before its patches: lit over the battle, darker to the sides, in the trees' shade at the back (with sun flecks). */
+  const grassTone = (x: number, z: number) => {
+    const pool = 1 - smoothstep(0.35, 1.3, Math.hypot((x - cx) / 3.6, (z - cz) / 5.2));
+    const shade = smoothstep(line - 2.2, line - 0.6, z);
+    const fleck = shade > 0.3 && fbm(x * 1.2, z * 2.2, 57) > 0.64 ? 1 : 0;
+    const patch = fbm(x * 0.2, z * 0.34, 11);
+    const p = patch > 0.66 ? 1 : patch < 0.38 ? -1 : 0;
+    return 2.4 + pool * 1.7 + p * 0.7 - shade * 1.7 + fleck * 1.4;
+  };
   fill(ctx, (sx, sy, g) => {
-    const w = Math.min(pondD(g.x, g.z), puddleD(g.x, g.z));
+    const w = water(g.x, g.z);
     if (w < 0) {
-      // Deeper toward the middle; the far bank's shadow on the water.
-      const v = 2.2 + Math.min(1.6, -w * 3) + (fbm(g.x * 0.5, g.z * 0.9, 31) - 0.5) * 0.8;
-      const farBank = !!o.pond && g.z > o.pond.z && w > -0.12;
-      return [band(POND, farBank ? 0.6 : v, sx, sy, 0.3), MAT.WATER];
+      const pond = pondD(g.x, g.z) < 0 && o.pond;
+      if (pond) {
+        const p = o.pond!;
+        // The far bank's trees mirrored along the far water, scalloped; the sky on the open water, darker toward the banks.
+        const farEdge = -pondD(g.x, g.z);
+        const inFar = g.z > p.z && farEdge < 0.32 + Math.abs(Math.sin(g.x * 2.3) + Math.sin(g.x * 5.1) * 0.4) * 0.07;
+        if (inFar) return [REFLECT[farEdge < 0.08 ? 0 : farEdge < 0.2 ? 1 : 2], MAT.WATER];
+        const v = 3 + Math.min(2.4, -w * 5) + (fbm(g.x * 0.6, g.z * 1.4, 31) - 0.5) * 0.9;
+        return [band(POND, v, sx, sy, 0.15), MAT.WATER];
+      }
+      // A puddle: the grass of its far rim mirrored dark along the top, sky on the rest, a pale streak.
+      const d = -puddleD(g.x, g.z);
+      const up2 = view.ground(sx, sy - 2), up4 = view.ground(sx, sy - 4);
+      if (up2 && puddleD(up2.x, up2.z) >= 0) return [REFLECT[1], MAT.WATER];
+      if (up4 && puddleD(up4.x, up4.z) >= 0) return [POND[3], MAT.WATER];
+      const streak = Math.abs(((g.x - g.z * 0.6) * 3.1) % 1) < 0.12 && d > 0.25;
+      return [streak ? POND[7] : band(POND, 5 + Math.min(1.4, d * 3), sx, sy, 0.2), MAT.WATER];
     }
-    if (w < 1.4 / g.ppu + 0.03) return [G[1], MAT.SOLID];
+    // Blades of the nearer grass poke up over the near edges of the path and the banks.
+    const t = bladeTooth(sx, g.ppu);
+    const q = t ? view.ground(sx, sy + t)! : g;
+    const qIsGrass = water(q.x, q.z) >= 0.07 + 1.4 / q.ppu && onPath(q.x, q.z) >= 0;
+    if (t && qIsGrass && (w < 0.07 + 1.4 / g.ppu || onPath(g.x, g.z) < 0)) return [band(G, grassTone(q.x, q.z), sx, sy, 0.06), MAT.GRASS];
+    // Banks: wet earth around the water.
+    if (w < 0.07 + 1.4 / g.ppu) return [BANK[w < 0.04 ? 0 : 1], MAT.SOLID];
     const d = onPath(g.x, g.z);
     if (d < 0) {
-      // Sand, lighter along the middle, with a darker rim where it meets the grass.
-      const px = 1 / g.ppu;
-      if (d > -px * 1.2) return [PATH[1], MAT.SOLID];
-      const v = 2.2 + (fbm(g.x * 0.8, g.z * 0.8, 21) - 0.5) * 1.6 + (d < -pathHalf * 0.55 ? 0.6 : 0);
-      return [band(PATH, v, sx, sy, 0.25), MAT.SOLID];
+      // Sand, packed lighter down the middle, a darker rim where the grass meets it.
+      if (d > -1.3 / g.ppu) return [PATH[1], MAT.SOLID];
+      const v = 2.4 + (fbm(g.x * 0.8, g.z * 0.8, 21) - 0.5) * 1.4 + (d < -pathHalf * 0.45 ? 0.7 : 0);
+      return [band(PATH, v, sx, sy, 0.2), MAT.SOLID];
     }
-    const n = fbm(g.x * 0.2, g.z * 0.34, 11);
-    const edge = (t: number) => smoothstep(t - 0.018, t + 0.018, n) > bayer(sx, sy);
-    let c = G[3];
-    if (edge(0.6)) c = G[4];
-    if (edge(0.7)) c = G[5];
-    if (!edge(0.37)) c = G[2];
-    return [c, MAT.GRASS];
+    // Grass: its tones sampled a blade's height lower, so the nearer grass pokes up into the farther in blades.
+    const v = grassTone(qIsGrass ? q.x : g.x, qIsGrass ? q.z : g.z);
+    return [band(G, v, sx, sy, 0.06), MAT.GRASS];
   });
-  // Lily pads on the pond.
-  if (o.pond) {
-    scatter(ctx, 11, 41, (x, z, sx, sy, ppu, r) => {
-      if (r > 0.3 || pondD(x, z) > -0.25) return;
-      const w = Math.max(2, Math.round(ppu * 0.22)), h = Math.max(1, Math.round(w * 0.4));
-      for (let yy = 0; yy < h; yy++) {
-        for (let xx = 0; xx < w; xx++) {
-          const u = (xx + 0.5) / w - 0.5, v = (yy + 0.5) / h - 0.5;
-          if (u * u + v * v > 0.25) continue;
-          if (u > 0.05 && Math.abs(v) < 0.12 && w > 4) continue; // the notch
-          ctx.ground.set(sx - Math.floor(w / 2) + xx, sy - h + 1 + yy, yy === 0 ? LILY[2] : yy === h - 1 ? LILY[0] : LILY[1]);
-        }
-      }
-      if (w > 5 && r < 0.08) ctx.ground.set(sx, sy - h, FLOWERS[2][0]);
-    });
-  }
-  // Blade marks, darker than the patch they are on.
-  scatter(ctx, 10, 3, (x, z, sx, sy, ppu, r) => {
-    if (r > 0.4 || onPath(x, z) < 0.1 || ctx.ground.material(sx, sy) !== MAT.GRASS) return;
-    const i = indexIn(G, ctx.ground.get(sx, sy));
+  // Blade tufts, in clusters: two darker blades, a light tip near the camera.
+  scatter(ctx, 9, 3, (x, z, sx, sy, ppu, r) => {
+    const f = fbm(x * 0.45, z * 0.75, 51);
+    if (r > (f - 0.5) * 3.2 || ground.material(sx, sy) !== MAT.GRASS) return;
+    const i = indexIn(G, ground.get(sx, sy));
     if (i < 0) return;
-    grassMark(ctx, sx, sy, ppu, G[Math.max(0, i - 2)], r < 0.2 ? G[Math.min(G.length - 1, i + 1)] : null, MAT.GRASS);
+    const dark = G[Math.max(0, i - 2)], light = r < 0.2 ? G[Math.min(G.length - 1, i + 1)] : null;
+    if (ppu < 24) ground.set(sx, sy, dark, MAT.GRASS);
+    else if (ppu < 44) {
+      ground.set(sx - 1, sy - 1, dark, MAT.GRASS);
+      ground.set(sx + 1, sy - 1, dark, MAT.GRASS);
+      ground.set(sx, sy, dark, MAT.GRASS);
+    } else {
+      for (const [dx, dy] of [[-2, -2], [-1, -1], [1, -2], [1, -1], [0, 0]]) ground.set(sx + dx, sy + dy, dark, MAT.GRASS);
+      if (light) ground.set(sx, sy - 2, light, MAT.GRASS);
+    }
+  });
+  // Clover in patches near the camera: three round leaves, a light dot.
+  scatter(ctx, 11, 17, (x, z, sx, sy, ppu, r) => {
+    if (ppu < 40 || r > 0.45 || fbm(x * 0.6, z * 0.9, 52) < 0.62 || ground.material(sx, sy) !== MAT.GRASS) return;
+    const i = indexIn(G, ground.get(sx, sy));
+    if (i < 1) return;
+    const dark = G[Math.max(0, i - 2)], leaf = G[Math.max(0, i - 1)];
+    ground.set(sx - 1, sy, leaf, MAT.GRASS);
+    ground.set(sx + 1, sy, leaf, MAT.GRASS);
+    ground.set(sx, sy - 1, leaf, MAT.GRASS);
+    ground.set(sx, sy, dark, MAT.GRASS);
+    if (ppu > 52) ground.set(sx, sy - 2, G[Math.min(G.length - 1, i + 1)], MAT.GRASS);
   });
   // Pebbles on the path.
   if (o.path) {
     scatter(ctx, 7, 9, (x, z, sx, sy, ppu, r) => {
-      if (r > 0.35 || onPath(x, z) > -0.15) return;
-      ctx.ground.set(sx, sy, PATH[0]);
-      if (ppu > 30) ctx.ground.set(sx + 1, sy, PATH[3]);
+      if (r > 0.3 || onPath(x, z) > -0.15) return;
+      ground.set(sx, sy, PATH[0]);
+      if (ppu > 30) ground.set(sx + 1, sy, PATH[4]);
     });
   }
-  // Flower beds: loose clusters away from the battlers and the path.
-  const beds = o.flowers ?? 6;
-  for (let b = 0; b < beds; b++) {
-    const c = at(ctx, ctx.rng.range(-180, 420), ctx.rng.range(30, 112));
-    if (Math.hypot(c.x - ctx.enemy.x, c.z - ctx.enemy.z) < 1.6 || Math.hypot(c.x - ctx.player.x, c.z - ctx.player.z) < 1.8) continue;
+  // Flower beds: loose clusters toward the sides and in the middle distance, clear of the battlers.
+  const flower = (x: number, z: number, kind: Rgb[]) => {
+    if (onPath(x, z) < 0.1 || water(x, z) < 0.2) return;
+    const [fx, fy] = view.screen(x, 0, z);
+    const px = Math.floor(fx), py = Math.floor(fy);
+    const ppu = view.ppu(view.depth(x, 0, z));
+    const stem = G[1];
+    if (ppu > 48) {
+      ground.set(px, py + 1, stem, MAT.GRASS);
+      ground.set(px, py + 2, stem, MAT.GRASS);
+      for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) ground.set(px + dx, py + dy, kind[0], MAT.GRASS);
+      ground.set(px, py, kind[1], MAT.GRASS);
+    } else if (ppu > 30) {
+      ground.set(px, py, kind[0], MAT.GRASS);
+      ground.set(px + 1, py, kind[0], MAT.GRASS);
+      ground.set(px, py + 1, stem, MAT.GRASS);
+    } else ground.set(px, py, kind[0], MAT.GRASS);
+  };
+  const beds = o.flowers ?? 7;
+  for (let b = 0, tries = 0; b < beds && tries < 200; tries++) {
+    const c = at(ctx, ctx.rng.range(-200, 440), ctx.rng.range(34, 112));
+    if (Math.hypot(c.x - ctx.enemy.x, (c.z - ctx.enemy.z) * 1.4) < 2.2 || Math.hypot(c.x - ctx.player.x, c.z - ctx.player.z) < 1.6 || c.z > line - 0.6) continue;
+    b++;
     const kind = FLOWERS[ctx.rng.int(0, FLOWERS.length - 1)];
-    const n = ctx.rng.int(7, 14);
-    for (let i = 0; i < n; i++) {
-      const x = c.x + ctx.rng.range(-0.8, 0.8), z = c.z + ctx.rng.range(-0.5, 0.5);
-      if (onPath(x, z) < 0.1 || pondD(x, z) < 0.15 || puddleD(x, z) < 0.2) continue;
-      const [fx, fy] = ctx.view.screen(x, 0, z);
-      const px = Math.floor(fx), py = Math.floor(fy);
-      const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-      if (ppu > 34) {
-        ctx.ground.set(px, py + 1, G[1]);
-        for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) ctx.ground.set(px + dx, py + dy, kind[0]);
-        ctx.ground.set(px, py, kind[1]);
-      } else if (ppu > 20) {
-        ctx.ground.set(px, py, kind[0]);
-        ctx.ground.set(px + 1, py, kind[0]);
-        ctx.ground.set(px, py + 1, G[1]);
-      } else ctx.ground.set(px, py, kind[0]);
-    }
+    const n = ctx.rng.int(6, 13);
+    for (let i = 0; i < n; i++) flower(c.x + ctx.rng.range(-0.7, 0.7) * (1 - i / n * 0.5), c.z + ctx.rng.range(-0.4, 0.4), kind);
   }
-  // The tree line: staggered rows of round trees across the back, bushes in front.
-  const dark = darker([G, PATH, o.leaves]);
-  const line = o.treeLine ?? 15.2;
-  const pal = { leaves: o.leaves, outline: TREE_OUTLINE, trunk: TRUNK };
+  // The tree line: staggered rows of round trees, the far rows hazy; bushes at its foot.
+  const dark = darker([G, PATH]);
   const trees = [];
   for (let row = 0; row < 3; row++) {
     const z0 = line + row * 1.7;
+    const pal = { leaves: row ? tint(o.leaves, HAZE, row * 0.16) : o.leaves, outline: row ? mix(TREE_OUTLINE, HAZE, row * 0.16) : TREE_OUTLINE, trunk: TRUNK };
     for (let x = -24 + row * 0.9; x < 24; x += ctx.rng.range(1.6, 2.2)) {
       const z = z0 + ctx.rng.range(-0.35, 0.35);
-      const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
+      const ppu = view.ppu(view.depth(x, 0, z));
       const w = ppu * ctx.rng.range(2.2, 2.7);
-      trees.push({ sprite: tree(w, pal, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: w * 0.6, ry: w * 0.13 } });
+      trees.push({ sprite: tree(w, pal, ctx.rng.int(1, 1e6)), x, z });
     }
   }
-  for (let i = 0; i < 12; i++) {
-    const x = ctx.rng.range(-20, 20), z = line - ctx.rng.range(0.6, 1.8);
-    const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
+  const bushPal = { leaves: o.leaves, outline: TREE_OUTLINE, trunk: TRUNK };
+  for (let i = 0; i < 14; i++) {
+    const x = ctx.rng.range(-20, 20), z = line - ctx.rng.range(0.5, 1.6);
+    if (water(x, z) < 0.3) continue;
+    const ppu = view.ppu(view.depth(x, 0, z));
     const w = ppu * ctx.rng.range(0.9, 1.5);
-    trees.push({ sprite: bush(w, pal, ctx.rng.int(1, 1e6)), x, z, shadow: { rx: w * 0.55, ry: w * 0.12 } });
+    trees.push({ sprite: bush(w, bushPal, ctx.rng.int(1, 1e6)), x, z });
   }
   stand(ctx, trees, dark);
-  // Tall grass clumps standing around the arena (props: they sway and can hide the Pokémon's feet).
-  const clumps = o.tallGrass ?? 12;
-  for (let i = 0, tries = 0; i < clumps && tries < 300; tries++) {
-    const p = at(ctx, ctx.rng.range(-60, 300), ctx.rng.range(30, 112));
-    if (onPath(p.x, p.z) < 0.3 || pondD(p.x, p.z) < 0.25 || puddleD(p.x, p.z) < 0.3) continue;
-    const ppu = ctx.view.ppu(ctx.view.depth(p.x, 0, p.z));
-    const w = ppu * ctx.rng.range(0.4, 0.62), h = ppu * ctx.rng.range(0.3, 0.4) * (o.tallGrassHeight ?? 1);
-    if (addProp(ctx, { sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: p.x, z: p.z, sway: Math.max(1, h * 0.12) })) i++;
+  // Framing the left: big tufts of grass and a clump of flowers in the foreground, cropped by the frame.
+  const tufts = [];
+  for (const [sx, sy, s] of [[2, 110, 1], [22, 104, 0.8], [-6, 92, 0.9], [34, 112, 0.7], [10, 84, 0.6]] as const) {
+    const g = view.ground(sx, sy)!;
+    const w = g.ppu * 0.55 * s, h = g.ppu * 0.42 * s;
+    tufts.push({ sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), x: g.x, z: g.z });
   }
-  // Reeds along the pond's shore.
+  tufts.sort((a, b) => b.z - a.z);
+  for (const t of tufts) {
+    const [px, py] = view.screen(t.x, 0, t.z);
+    ground.sprite(t.sprite, Math.round(px), Math.floor(py) + 1, MAT.GRASS);
+  }
+  const fk = FLOWERS[0];
+  for (let i = 0; i < 7; i++) {
+    const g = view.ground(ctx.rng.range(4, 30), ctx.rng.range(88, 100))!;
+    flower(g.x, g.z, fk);
+  }
+  // Tall grass swaying at the edges of the view and around the sides (props: it can hide the Pokémon's feet).
+  const clump = (ppu: number) => {
+    const w = ppu * ctx.rng.range(0.4, 0.62), h = ppu * ctx.rng.range(0.3, 0.4) * (o.tallGrassHeight ?? 1);
+    return { sprite: tallGrass(w, h, { blades: o.blades, outline: TREE_OUTLINE }, ctx.rng.int(1, 1e6)), sway: Math.max(1, h * 0.12) };
+  };
+  frameProp(ctx, 3, 70, -1, clump);
+  frameProp(ctx, 236, 64, 1, clump);
+  frameProp(ctx, 232, 40, 1, clump);
+  const clumps = o.tallGrass ?? 10;
+  for (let i = 0, tries = 0; i < clumps && tries < 400; tries++) {
+    // Around the sides and the back, not in the middle of the field.
+    const side = ctx.rng.chance(0.5) ? ctx.rng.range(-220, 30) : ctx.rng.range(210, 460);
+    const p = at(ctx, ctx.rng.chance(0.25) ? ctx.rng.range(40, 200) : side, ctx.rng.range(24, 112));
+    if (onPath(p.x, p.z) < 0.3 || water(p.x, p.z) < 0.25 || p.z > line - 0.4) continue;
+    const ppu = view.ppu(view.depth(p.x, 0, p.z));
+    if (addProp(ctx, { ...clump(ppu), x: p.x, z: p.z })) i++;
+  }
+  // Reeds along the pond's shore, lily pads in a few clusters on it.
   if (o.pond) {
     const p = o.pond;
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < 30; i++) {
       const a = ctx.rng.range(0, Math.PI * 2);
-      const x = p.x + Math.cos(a) * p.rx * 1.02, z = p.z + Math.sin(a) * p.rz * 1.02;
-      const ppu = ctx.view.ppu(ctx.view.depth(x, 0, z));
-      const w = ppu * ctx.rng.range(0.25, 0.45), h = ppu * ctx.rng.range(0.45, 0.75);
+      if (Math.sin(a) < -0.3 && ctx.rng.chance(0.7)) continue; // fewer on the near shore
+      const x = p.x + Math.cos(a) * p.rx * 1.03, z = p.z + Math.sin(a) * p.rz * 1.03;
+      const ppu = view.ppu(view.depth(x, 0, z));
+      const w = ppu * ctx.rng.range(0.25, 0.45), h = ppu * ctx.rng.range(0.45, 0.8);
       addProp(ctx, { sprite: reeds(w, h, REED_STEM, REED_HEAD, TREE_OUTLINE, ctx.rng.int(1, 1e6)), x, z, sway: Math.max(1, h * 0.08) });
+    }
+    for (let k = 0; k < 4; k++) {
+      const cxp = p.x + ctx.rng.range(-0.7, 0.7) * p.rx, czp = p.z + ctx.rng.range(-0.5, 0.2) * p.rz;
+      for (let i = ctx.rng.int(4, 8); i > 0; i--) {
+        const x = cxp + ctx.rng.range(-0.6, 0.6), z = czp + ctx.rng.range(-0.3, 0.3);
+        if (pondD(x, z) > -0.2) continue;
+        const [fx, fy] = view.screen(x, 0, z);
+        const ppu = view.ppu(view.depth(x, 0, z));
+        const w = Math.max(2, Math.round(ppu * 0.2)), h = Math.max(1, Math.round(w * 0.4));
+        const sx0 = Math.floor(fx) - Math.floor(w / 2), sy0 = Math.floor(fy) - h + 1;
+        for (let yy = 0; yy < h; yy++) {
+          for (let xx = 0; xx < w; xx++) {
+            const u = (xx + 0.5) / w - 0.5, v = (yy + 0.5) / h - 0.5;
+            if (u * u + v * v > 0.25 || (u > 0.05 && Math.abs(v) < 0.12 && w > 4)) continue;
+            ground.set(sx0 + xx, sy0 + yy, yy === 0 ? LILY[2] : yy === h - 1 ? LILY[0] : LILY[1], MAT.SOLID);
+          }
+        }
+        if (w > 5 && ctx.rng.chance(0.2)) ground.set(Math.floor(fx), sy0 - 1, FLOWERS[2][0]);
+      }
     }
   }
 }
@@ -1086,9 +1177,9 @@ export const ARENAS: Record<string, ArenaDesign> = {
         grass: ramp('#1f6a4f', '#2f8a66', '#48a37f', '#5fb392', '#79c3a6', '#93d0b8'),
         blades: ramp('#2f7a2a', '#6db353', '#9be070'),
         leaves: ramp('#17491b', '#2e7a2b', '#4c963c', '#6db353', '#9be070'),
-        tallGrass: 34,
+        tallGrass: 30,
         tallGrassHeight: 1.5,
-        puddles: 5,
+        puddles: [{ x: 2.45, z: 9.4, r: 0.8 }, { x: -3.6, z: 11.4, r: 0.9 }, { x: 3.6, z: 12.2, r: 0.8 }, { x: -6, z: 9, r: 1 }, { x: 6.5, z: 10.5, r: 0.9 }],
         flowers: 2,
         treeLine: 14.2,
       }),
@@ -1108,7 +1199,7 @@ export const ARENAS: Record<string, ArenaDesign> = {
     ambience: 'pond',
     look: { waveLight: [166, 218, 248], waveDark: [63, 103, 168], waveDensity: 0.12 },
     ripples: 0,
-    paint: (ctx) => meadow(ctx, { grass: MEADOW, blades: BLADES, leaves: LEAVES, pond: { x: -1.2, z: 12.4, rx: 5.2, rz: 2.3 }, tallGrass: 8, treeLine: 16.2 }),
+    paint: (ctx) => meadow(ctx, { grass: MEADOW, blades: BLADES, leaves: LEAVES, pond: { x: -0.8, z: 12.5, rx: 4.2, rz: 1.8 }, tallGrass: 8, treeLine: 16.2 }),
   },
   underwater: { name: 'SEAFLOOR', about: 'Deep below the waves of ROUTE 128.', ambience: 'underwater', paint: seafloor },
   mountain: { name: 'MT. CHIMNEY', about: 'Rocky slopes dusted with volcanic ash.', ambience: 'mountain', look: { lavaHot: [255, 190, 80] }, paint: chimney },
