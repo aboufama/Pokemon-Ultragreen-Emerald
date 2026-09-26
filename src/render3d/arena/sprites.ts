@@ -1,7 +1,8 @@
 // Props drawn as pixel art at the size they appear on screen (one sprite
 // pixel per GBA pixel), lit from the upper left like the battle sprites:
-// round Hoenn trees and bushes, tall grass, rocks, reeds, kelp, coral,
-// stalagmites and the Battle Tower's lamp posts.
+// round Hoenn trees and bushes, tall grass, desert shrubs, rocks and faceted
+// crags, reeds, seaweed, coral heads, staghorn, sea fans, anemones,
+// starfish, stalagmites, wisps of steam and the Battle Tower's lamp posts.
 
 import { type Ramp, type Rgb, type Sprite, Rng, band, bayer, createSprite, hash2, noise, opaque, put } from './art';
 
@@ -201,24 +202,6 @@ export function shrub(w: number, h: number, twig: Ramp, leaves: Ramp, seed: numb
   return s;
 }
 
-/** A few short blades (a tuft of grass or weeds), no outline. */
-export function tuft(h: number, pal: GrassPalette, seed: number): Sprite {
-  const rng = new Rng(seed);
-  const th = Math.max(2, Math.round(h));
-  const s = createSprite(th + 3, th);
-  const n = rng.int(2, 3);
-  for (let i = 0; i < n; i++) {
-    const base = 1 + ((i + 0.5) / n) * (th + 1);
-    const lean = (i - (n - 1) / 2) * rng.range(0.4, 0.9);
-    const bh = th * rng.range(0.6, 1);
-    for (let k = 0; k < bh; k++) {
-      const t = k / bh;
-      put(s, Math.round(base + lean * t * th * 0.5), th - 1 - k, pal.blades[t > 0.6 ? 2 : k === 0 ? 0 : 1]);
-    }
-  }
-  return s;
-}
-
 export interface RockPalette {
   shades: Ramp; // dark .. light (3-5)
   outline: Rgb;
@@ -333,39 +316,6 @@ export function crag(w: number, h: number, pal: RockPalette, seed: number, facet
 }
 
 /**
- * A plume of steam or smoke: puffs swelling as they rise, lit on the left,
- * thinning (dithered away) toward the top. `lean` pixels right per row.
- */
-export function plume(w: number, h: number, shades: Ramp, seed: number, lean = 0.2, density = 0.6): Sprite {
-  const rng = new Rng(seed);
-  const pw = Math.max(4, Math.round(w)), ph = Math.max(6, Math.round(h));
-  const s = createSprite(Math.round(pw * 1.6 + ph * Math.abs(lean)) + 4, ph + 2);
-  const puffs: Lump[] = [];
-  for (let y = ph; y > 0;) {
-    const t = 1 - y / ph;
-    const r = (pw / 2) * (0.45 + t * 0.6) * rng.range(0.8, 1.1);
-    puffs.push({ cx: 2 + pw * 0.8 + (ph - y) * lean + rng.range(-1, 1) * r * 0.3, cy: y - r * 0.4, r });
-    y -= r * rng.range(0.7, 1);
-  }
-  const top = shades.length - 1;
-  for (let y = 0; y < s.h; y++) {
-    for (let x = 0; x < s.w; x++) {
-      let best = -1, lit = 0, edge = 0;
-      puffs.forEach((p, i) => {
-        const d = Math.hypot(x + 0.5 - p.cx, y + 0.5 - p.cy) / p.r;
-        if (d <= 1 && best < 0) { best = i; lit = sphereLight(x, y, p.cx, p.cy, p.r); edge = d; }
-      });
-      if (best < 0) continue;
-      // Puffs are solid low down; higher up they thin out in coarse (2x2) dither, from their rims in.
-      const thin = (best / Math.max(1, puffs.length - 1)) * (1 - density) * 2 + edge * edge * 0.5;
-      if (thin > bayer(x >> 1, y >> 1)) continue;
-      put(s, x, y, shades[Math.max(0, Math.min(top, Math.round(lit * (top + 0.4) - 0.2)))]);
-    }
-  }
-  return s;
-}
-
-/**
  * A wisp of steam: a thin ribbon curling up, lit on the left, breaking up and
  * thinning out as it rises. `lean` pixels right per row.
  */
@@ -406,28 +356,6 @@ export function reeds(w: number, h: number, stem: Ramp, head: Ramp, outlineColor
         put(s, x, y, head[1]);
         put(s, x + 1, y, head[0]);
       } else put(s, x, y, stem[t > 0.5 ? 2 : 1]);
-    }
-  }
-  outline(s, outlineColor, { bottom: false });
-  return s;
-}
-
-/** Kelp: tall wavy strands, a lit left edge. */
-export function kelp(w: number, h: number, shades: Ramp, outlineColor: Rgb, seed: number): Sprite {
-  const rng = new Rng(seed);
-  const kw = Math.max(4, Math.round(w)), kh = Math.max(6, Math.round(h));
-  const s = createSprite(kw + 6, kh + 2);
-  const n = Math.max(1, Math.round(kw / 4));
-  for (let i = 0; i < n; i++) {
-    const x0 = 3 + ((i + 0.5) / n) * kw;
-    const sh = kh * rng.range(0.6, 1);
-    const ph = rng.range(0, 6), amp = rng.range(0.8, 1.6), bw = rng.range(1.5, 2.6);
-    for (let k = 0; k < sh; k++) {
-      const t = k / sh;
-      const cx = x0 + Math.sin(k * 0.35 + ph) * amp * t;
-      const half = bw * (1 - t * 0.5) * 0.5;
-      const xa = Math.round(cx - half), xb = Math.round(cx + half);
-      for (let x = xa; x <= xb; x++) put(s, x, s.h - 1 - k, shades[x === xa ? 2 : x === xb ? 0 : 1]);
     }
   }
   outline(s, outlineColor, { bottom: false });
@@ -598,31 +526,6 @@ export function starfish(size: number, shades: Ramp, seed: number): Sprite {
   return s;
 }
 
-/** Branching coral. */
-export function coral(w: number, h: number, shades: Ramp, outlineColor: Rgb, seed: number): Sprite {
-  const rng = new Rng(seed);
-  const cw = Math.max(5, Math.round(w)), chh = Math.max(5, Math.round(h));
-  const s = createSprite(cw + 2, chh + 2);
-  const branch = (x: number, y: number, ang: number, len: number, width: number, depth: number) => {
-    for (let i = 0; i < len; i++) {
-      x += Math.sin(ang);
-      y -= Math.cos(ang);
-      for (let d = -width / 2; d <= width / 2; d += 0.5) {
-        const px = Math.round(x + d), py = Math.round(y);
-        put(s, px, py, shades[d < 0 ? 2 : d > 0.2 ? 0 : 1]);
-      }
-      ang += rng.range(-0.08, 0.08);
-    }
-    if (depth > 0) {
-      branch(x, y, ang - rng.range(0.35, 0.7), len * 0.65, Math.max(1, width - 0.5), depth - 1);
-      branch(x, y, ang + rng.range(0.35, 0.7), len * 0.65, Math.max(1, width - 0.5), depth - 1);
-    }
-  };
-  branch(1 + cw / 2, s.h - 1, rng.range(-0.15, 0.15), chh * 0.42, Math.max(1.5, cw / 6), 2);
-  outline(s, outlineColor, { bottom: false });
-  return s;
-}
-
 /** A stalagmite: a tapered, rounded cone lit on the left. */
 export function stalagmite(w: number, h: number, pal: RockPalette, seed: number): Sprite {
   const rng = new Rng(seed);
@@ -698,78 +601,3 @@ export function lampPost(w: number, h: number, metal: Ramp, glass: Ramp, ring: R
   return s;
 }
 
-/** A soft, dithered light shaft (for underwater): opaque pixels where the dither passes. */
-export function lightShaft(w: number, h: number, color: Rgb, strength: number, seed: number): Sprite {
-  const s = createSprite(Math.max(2, Math.round(w)), Math.max(2, Math.round(h)));
-  const lean = s.h * 0.35;
-  for (let y = 0; y < s.h; y++) {
-    const t = y / s.h;
-    const x0 = (1 - t) * lean * 0.3;
-    for (let x = 0; x < s.w; x++) {
-      const u = (x - x0) / (s.w - lean * 0.3);
-      if (u < 0 || u > 1) continue;
-      const a = strength * Math.sin(u * Math.PI) * (1 - t) * (0.7 + 0.3 * Math.sin(seed + u * 9));
-      if (a > bayer(x, y)) put(s, x, y, color);
-    }
-  }
-  return s;
-}
-
-/** A sand dune: a smooth hump, lit on the left, a crisp ridge, the lee side in shadow. */
-export function dune(w: number, h: number, shades: Ramp, seed: number): Sprite {
-  const rng = new Rng(seed);
-  const dw = Math.max(8, Math.round(w)), dh = Math.max(3, Math.round(h));
-  const s = createSprite(dw, dh);
-  const peak = rng.range(0.4, 0.6);
-  const top = shades.length - 1;
-  for (let x = 0; x < dw; x++) {
-    const u = (x + 0.5) / dw;
-    const hump = u < peak ? Math.pow(u / peak, 0.8) : Math.pow((1 - u) / (1 - peak), 1.3);
-    const colH = Math.round(dh * Math.sin((hump * Math.PI) / 2));
-    for (let k = 0; k < colH; k++) {
-      const y = dh - 1 - k;
-      const lit = u < peak ? 0.75 + 0.25 * (1 - k / Math.max(1, colH)) : 0.25;
-      const ridge = Math.abs(u - peak) < 1.5 / dw;
-      put(s, x, y, ridge ? shades[top] : band(shades, lit * top, x, y, 0.3));
-    }
-  }
-  return s;
-}
-
-/** A shelf of rock: a wall face with ledges and cracks (cliffs, the cave's back wall). */
-export function rockWall(w: number, h: number, pal: RockPalette, seed: number): Sprite {
-  const rng = new Rng(seed);
-  const rw = Math.max(8, Math.round(w)), rh = Math.max(6, Math.round(h));
-  const s = createSprite(rw, rh);
-  const top = pal.shades.length - 1;
-  // A ragged top edge, horizontal ledges with lit tops and shadowed faces.
-  const edge: number[] = [];
-  let y0 = rng.range(0, rh * 0.2);
-  for (let x = 0; x < rw; x++) {
-    y0 += rng.range(-1, 1) * 0.8;
-    y0 = Math.max(0, Math.min(rh * 0.35, y0));
-    edge.push(Math.round(y0));
-  }
-  const ledges: number[] = [];
-  for (let y = rng.int(4, 8); y < rh; y += rng.int(5, 9)) ledges.push(y);
-  for (let x = 0; x < rw; x++) {
-    for (let y = edge[x]; y < rh; y++) {
-      const onLedge = ledges.some((l) => y === l + Math.round(Math.sin(x * 0.2 + l) * 1.2));
-      const underLedge = ledges.some((l) => y === l + 1 + Math.round(Math.sin(x * 0.2 + l) * 1.2));
-      let v = top * 0.45 + (hash2(Math.floor(x / 3), Math.floor(y / 4), seed) - 0.5) * 1.2;
-      if (y === edge[x] || onLedge) v = top;
-      if (underLedge) v = 0.4;
-      put(s, x, y, band(pal.shades, v, x, y, 0.3));
-    }
-  }
-  // Vertical cracks.
-  for (let c = 0; c < rw / 10; c++) {
-    let x = rng.range(0, rw);
-    for (let y = rng.int(edge[Math.floor(x)] ?? 0, rh - 4); y < rh; y++) {
-      if (rng.chance(0.3)) x += rng.range(-1, 1);
-      if (opaque(s, Math.round(x), y)) put(s, Math.round(x), y, pal.shades[0]);
-      if (rng.chance(0.08)) break;
-    }
-  }
-  return s;
-}
