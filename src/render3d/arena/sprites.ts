@@ -237,6 +237,120 @@ export function rock(w: number, h: number, pal: RockPalette, seed: number): Spri
   return s;
 }
 
+/**
+ * A crag: an angular rock of flat facets (volcanic rock, sea stacks, desert
+ * boulders): a jagged silhouette on a flat foot, each facet one shade by how
+ * it faces the light from the upper left, a lit edge along the facets' upper
+ * sides, a dark outline.
+ */
+export function crag(w: number, h: number, pal: RockPalette, seed: number, facets = 6): Sprite {
+  const rng = new Rng(seed);
+  const rw = Math.max(4, Math.round(w)), rh = Math.max(4, Math.round(h));
+  const s = createSprite(rw + 2, rh + 2);
+  const top = pal.shades.length - 1;
+  // The silhouette: a polygon of jittered points around a squat half-ellipse, flat underneath.
+  const n = 9;
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= n; i++) {
+    const a = Math.PI * (1 - i / n);
+    const r = rng.range(0.78, 1);
+    pts.push([1 + rw / 2 + Math.cos(a) * (rw / 2) * r, 1 + rh - Math.sin(a) * rh * r * (i === 0 || i === n ? 0.25 : 1)]);
+  }
+  const inside = (x: number, y: number) => {
+    if (y > 1 + rh) return false;
+    let c = false;
+    const poly = [...pts, [1 + rw, 1 + rh], [1, 1 + rh]] as [number, number][];
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  // Facets: the interior split among a few seeds, each with its own tilt.
+  const seeds = Array.from({ length: facets }, () => ({ x: 1 + rng.range(0.1, 0.9) * rw, y: 1 + rng.range(0.15, 0.95) * rh, tilt: rng.range(-0.35, 0.35) }));
+  const facetAt = (x: number, y: number) => {
+    let best = 0, bd = 1e9;
+    seeds.forEach((f, i) => {
+      const d = (x - f.x) ** 2 + ((y - f.y) * 1.3) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    });
+    return best;
+  };
+  const cxr = 1 + rw / 2;
+  for (let y = 0; y < s.h; y++) {
+    for (let x = 0; x < s.w; x++) {
+      if (!inside(x + 0.5, y + 0.5)) continue;
+      const f = facetAt(x + 0.5, y + 0.5), fs = seeds[f];
+      // A facet faces the way its seed sits from the rock's middle (left and top: toward the light).
+      const nx = (fs.x - cxr) / (rw / 2) + fs.tilt, ny = (fs.y - (1 + rh * 0.55)) / (rh * 0.6);
+      let v = (0.55 - nx * 0.45 - ny * 0.4) * (top + 0.3);
+      // Edges between facets: lit where the facet above or to the left is a different one.
+      if (facetAt(x - 0.5, y + 0.5) !== f || facetAt(x + 0.5, y - 0.5) !== f) v += 0.9;
+      // Toward the foot, in the shadow of the ground.
+      v -= Math.max(0, (y + 0.5 - (1 + rh * 0.8)) / (rh * 0.2)) * 0.8;
+      put(s, x, y, pal.shades[Math.max(0, Math.min(top, Math.round(v)))]);
+    }
+  }
+  outline(s, pal.outline, { bottom: false });
+  return s;
+}
+
+/**
+ * A plume of steam or smoke: puffs swelling as they rise, lit on the left,
+ * thinning (dithered away) toward the top. `lean` pixels right per row.
+ */
+export function plume(w: number, h: number, shades: Ramp, seed: number, lean = 0.2, density = 0.6): Sprite {
+  const rng = new Rng(seed);
+  const pw = Math.max(4, Math.round(w)), ph = Math.max(6, Math.round(h));
+  const s = createSprite(Math.round(pw * 1.6 + ph * Math.abs(lean)) + 4, ph + 2);
+  const puffs: Lump[] = [];
+  for (let y = ph; y > 0;) {
+    const t = 1 - y / ph;
+    const r = (pw / 2) * (0.45 + t * 0.6) * rng.range(0.8, 1.1);
+    puffs.push({ cx: 2 + pw * 0.8 + (ph - y) * lean + rng.range(-1, 1) * r * 0.3, cy: y - r * 0.4, r });
+    y -= r * rng.range(0.7, 1);
+  }
+  const top = shades.length - 1;
+  for (let y = 0; y < s.h; y++) {
+    for (let x = 0; x < s.w; x++) {
+      let best = -1, lit = 0, edge = 0;
+      puffs.forEach((p, i) => {
+        const d = Math.hypot(x + 0.5 - p.cx, y + 0.5 - p.cy) / p.r;
+        if (d <= 1 && best < 0) { best = i; lit = sphereLight(x, y, p.cx, p.cy, p.r); edge = d; }
+      });
+      if (best < 0) continue;
+      // Puffs are solid low down; higher up they thin out in coarse (2x2) dither, from their rims in.
+      const thin = (best / Math.max(1, puffs.length - 1)) * (1 - density) * 2 + edge * edge * 0.5;
+      if (thin > bayer(x >> 1, y >> 1)) continue;
+      put(s, x, y, shades[Math.max(0, Math.min(top, Math.round(lit * (top + 0.4) - 0.2)))]);
+    }
+  }
+  return s;
+}
+
+/**
+ * A wisp of steam: a thin ribbon curling up, lit on the left, breaking up and
+ * thinning out as it rises. `lean` pixels right per row.
+ */
+export function wisp(w: number, h: number, shades: Ramp, seed: number, lean = 0.15): Sprite {
+  const rng = new Rng(seed);
+  const ww = Math.max(2, Math.round(w)), wh = Math.max(8, Math.round(h));
+  const amp = ww * rng.range(0.6, 1), per = rng.range(0.16, 0.26), ph = rng.range(0, 6);
+  const s = createSprite(Math.round(ww * 3 + wh * Math.abs(lean)) + 4, wh + 1);
+  const x0 = 2 + ww * 1.5;
+  const top = shades.length - 1;
+  for (let k = 0; k < wh; k++) {
+    const t = k / wh;
+    // Higher up it breaks into dashes.
+    if (t > 0.45 && hash2(k >> 1, 0, seed) < (t - 0.45) * 1.6) continue;
+    const cx = x0 + k * lean + Math.sin(k * per + ph) * amp * (0.3 + t);
+    const half = Math.max(0.5, (ww / 2) * (1 - t * 0.6));
+    const y = s.h - 1 - k;
+    for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++) put(s, x, y, shades[x <= cx - half + 1 ? top : x >= cx + half - 1 ? 0 : Math.max(0, top - 1)]);
+  }
+  return s;
+}
+
 /** Reeds and cattails at the water's edge. */
 export function reeds(w: number, h: number, stem: Ramp, head: Ramp, outlineColor: Rgb, seed: number): Sprite {
   const rng = new Rng(seed);
