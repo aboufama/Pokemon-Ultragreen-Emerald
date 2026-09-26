@@ -11,7 +11,7 @@ the text box) and the opponent's side, starts and ends on the stance.
 - [x] `idle`: breathing, weight shift and bounce read; mane and wrist feathers sway on springs; blinks
 - [x] `intro`: curled crouch as it emerges, bursts into the battle cry with arms flung wide and wrist flames (wide, not overhead: from our side the claws and crest stay under the foe's healthbox), settles into guard
 - [x] `hit`: snaps back with the hurt eyes, the sprung knock-back carries the body, shakes it off
-- [x] `faint`: reels, sways forward, knees buckle, folds onto its knees sitting back a little (slumped over its feet the foe's head fell onto our healthbox), sinks
+- [x] `faint`: a tired sway with its eyes half shut, then it curls over onto its heels hugging itself, head tucked and eyes shut, and shrinks away (worn out, as the 3D games show it; it sits back as it curls, clear of our healthbox)
 
 ## Attack categories
 

@@ -1,6 +1,8 @@
 // A 3D battler: species model + rig + animator placed in a battle slot.
 // Applies the non-skeletal pose channels every frame: root motion (advance
 // toward the target, jumps, spins, sinking), facing, eye expression, effects.
+// A faint ends as it does in the 3D games: from the faint clip's 'shrink' the
+// curled body shrinks away into its middle (then it is hidden).
 // On top of the clips it adds what makes the creature feel alive: loose parts
 // on springs, eye blinks and a sprung recoil when hit. It always faces its
 // opponent.
@@ -20,6 +22,7 @@
 
 import * as THREE from 'three';
 import { Animator } from '../anim/animator';
+import { SHRINK_FRAMES, shrinkScale } from '../anim/clip';
 import { SecondOrder, SpringChain, seededRandom, skinnedExtent } from '../anim/dynamics';
 import type { Pose } from '../anim/rig';
 import { makeFireIdMaterial, makeFireMaterial } from '../render3d/fire';
@@ -48,10 +51,10 @@ export class Battler3D {
 
   readonly animator: Animator;
   target: Battler3D | null = null;
-  /** Scale multiplier for the Poke Ball appear/withdraw effect. */
+  /** Scale multiplier for the Poke Ball appear/withdraw effect (and a faint's shrink). */
   appear = 1;
-  /** Height fraction the appear scale pivots on (sprites scale about their center). */
-  appearPivot = 0.5;
+  /** Where the appear scale pivots, from the root in heights (slot frame): sprites scale about their center. */
+  appearPivot = new THREE.Vector3(0, 0.5, 0);
   visible = true;
   /**
    * Sprite-style offset in GBA pixels (x right, y down), like OAM x2/y2:
@@ -93,6 +96,8 @@ export class Battler3D {
   private poseClock = 0;
   private snapPose = true;
   private posed: { nodes: THREE.Object3D[]; values: Float32Array; root: THREE.Vector3; rotation: THREE.Euler; scale: number } | null = null;
+  /** Fainting: the middle of the curled body, which the shrink closes in on (from the clip's 'shrink'). */
+  private shrinkPivot: THREE.Vector3 | null = null;
 
   private constructor(readonly stage: BattleStage, readonly slot: SlotName, readonly inst: PokemonInstance) {
     this.animator = new Animator(inst.rig, inst.profile.clips, inst.profile.overlap);
@@ -393,6 +398,26 @@ export class Battler3D {
     if (lowest < ground) root.position.y += ground - lowest;
   }
 
+  /**
+   * The middle of the body as it stands on screen (the box around its skin),
+   * from the root in heights, in the slot's frame.
+   */
+  private bodyMiddle(): THREE.Vector3 {
+    const root = this.inst.root;
+    root.updateMatrixWorld(true);
+    const toSlot = this.stage.slots[this.slot].matrixWorld.clone().invert();
+    const box = new THREE.Box3();
+    const v = new THREE.Vector3();
+    root.traverse((o) => {
+      const mesh = o as THREE.SkinnedMesh;
+      if (!mesh.isSkinnedMesh || !mesh.visible) return;
+      const count = mesh.geometry.getAttribute('position').count;
+      const step = Math.max(1, Math.floor(count / 2000));
+      for (let i = 0; i < count; i += step) box.expandByPoint(mesh.getVertexPosition(i, v).applyMatrix4(mesh.matrixWorld).applyMatrix4(toSlot));
+    });
+    return box.isEmpty() ? this.appearPivot.clone() : box.getCenter(new THREE.Vector3()).sub(root.position).divideScalar(this.height);
+  }
+
   /** Distance a contact move travels so the attacker ends up in front of its target. */
   approachDistance(): number {
     if (!this.target) return 0;
@@ -409,6 +434,7 @@ export class Battler3D {
       onEvent: (e) => {
         // An event's pose shows on the frame it happens.
         this.snapPose = true;
+        if (e === 'shrink') this.shrinkPivot = this.bodyMiddle();
         this.onEvent?.(e);
       },
     });
@@ -463,7 +489,7 @@ export class Battler3D {
   private placeRoot(poseScale: number): void {
     const root = this.inst.root;
     root.scale.setScalar(poseScale * this.appear);
-    if (this.appear !== 1) root.position.y += (1 - this.appear) * this.height * this.appearPivot;
+    if (this.appear !== 1) root.position.addScaledVector(this.shrinkPivot ?? this.appearPivot, (1 - this.appear) * this.height);
     if (this.screenOffset[0] || this.screenOffset[1]) root.position.add(this.screenOffsetLocal());
   }
 
@@ -471,6 +497,18 @@ export class Battler3D {
     this.time += dt;
     const pose = this.animator.update(dt);
     this.pose = pose;
+    // Fainting, as the 3D games show it: from the faint clip's 'shrink' the
+    // body shrinks away into its middle (as the GBA shrinks a Pokémon into
+    // its ball), and then it is gone.
+    if (this.shrinkPivot) {
+      const since = this.animator.sinceEvent('shrink');
+      const frames = since === null ? 0 : since * 60;
+      if (since === null || frames >= SHRINK_FRAMES) {
+        if (since !== null) this.visible = false;
+        this.shrinkPivot = null;
+        this.appear = 1;
+      } else this.appear = shrinkScale(frames);
+    }
     const recoil = this.recoilSpring.update(dt, 0);
 
     // Root transform: calibration + animation channels (+ hit recoil: pushed
@@ -493,7 +531,7 @@ export class Battler3D {
     // Loose parts follow the body through world space (start from rest when
     // the battler (re)appears) and sway in the arena's wind.
     root.updateMatrixWorld(true);
-    const settled = this.visible && this.appear >= 1;
+    const settled = this.visible && (this.appear >= 1 || this.shrinkPivot !== null);
     const ambience = this.stage.ambience;
     const wind = ambience ? ambience.wind.clone().multiplyScalar(H * 9) : undefined;
     for (const chain of this.chains) {
@@ -586,7 +624,8 @@ export class Battler3D {
     if (this.carry || this.letGo) this.placeCarried(dt);
 
     // Shadow on the ground under the body on screen: follows the feet,
-    // shrinks and fades in the air, gone when sunk (fainted) or not sent out.
+    // shrinks and fades in the air, shrinks with the body (a Poké Ball's
+    // flash, a faint), gone when sunk (a dig) or not sent out.
     const shownLift = root.position.y - cal.lift;
     const up = Math.max(0, shownLift / H);
     const sunk = Math.min(1, Math.max(0, 1 + (shownLift / H) * 4));

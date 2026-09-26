@@ -100,6 +100,18 @@ export class Animator {
     return this.current?.clip.name ?? null;
   }
 
+  /**
+   * Seconds the current clip has run since its `event`, or null when it has
+   * no such event or has not reached it yet (a faint shrinks away from its
+   * 'shrink').
+   */
+  sinceEvent(event: string): number | null {
+    const cur = this.current;
+    const at = cur?.clip.events?.find((e) => e.name === event)?.t;
+    if (!cur || at === undefined || cur.time < at) return null;
+    return (cur.time - at) / cur.speed;
+  }
+
   has(name: string): boolean {
     return name in this.clips;
   }

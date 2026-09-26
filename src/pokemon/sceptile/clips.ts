@@ -4,13 +4,13 @@
 //
 // Channels used here:
 //   advance  0..1   how far toward the target a contact move has travelled
-//   root     model-unit offset/rotation of the whole body (leaps, spins, sink)
+//   root     model-unit offset/rotation of the whole body (leaps, spins)
 //   plantFeet       foot IK weight (0 = the legs are free: airborne). The IK
 //                   pins a planted foot's height and keeps its posed x/z, so
 //                   a pelvis shift moves planted feet with it
 //   expression      eye atlas cell (open, angry, focus, half, happy, closed, hurt)
 // Events: impact (contact lands), release (projectile/beam starts),
-// releaseEnd, charge, cry, aura, emit, thud; grab and throw (a toss carries
+// releaseEnd, charge, cry, aura, emit, shrink; grab and throw (a toss carries
 // the foe between them), dig (a burrow goes under).
 //
 // The healthboxes are drawn over the Pokémon, so clips at home stay clear of
@@ -50,6 +50,7 @@ const fall = (t: number, ...deltas: Pose[]): Keyframe => ({ ...key(t, ...deltas)
 const ANGRY: Pose = { expression: 'angry' };
 const FOCUS: Pose = { expression: 'focus' };
 const SHUT: Pose = { expression: 'closed' };
+const DROWSY: Pose = { expression: 'half' };
 const HAPPY: Pose = { expression: 'happy' };
 const HURT: Pose = { expression: 'hurt' };
 const OPEN_EYES: Pose = { expression: 'open' };
@@ -104,12 +105,6 @@ const ELBOWS_BACK = both([[-0.55, -0.42, -0.72], [-0.22, 0.08, 0.97], [-0.1, 0.1
 const CLAWS_UP = both([[-0.6, 0.3, 0.74], [-0.25, 0.9, 0.36], [-0.1, 0.98, 0.15]]);
 /** Claws thrust at the foe, splayed. */
 const CLAWS_OUT = both([[-0.5, 0.05, 0.86], [-0.3, 0.3, 0.9], [-0.2, 0.45, 0.87]]);
-/**
- * Hanging limp at its sides, a little back (faint): hanging forward, a wild
- * Sceptile's claws touched the ground in front of its feet, under our
- * healthbox.
- */
-const LIMP = both([[-0.35, -0.82, -0.45], [-0.2, -0.8, -0.55], [-0.1, -0.85, -0.5]]);
 /** Both claws reaching wide at the foe, open (reads in both views). */
 const REACH = both([[-0.55, 0.05, 0.83], [-0.35, 0.15, 0.92], [-0.3, 0.25, 0.92]]);
 /** Arms open to the sky, palms up (basking). */
@@ -822,30 +817,26 @@ const hit: Clip = {
 };
 
 /**
- * Fainting: reels, sways forward, its knees buckle and splay out and it sits
- * back on its heels in a low sprawl, then flops back onto its tail with the
- * head lolling onto its chest, and sinks into the ground. (Back over its
- * heels, knees out and arms hanging at its sides rather than slumped forward
- * over its feet: on its long neck a wild Sceptile's head, knees and claws came
- * down onto our healthbox.)
+ * Fainting, as the 3D games show it (worn out, not dying): a tired sway,
+ * then it sinks into a squat, knees out, and curls over hugging itself, the
+ * long neck bowed and the tail curling round, eyes shut; from the 'shrink'
+ * the curled body shrinks away (Battler3D). It sits back over its heels as
+ * it curls: bowed forward over its feet on that long neck, a wild
+ * Sceptile's head, knees and claws came down onto our healthbox
+ * (tools/gauntlet/uiclear.mjs).
  */
-const down = (y: number, back: number, sink = 0): Pose[] => [pelvis(0, y), root({ y: sink, z: -back }), LIMP, SHUT];
 const faint: Clip = {
   name: 'faint',
-  duration: 1.8,
+  duration: 1.6,
   keys: [
     key(0),
-    snap(0.12, root({ z: -0.04 }), bend(-14, -6, -6, -24), FLINCH, HURT, tail(10)),
-    key(0.4, ...down(-0.04, 0.03), bend(10, 4, 6, 16), tail(-6)),
-    // The knees buckle, splaying out: it sits back on its heels, the head drooping.
-    key(0.72, ...down(-0.15, 0.1), SQUAT, bend(4, 2, 10, 20), tail(-8)),
-    // Flops back onto its tail, the head lolling onto its chest.
-    fall(0.9, ...down(-0.22, 0.18), SQUAT, bend(-18, -7, 14, 26, 0, 10), tail(-6)),
-    key(1.0, ...down(-0.205, 0.18), SQUAT, bend(-16, -6, 13, 24, 0, 8), tail(-5)),
-    key(1.12, ...down(-0.215, 0.18), SQUAT, bend(-18, -7, 14, 26, 0, 10), tail(-6)),
-    fall(1.8, ...down(-0.215, 0.22, -1.1), SQUAT, bend(-18, -7, 14, 26, 0, 10), tail(-6)),
+    key(0.18, root({ z: -0.02 }), bend(-8, -4, -4, -12), DROWSY, tail(6)),
+    key(0.48, pelvis(0, -0.07), root({ z: -0.04 }), SQUAT, bend(12, 5, 8, 16), CROSSED, SHUT, tail(-6, 10)),
+    key(0.82, pelvis(0, -0.18), root({ z: -0.1 }), SQUAT, bend(22, 10, 16, 24), CROSSED, SHUT, tail(-12, 26)),
+    key(0.96, pelvis(0, -0.19), root({ z: -0.1 }), SQUAT, bend(24, 11, 17, 26), CROSSED, SHUT, tail(-13, 28)),
+    key(1.6, pelvis(0, -0.186), root({ z: -0.1 }), SQUAT, bend(23, 10, 16, 25), CROSSED, SHUT, tail(-12, 27)),
   ],
-  events: [{ t: 0.9, name: 'thud' }],
+  events: [{ t: 1.04, name: 'shrink' }],
 };
 
 export const SCEPTILE_CLIPS: Record<string, Clip> = Object.fromEntries(

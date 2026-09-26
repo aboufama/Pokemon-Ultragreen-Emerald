@@ -24,7 +24,7 @@ forward at rest: a deep crouch plus a spine bend lays the whole body flat.
 - [x] `hit`: 3-frame snap into a flinch with the hands jerking up in front of the face and hurt eyes, the sprung knock-back carries it, digs back in
   - fixed after review: the first version flung the arms straight out, which read as a T-pose flash from the back view
   - fixed for the healthboxes: from our side the hands, jerking up out at the sides, went under our healthbox (20 px); they now come up close in front of the face (1 px), with the 3-frame snap of the timing table (2 pops, as before)
-- [x] `faint`: reels back with the flinch, the hands fall in front of it as it sways, the knees give and it sits back heavily onto its heels, slumped, and sinks tipping back a little
+- [x] `faint`: a tired sway, then it settles back onto its heels hunched over, head bowed between its shoulders and arms folded low, eyes shut, and shrinks away (worn out, as the 3D games show it; bowed deeper, its head fins splayed and it looked face down)
   - fixed for the healthboxes: as the foe it slumped forward onto its belly and its head fell onto our healthbox (278 px); it now folds back over its heels (3 px). From our side the flinching right hand went under our box (14 px): the flinch is narrower and the hands fall in front (0 px)
 
 ## Attack categories

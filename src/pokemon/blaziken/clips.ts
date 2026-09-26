@@ -3,12 +3,12 @@
 //
 // Channels used here:
 //   advance  0..1   how far toward the target a contact move has travelled
-//   root     model-unit offset/rotation of the whole body (jumps, spins, sink)
+//   root     model-unit offset/rotation of the whole body (jumps, spins)
 //   plantFeet / plantLeft / plantRight   foot IK weights (0 = the leg is free)
 //   fx.flames 0..1  wrist flames (the stock sprite shows none at rest)
 //   expression      eye atlas cell
 // Events: impact (contact lands), release (projectile/beam starts),
-// releaseEnd, charge, cry, aura, emit, thud.
+// releaseEnd, charge, cry, aura, emit, shrink.
 //
 // How the clips are built (the 12 principles, applied to game clips):
 //   - every action has an anticipation (wind-up, crouch, drawn breath) and a
@@ -42,6 +42,7 @@ const fall = (t: number, ...deltas: Pose[]): Keyframe => ({ ...key(t, ...deltas)
 
 const ANGRY: Pose = { expression: 'angry' };
 const SHUT: Pose = { expression: 'closed' };
+const DROWSY: Pose = { expression: 'half' };
 const HURT: Pose = { expression: 'hurt' };
 const OPEN_EYES: Pose = { expression: 'open' };
 const jaw = (deg: number): Pose => ({ bones: { jaw: { x: deg } } });
@@ -72,15 +73,6 @@ const ARMS_SPREAD_UP: Pose = {
     forearmR: { dir: [-0.7, 0.62, 0.36] },
     armL: { dir: [0.93, 0.1, 0.35] },
     forearmL: { dir: [0.7, 0.62, 0.36] },
-  },
-};
-
-const LIMP_ARMS: Pose = {
-  aim: {
-    armR: { dir: [-0.3, -0.95, 0.1] },
-    forearmR: { dir: [-0.1, -0.95, 0.3] },
-    armL: { dir: [0.3, -0.95, 0.1] },
-    forearmL: { dir: [0.1, -0.95, 0.3] },
   },
 };
 
@@ -680,24 +672,25 @@ const hit: Clip = {
   ],
 };
 
-/** Fainting: reels, sways forward, knees buckle, slumps, then sinks into the ground. */
+/**
+ * Fainting, as the 3D games show it (worn out, not dying): a tired sway, then
+ * it curls over onto its heels hugging itself, head tucked and eyes shut, and
+ * from the 'shrink' the curled body shrinks away (Battler3D). It sits back as
+ * it curls: bowed forward over its feet, the foe's head came down onto our
+ * healthbox (tools/gauntlet/uiclear.mjs).
+ */
 const faint: Clip = {
   name: 'faint',
-  duration: 1.8,
+  duration: 1.6,
   keys: [
     key(0),
-    snap(0.12, { root: { z: -0.04 } }, bend(-14, -6, -4, -24), HURT,
-      { aim: { armR: { dir: [-0.8, -0.3, 0.5] }, armL: { dir: [0.8, -0.35, -0.48] } } }),
-    key(0.4, pelvis(0, -0.04), { root: { z: -0.02 } }, bend(10, 4, 4, 16), LIMP_ARMS, SHUT),
-    // It folds onto its knees sitting back a little: slumped forward over its
-    // feet, the foe's head would drop onto our healthbox (tools/gauntlet/uiclear.mjs).
-    key(0.72, pelvis(0, -0.2), { root: { z: -0.08 } }, bend(26, 8, 6, 24), LIMP_ARMS, SHUT),
-    fall(0.9, pelvis(0, -0.275), { root: { z: -0.15 } }, bend(32, 10, 6, 26), LIMP_ARMS, SHUT),
-    key(1.0, pelvis(0, -0.255), { root: { z: -0.15 } }, bend(30, 10, 6, 24), LIMP_ARMS, SHUT),
-    key(1.12, pelvis(0, -0.27), { root: { z: -0.15 } }, bend(32, 10, 6, 26), LIMP_ARMS, SHUT),
-    fall(1.8, pelvis(0, -0.27), { root: { y: -1.1, z: -0.15 } }, bend(32, 10, 6, 26), LIMP_ARMS, SHUT),
+    key(0.18, { root: { z: -0.02 } }, bend(-8, -4, -2, -12), DROWSY),
+    key(0.48, pelvis(0, -0.08), { root: { z: -0.04 } }, bend(14, 5, 4, 20), CROSSED, SHUT),
+    key(0.82, pelvis(0, -0.22), { root: { z: -0.1 } }, bend(28, 12, 8, 30), CROSSED, SHUT),
+    key(0.96, pelvis(0, -0.235), { root: { z: -0.1 } }, bend(30, 13, 8, 32), CROSSED, SHUT),
+    key(1.6, pelvis(0, -0.228), { root: { z: -0.1 } }, bend(29, 12, 8, 31), CROSSED, SHUT),
   ],
-  events: [{ t: 0.9, name: 'thud' }],
+  events: [{ t: 1.04, name: 'shrink' }],
 };
 
 export const BLAZIKEN_CLIPS: Record<string, Clip> = Object.fromEntries(

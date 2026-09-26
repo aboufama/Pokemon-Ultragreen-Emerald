@@ -161,7 +161,7 @@ One clip per category, plus `idle` (loop), `intro` (sent out / appears), `hit` a
 | `special_strong` | no contact, power ≥ 75 | `charge`, `release` (stream), `releaseEnd` |
 | `status_self` | power 0, targets the user | `aura` |
 | `status_target` | power 0, targets the foe | `emit` |
-| `intro` / `faint` | send-out / fainting | `cry` / `thud` |
+| `intro` / `faint` | send-out / fainting | `cry` / `shrink` |
 
 - **Per-move overrides** go in `moveClips` (e.g. `MOVE_DOUBLE_KICK: 'physical_weak_kick'`).
   Multi-hit clips emit one `impact` per hit.
@@ -169,7 +169,8 @@ One clip per category, plus `idle` (loop), `intro` (sent out / appears), `hit` a
   - `advance` 0..1 travels toward the target; contact moves reach 1 at `impact`.
   - `root` moves and turns the whole body, in units of its height (jumps, spins).
     A spin can end at `yaw: 360`: blends back to idle take the short way round.
-  - `root.y = -1.1` at the end of `faint` sinks it below the ground, which hides it.
+  - `faint` curls over and holds; from its `shrink` event the battler shrinks the
+    body away (src/anim/clip.ts `SHRINK_FRAMES`), as the 3D games show a faint.
   - `plantFeet` pins both feet to the ground with IK; `plantLeft` / `plantRight`
     override one leg, so a kick lifts one foot while the other stays planted.
   - `scale` pulses the whole model; `fx.<channel>` drives effect meshes.

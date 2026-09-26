@@ -6,7 +6,7 @@
 // bespoke ones (see src/pokemon/blaziken/clips.ts and docs/POKEMON_PIPELINE.md).
 //
 // Event names and timings match the Blaziken set so the move director drives
-// both the same way: impact, release, releaseEnd, charge, aura, emit, cry, thud.
+// both the same way: impact, release, releaseEnd, charge, aura, emit, cry, shrink.
 
 import type { Clip, Ease, Keyframe } from '../../anim/clip';
 import { compose } from '../../anim/animator';
@@ -132,17 +132,19 @@ export function makeGenericClips(stance: Pose = {}): Record<string, Clip> {
       ],
     },
     {
-      // Faint: stagger, slump and sink into the ground (the ground hides it).
+      // Faint, as the 3D games show it (worn out, not dying): a tired sway,
+      // then it curls over, bowed low with the head tucked; from the
+      // 'shrink' the curled body shrinks away (Battler3D).
       name: 'faint',
-      duration: 1.7,
+      duration: 1.6,
       keys: [
         key(0),
-        key(0.3, { root: { z: -0.04, pitch: -8 }, bones: { spine: { x: -10 }, head: { x: -16 } } }, 'out'),
-        key(0.85, { root: { y: -0.05, pitch: 22 }, bones: { spine: { x: 20 }, head: { x: 26 } } }, 'in'),
-        key(1.15, { root: { y: -0.06, pitch: 26 }, bones: { spine: { x: 24 }, head: { x: 30 } } }),
-        key(1.7, { root: { y: -1.1, pitch: 26 }, bones: { spine: { x: 24 }, head: { x: 30 } } }, 'in'),
+        key(0.18, { root: { z: -0.02, pitch: -5 }, bones: { spine: { x: -6 }, head: { x: -10 } } }),
+        key(0.5, { root: { y: -0.02, pitch: 10 }, bones: { spine: { x: 14 }, head: { x: 20 }, tail: { x: -8 } } }),
+        key(0.85, { root: { y: -0.04, pitch: 18 }, bones: { spine: { x: 24 }, head: { x: 30 }, tail: { x: -14 } } }),
+        key(1.6, { root: { y: -0.04, pitch: 17 }, bones: { spine: { x: 23 }, head: { x: 29 }, tail: { x: -13 } } }),
       ],
-      events: [{ t: 0.85, name: 'thud' }],
+      events: [{ t: 1.05, name: 'shrink' }],
     },
   ];
   return Object.fromEntries(clips.map((c) => [c.name, { ...c, generic: true }]));

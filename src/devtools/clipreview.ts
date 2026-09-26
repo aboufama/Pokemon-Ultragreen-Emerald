@@ -53,7 +53,7 @@ declare global {
       /** Play another clip in place (after start()'s), from where the body is; done again at its end. */
       play: (clip: string) => void;
       done: boolean;
-      /** Frames stepped so far, and the frames a move's hits (or a faint's thud) landed on. */
+      /** Frames stepped so far, and the frames a move's hits (or a faint's shrink) landed on. */
       frame: number;
       hits: number[];
       label: string;
@@ -182,13 +182,11 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
       if (moveName) void performMove(attacker, defender, moveData(moveName), vfx, { onHit }).then(finish);
       else if (clipName === 'idle') finish();
       else {
-        // A hit plays with the knock-back the move director adds in battle,
-        // a faint with the scene's shake as the body hits the ground.
+        // A hit plays with the knock-back the move director adds in battle;
+        // a faint's moment is its shrink (the battle plays SE_FAINT there).
         if (clipName === 'hit') attacker.recoil(1);
         attacker.onEvent = (e) => {
-          if (e !== 'thud') return;
-          api.hits.push(api.frame);
-          vfx.shake(0.03, 0.25);
+          if (e === 'shrink') api.hits.push(api.frame);
         };
         void attacker.play(clipName).then(finish);
       }

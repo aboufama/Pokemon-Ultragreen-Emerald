@@ -19,6 +19,7 @@ import { speciesBrief } from './brief.mjs';
 import { lintClips } from './cliplint.mjs';
 import { readGlbJson } from './rigmap.mjs';
 import { CATEGORY_CLIPS, MOMENT_CLIPS, ROOT, clipOf, gameData, loadProfile, reviewJobs } from './species.mjs';
+import { importTs } from './tsimport.mjs';
 
 function parseArgs(argv) {
   const args = {};
@@ -61,8 +62,15 @@ const REQUIRED_EVENTS = {
   status_self: ['aura'],
   status_target: ['emit'],
   intro: ['cry'],
-  faint: ['thud'],
+  faint: ['shrink'],
 };
+/**
+ * A faint curls over and shrinks away, as the 3D games show it: it never
+ * sinks into the ground (root.y) or topples over (root.pitch / root.roll),
+ * and it lasts the shrink's length after its 'shrink' (src/anim/clip.ts).
+ */
+const FAINT_LIMITS = { sink: -0.1, tip: 40 };
+const { SHRINK_FRAMES } = await importTs('src/anim/clip.ts');
 // Bones every species of a body plan has (shells may lack a spine; some necks are one bone).
 const REQUIRED_BONES = {
   biped: ['hips', 'head', 'armL', 'armR', 'forearmL', 'forearmR', 'thighL', 'thighR', 'shinL', 'shinR', 'footL', 'footR'],
@@ -155,6 +163,13 @@ for (const name of [...MOMENT_CLIPS, ...CATEGORY_CLIPS]) {
   const lacking = need.filter((e) => !events.includes(e));
   if (lacking.length) problems.push(`missing events: ${lacking.join(', ')}`);
   if ((c.events ?? []).some((e) => e.t < 0 || e.t > c.duration)) problems.push('event outside the clip');
+  if (name === 'faint') {
+    const shrink = (c.events ?? []).find((e) => e.name === 'shrink');
+    if (shrink && c.duration - shrink.t < SHRINK_FRAMES / 60 - 1e-6) problems.push(`ends ${(c.duration - shrink.t).toFixed(2)} s after its shrink (the shrink takes ${(SHRINK_FRAMES / 60).toFixed(2)} s)`);
+    const r = (k) => k.pose.root ?? {};
+    if (keys.some((k) => (r(k).y ?? 0) < FAINT_LIMITS.sink)) problems.push(`sinks into the ground (root.y below ${FAINT_LIMITS.sink}): a faint curls over and shrinks away`);
+    if (keys.some((k) => Math.abs(r(k).pitch ?? 0) > FAINT_LIMITS.tip || Math.abs(r(k).roll ?? 0) > FAINT_LIMITS.tip)) problems.push(`topples over (root tipped past ${FAINT_LIMITS.tip}°): a faint curls over and shrinks away`);
+  }
   gate(`clip ${name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s, ${keys.length} keys${events.length ? ', ' + events.join(' ') : ''}`);
 }
 

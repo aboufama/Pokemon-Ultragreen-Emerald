@@ -11,7 +11,7 @@
 //   plantFeet / plantLeft / plantRight   foot IK weights (0 = the leg is free)
 //   expression      eye atlas cell (open, angry, half, closed, squint, narrow, hurt)
 // Events: impact (contact lands), release (projectile/stream/wave starts),
-// releaseEnd, charge, cry, aura, emit, thud; grab and throw (a toss carries
+// releaseEnd, charge, cry, aura, emit, shrink; grab and throw (a toss carries
 // the foe from its grab to its throw), dig (a burrow goes under).
 //
 // How Swampert moves (the brief in index.ts):
@@ -47,6 +47,7 @@ const fall = (t: number, ...deltas: Pose[]): Keyframe => ({ ...key(t, ...deltas)
 
 const ANGRY: Pose = { expression: 'angry' };
 const SHUT: Pose = { expression: 'closed' };
+const DROWSY: Pose = { expression: 'half' };
 const SQUINT: Pose = { expression: 'squint' };
 const NARROW: Pose = { expression: 'narrow' };
 const HURT: Pose = { expression: 'hurt' };
@@ -136,7 +137,7 @@ const ARMS_BACK = arms([0.6, -0.35, -0.72], [0.45, -0.6, -0.66], [0.2, -0.8, -0.
 const ARMS_FWD_SPREAD = arms([0.75, -0.15, 0.65], [0.45, -0.35, 0.82], [0.1, -0.55, 0.83]);
 /** Flinch: the hands jerk up in front of the face. */
 const FLINCH = arms([0.62, 0.05, 0.78], [-0.05, 0.8, 0.6], [-0.3, 0.85, 0.43]);
-/** Arms hanging limp at its sides, a little behind the hips (fainting, resting). */
+/** Arms hanging limp at its sides, a little behind the hips (resting). */
 const LIMP_ARMS = arms([0.55, -0.82, -0.12], [0.2, -0.97, 0.1], [-0.2, -0.95, 0.2]);
 /** The crab arms easing out at the elbows, hands hanging (a breakdown into and out of a squat: the hands pass at its sides, not low in front). */
 const ELBOWS_OUT = arms([0.93, -0.22, 0.28], [0.5, -0.85, 0.18], [-0.3, -0.88, 0.37]);
@@ -239,27 +240,25 @@ const hit: Clip = {
 };
 
 /**
- * Fainting: reels, sways forward, the knees give and it sits back heavily
- * onto its heels, slumped, then sinks. Slumped forward onto its belly, the
- * foe's head fell onto our healthbox (tools/gauntlet/uiclear.mjs).
+ * Fainting, as the 3D games show it (worn out, not dying): a tired sway,
+ * then it settles back heavily onto its heels and curls over its belly,
+ * arms folded in and head bowed between its shoulders, eyes shut; from the
+ * 'shrink' the curled body shrinks away (Battler3D). It sits back as it
+ * curls: slumped forward onto its belly, the foe's head fell onto our
+ * healthbox (tools/gauntlet/uiclear.mjs).
  */
 const faint: Clip = {
   name: 'faint',
-  duration: 2.0,
+  duration: 1.7,
   keys: [
     key(0),
-    snap(0.14, { root: { z: -0.03 } }, bend(-14, -6, -4, -22), FLINCH, jaw(14), HURT),
-    // The hands fall in front of it as it sways forward.
-    key(0.3, pelvis(0, -0.02), { root: { z: -0.04 } }, bend(-2, -1, 0, -4), ARMS_DOWN_FRONT, jaw(8), HURT),
-    key(0.45, pelvis(0, -0.035), { root: { z: -0.08 } }, bend(3, 1, 1, 5), LIMP_ARMS, CURL, jaw(4), SHUT),
-    // The knees give and it sits back heavily onto its heels, slumped.
-    key(0.78, pelvis(0, -0.15), { root: { z: -0.14 } }, bend(16, 6, 4, 14), LIMP_ARMS, CURL, jaw(2), SHUT),
-    fall(0.98, pelvis(0, -0.22), { root: { z: -0.3, pitch: -6 } }, bend(22, 8, 4, 18), LIMP_ARMS, CURL, SHUT),
-    key(1.1, pelvis(0, -0.2), { root: { z: -0.3, pitch: -5 } }, bend(20, 8, 4, 16), LIMP_ARMS, CURL, SHUT),
-    key(1.24, pelvis(0, -0.22), { root: { z: -0.3, pitch: -6 } }, bend(22, 8, 4, 18), LIMP_ARMS, CURL, SHUT),
-    fall(2.0, pelvis(0, -0.22), { root: { y: -1.1, z: -0.3, pitch: -6 } }, bend(22, 8, 4, 18), LIMP_ARMS, CURL, SHUT),
+    key(0.2, { root: { z: -0.02 } }, bend(-8, -4, -2, -12), jaw(-8), DROWSY),
+    key(0.52, sink(-0.05), { root: { z: -0.03 } }, bend(6, 2, 1, 12), CROSSED_LOW, CURL, MOUTH_SHUT, SHUT),
+    key(0.88, sink(-0.08), { root: { z: -0.06, pitch: -2 } }, bend(10, 4, 2, 19), CROSSED_LOW, CURL, MOUTH_SHUT, SHUT),
+    key(1.02, sink(-0.085), { root: { z: -0.06, pitch: -2 } }, bend(11, 5, 2, 20), CROSSED_LOW, CURL, MOUTH_SHUT, SHUT),
+    key(1.7, sink(-0.083), { root: { z: -0.06, pitch: -2 } }, bend(10, 4, 2, 19), CROSSED_LOW, CURL, MOUTH_SHUT, SHUT),
   ],
-  events: [{ t: 0.98, name: 'thud' }],
+  events: [{ t: 1.12, name: 'shrink' }],
 };
 
 // Attack categories -------------------------------------------------------------

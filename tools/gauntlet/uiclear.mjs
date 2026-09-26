@@ -35,7 +35,7 @@ const STEP = 2;
 /** Clips that play at home: the moments, then every clip that never travels toward the foe. */
 export function homeClips(profile, only = null) {
   const home = Object.entries(profile.clips).filter(([name, c]) => !MOMENT_CLIPS.includes(name) && c.keys.every((k) => !(k.pose.advance > 0)) && !(c.events ?? []).some((e) => ['grab', 'dig'].includes(e.name)));
-  // The faint last: the body stays down after it.
+  // The faint last: the body is gone after it.
   const order = ['idle', 'intro', 'hit', ...home.map(([n]) => n).sort(), 'faint'];
   return order.filter((n) => profile.clips[n] && (!only || only.includes(n)));
 }
@@ -119,7 +119,8 @@ if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
     if (argv[i].startsWith('--')) args[argv[i].slice(2)] = argv[i + 1] === undefined || argv[i + 1].startsWith('--') ? true : argv[++i];
   }
   const base = String(args.base ?? 'http://127.0.0.1:5173/');
-  const all = (await readdir(join(ROOT, 'src/pokemon'), { withFileTypes: true })).filter((d) => d.isDirectory() && existsSync(join(ROOT, 'src/pokemon', d.name, 'clips.ts'))).map((d) => d.name);
+  // Every species with a profile (src/pokemon/generic holds the starter clips, not a species).
+  const all = (await readdir(join(ROOT, 'src/pokemon'), { withFileTypes: true })).filter((d) => d.isDirectory() && existsSync(join(ROOT, 'src/pokemon', d.name, 'index.ts'))).map((d) => d.name);
   const species = args.species ? String(args.species).split(',') : all;
   const only = args.clips ? String(args.clips).split(',') : null;
   const shots = typeof args.shots === 'string' ? args.shots : null;

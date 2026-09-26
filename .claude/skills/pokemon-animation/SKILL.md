@@ -71,11 +71,21 @@ as Blaziken does). Rules:
 | strong ranged | ~2.3 s | 0.5 gather (charge) · hold · snap · 0.8 sustained (release → releaseEnd) · recover |
 | status | ~1.4–1.7 s | gather or rear up · the action with a moving hold · relax |
 | intro | ~1.6 s | curled crouch · burst up · cry with a moving hold · settle to stance |
-| faint | ~1.8 s | reel · sway forward · knees buckle · slump with a small bounce · sink (`root.y` -1.1) |
+| faint | ~1.6 s | a tired sway (eyes half shut) · curl over onto the heels, hugging itself, head tucked, eyes shut · `shrink` · a moving hold while it shrinks away (0.53 s) |
 
 Strikes happen in 3–6 frames; holds last 8–20 frames and never freeze (move
 something 1–3°). Everything starts at `key(0)` (the stance) and ends on a key at
-`duration` that returns to the stance.
+`duration` that returns to the stance, except the faint, which ends curled.
+
+**The faint is not a death.** As in the 3D games, the Pokémon is worn out:
+it curls over (a crouch on its heels, arms folded in, head bowed, eyes
+shut), and from its `shrink` event the battler shrinks the curled body away
+into its middle, as the GBA shrinks a Pokémon into its ball
+(`sAffineAnim_Battler_Return`, `SHRINK_FRAMES` in src/anim/clip.ts), with
+SE_FAINT. Never sink it into the ground, topple it over or slump it lifeless:
+`tools/gauntlet/check.mjs` fails a faint that sinks (`root.y` below -0.1),
+tips past 40° or ends before its shrink does. Heavy species hunch rather than
+fold (Swampert: bowed deeper, its head fins splayed and it looked face down).
 
 ## The principles as rules for these clips
 
@@ -97,7 +107,7 @@ something 1–3°). Everything starts at `key(0)` (the stance) and ends on a key
    body under one looks cut off. From our side the foe's box sits a few
    pixels above our Pokémon's head and ours to its right; the foe's feet touch
    the top of ours. So at home: raise arms wide rather than overhead, keep
-   jumps low (or lean into them instead), keep side-steps narrow, fold a faint
+   jumps low (or lean into them instead), keep side-steps narrow, curl a faint
    back over the heels rather than forward over the feet. Clips that travel
    (`advance`) are free to pass. `tools/gauntlet/uiclear.mjs` checks every
    clip that stays at home, from both sides.
@@ -146,7 +156,7 @@ existing clips in `profile.motifClips`.
 | `emit` | a status move reaches out | sand, spores, sound, glare |
 | `aura` | a self-buff peaks | aura / shield / heal sparkle |
 | `cry` | intro roar | small shake |
-| `thud` | faint hits the ground | — |
+| `shrink` | a faint is curled up | the body shrinks away into its middle (SE_FAINT); the clip holds the curl for `SHRINK_FRAMES` after it |
 
 Place events on the pose that causes them *plus the overlap delay* of the part
 that acts. Contact moves must have `advance: 1` at `impact`.
@@ -185,5 +195,5 @@ that acts. Contact moves must have `advance: 1` at `impact`.
 | stutters mid-motion | a key that stops a channel halfway (a `fall()` that starts mid-descent instead of at the apex; a hop whose apex sits near the landing): fall from the top; put a hop's apex halfway across |
 | strike snaps harder than Blaziken's | under 5 frames, or a torso swing over ~50°: land, then a 0.08 s snap; cock the arm further back as it lands so the strike starts from a turnaround |
 | unreadable from our side | the back view hides it: exaggerate the silhouette, move the action above y≈92 px |
-| cut off by a healthbox (uiclear fails) | from our side: arms raised wide not overhead, a lower jump, a narrower side-step toward our box; the foe's faint folds back over its heels (slumped forward, its head falls onto our box) |
+| cut off by a healthbox (uiclear fails) | from our side: arms raised wide not overhead, a lower jump, a narrower side-step toward our box; the foe's faint curls back over its heels (bowed forward over its feet, its head comes down onto our box) |
 | limbs through the body | aim directions crossing the torso: check the turntable in the rig lab |

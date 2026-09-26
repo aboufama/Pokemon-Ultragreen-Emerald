@@ -15,7 +15,7 @@ and ends on the stance. GIFs are exported by the orchestrator.
 - [x] `intro`: crouched behind its crossed blades with the eyes shut, springs up with the arms flung wide, claws open, jaw wide for the cry and the tail raised, settles into the stance (reads from both sides; the cry lands on the burst)
 - [x] `hit`: snaps back with the hurt eyes and the arms thrown out, the sprung knock-back carries it, recovers without popping
   - healthbox pass: its weight stays back on its heels while it recovers (the knock-back spring's swing back carried a wild Sceptile's toes a pixel past the top of our healthbox: 5 px under it)
-- [x] `faint`: reels back, sways forward, its knees buckle and splay out and it sits back on its heels in a low gecko sprawl, flops back onto its tail with the head bowed onto its chest and a small bounce, then sinks
+- [x] `faint`: a tired sway, then it sinks into its wide squat, knees out, and curls over hugging itself, the long neck bowed and the tail curling round, eyes shut, and shrinks away (worn out, as the 3D games show it; it sits back over its heels, clear of our healthbox)
   - healthbox pass: it used to slump forward over its feet, and on its long neck the head and chest came down onto our healthbox as it sank (184 px from the foe's side). It now folds back over its heels, the knees splay out (the foot IK folded the left knee down to the ground in front of the foot) and the limp arms hang at its sides, a little back (hanging forward, the claws touched the ground in front)
 
 ## Attack categories

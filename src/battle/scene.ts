@@ -900,14 +900,19 @@ export class BattleScene {
     await this.clock.until(() => !this.vfx.busy);
   }
 
+  /**
+   * Fainting, as the 3D games show it: the Pokémon curls over (its faint
+   * clip) and, from the clip's 'shrink', shrinks away into its middle
+   * (Battler3D). SE_FAINT plays as it starts to shrink, where the
+   * game slides the fainted sprite down (SpriteCB_FaintOpponentMon,
+   * PlayerHandleFaintAnimation); then the healthbox goes
+   * (HideHealthboxAfterMonFaint).
+   */
   private async faint(side: Side): Promise<void> {
     const b = this.battler(side);
     if (side === 'player') this.setLowHp(false);
     b.onEvent = (e) => {
-      if (e !== 'thud') return;
-      this.vfx.shake(0.03, 0.25);
-      // The sprite's slide down with SE_FAINT (SpriteCB_FaintOpponentMon / PlayerHandleFaintAnimation).
-      sound.playSEPanned('se_faint', panFor(side));
+      if (e === 'shrink') sound.playSEPanned('se_faint', panFor(side));
     };
     await b.play('faint');
     b.onEvent = null;

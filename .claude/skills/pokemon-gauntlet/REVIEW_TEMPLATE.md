@@ -17,7 +17,7 @@ box) and from the opponent's side · starts and ends on the stance.
 - [ ] `idle`: breathing reads, nothing pops at the loop point, loose parts sway
 - [ ] `intro`: bursts out with a cry that fits the species, clear of the foe's healthbox from our side
 - [ ] `hit`: snaps away from the attacker, recovers without popping
-- [ ] `faint`: reels, collapses with weight, sinks
+- [ ] `faint`: a tired sway, curls over (arms in, head tucked, eyes shut), shrinks away at its `shrink`: worn out, never dying
 
 ## Attack categories
 

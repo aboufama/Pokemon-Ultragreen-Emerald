@@ -44,6 +44,21 @@ export interface ClipEvent {
   name: string;
 }
 
+/**
+ * A faint's 'shrink': from it the body shrinks away into its middle
+ * (Battler3D) the way the GBA shrinks a Pokémon returning to its ball
+ * (sAffineAnim_Battler_Return: 18 frames at -2/256 a frame, then -16/256 a
+ * frame), gone after SHRINK_FRAMES. The clip lasts at least that long after
+ * its 'shrink' (tools/gauntlet/check.mjs).
+ */
+export const SHRINK_FRAMES = 32;
+
+/** The body's scale `frames` (60 fps) into a faint's shrink. */
+export function shrinkScale(frames: number): number {
+  const s = frames <= 18 ? 256 - 2 * frames : 220 - 16 * (frames - 18);
+  return Math.max(0, s / 256);
+}
+
 export interface Clip {
   name: string;
   duration: number;
