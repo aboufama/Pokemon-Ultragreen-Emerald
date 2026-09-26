@@ -1,10 +1,14 @@
 // An Emerald single battle with 3D battlers.
 //
-// The flow follows the game: the environment intro of battle_intro.c
-// (window reveal, the entry layer sweeping across, the slide-in), the wild Pokémon's
-// shadowed slide-in, the trainer's throw and the Poké Ball send-out
-// (pokeball.c / battle_anim_throw.c), the action and move menus of
+// The flow follows the game: the intro of battle_intro.c (the window opening
+// on the field, the entry layer, the wild Pokémon in shadow, its healthbox
+// and cry), the trainer's throw and the Poké Ball send-out (pokeball.c /
+// battle_anim_throw.c), the action and move menus of
 // battle_controller_player.c, and turns presented from BattleEngine steps.
+// The camera holds still, so where the game slides its backdrop and the wild
+// Pokémon in, the Pokémon comes into its spot itself (src/battle3d/entrance.ts):
+// out of the tall grass, the sand or the sea it hid in, leaping in, or
+// sinking down through the water.
 // Timings are the decomp's frame counts at 60 fps. The 3D battlers stand in
 // for the sprites; the 2D layer (text box, healthboxes, trainer, ball) is
 // drawn exactly as on the GBA. The music and sound effects play where the
@@ -19,6 +23,7 @@ import { BattleStage } from '../render3d/stage';
 import { Battler3D } from '../battle3d/battler';
 import { VfxSystem, preloadSheets } from '../battle3d/vfx';
 import { bodyPoint, performMove, towardCamera } from '../battle3d/director';
+import { entranceFor, entranceFx } from '../battle3d/entrance';
 import { hasProfile } from '../pokemon/registry';
 import { GbaScreen } from './screen';
 import { type Button, Input } from './input';
@@ -37,23 +42,38 @@ const WAIT_SHORT = 32;
 
 const BLACK: RGB = [0, 0, 0];
 /**
- * The intro slide by place (sBattleIntroSlideFuncs): which of Slide1-3, and
- * how fast the entry layer scrolls (BG1_X per frame).
+ * The intro's entry layer by place (BG1 of battle_intro.c: the tall grass,
+ * dunes, waves or rocks nearest the camera), for a still camera. `y` is where
+ * it sits (BG1VOFS): where the wild Pokémon comes up out of it, it is lifted
+ * so its solid part hides the ground at the Pokémon's feet. `stir` is how it
+ * moves while the Pokémon hides in it: the grass rustles, the sand trembles,
+ * the sea bobs, bubbles rise. Once the Pokémon has landed it clears: sinking
+ * away `sink[0]` px a frame to `sink[1]` as Slide1 sinks it, or fading a step
+ * of 16 every `fade` frames as Slide2 fades it.
  */
-const INTRO_SLIDE: Record<string, { slide: 1 | 2 | 3; scroll: number }> = {
-  grass: { slide: 1, scroll: 6 },
-  long_grass: { slide: 1, scroll: 6 },
-  pond: { slide: 1, scroll: 6 },
-  mountain: { slide: 1, scroll: 6 },
-  cave: { slide: 1, scroll: 6 },
-  sand: { slide: 2, scroll: 8 },
-  water: { slide: 2, scroll: 8 },
-  underwater: { slide: 2, scroll: 6 },
-  building: { slide: 3, scroll: 8 },
-  plain: { slide: 3, scroll: 8 },
+interface Cover {
+  y: number;
+  stir?: 'rustle' | 'tremble' | 'bob' | 'rise';
+  sink?: [number, number];
+  fade?: number;
+}
+const COVERS: Record<string, Cover> = {
+  grass: { y: 30, stir: 'rustle', sink: [3, -56] },
+  long_grass: { y: 22, stir: 'rustle', sink: [4, -84] },
+  sand: { y: 31, stir: 'tremble', fade: 2 },
+  water: { y: 36, stir: 'bob', fade: 2 },
+  pond: { y: 0, sink: [2, -24] },
+  mountain: { y: 0, sink: [2, -32] },
+  cave: { y: 0, sink: [2, -56] },
+  underwater: { y: 0, stir: 'rise', fade: 3 },
+  // The hall's speed lines belong to a moving camera: none.
 };
+/** The frame of the intro the wild Pokémon comes out on (the window is nearly open). */
+const LAUNCH_FRAME = 56;
+/** Frames the cover stirs before the Pokémon comes out. */
+const STIR_FRAMES = 26;
 
-/** RGB(8, 8, 8): palette the wild Pokémon is faded to while it slides in. */
+/** RGB(8, 8, 8): palette the wild Pokémon is faded to while it comes in. */
 const SHADOW: RGB = [66, 66, 66];
 /** gBallOpenFadeColors[BALL_POKE] = RGB(31, 22, 30). */
 const BALL_FADE: RGB = [255, 181, 247];
@@ -472,6 +492,7 @@ export class BattleScene {
       b.visible = true;
       b.appear = 1;
       b.screenOffset = [0, 0];
+      b.rootOffset.set(0, 0, 0);
       b.setTint(BLACK, 0);
       b.onEvent = null;
       void b.play('idle', { fade: 0 });
@@ -502,65 +523,76 @@ export class BattleScene {
     const env = this.stage.environment!;
     const { enemy, player } = this;
     player.visible = false;
+    enemy.visible = false;
     enemy.setTint(SHADOW, 10 / 16);
-    this.trainer = { visible: true, x: 80 + 240, y: 80, frame: 3 };
+    // The trainer is already there, facing the field.
+    this.trainer = { visible: true, x: 80, y: 80, frame: 3 };
 
-    // BattleIntroSlide1/2/3 (battle_intro.c), by the place's environment.
-    // WIN0 opens from the middle row, 1 px a frame to row 48, then 4; the
-    // wild Pokémon slides in from the left and the trainer from the right,
-    // 2 px a frame. (The game slides the halves of its backdrop, whose
-    // plain sky hides the seam; this arena stays put and only they move.)
-    // All along, the entry layer (BG1: tall grass, dunes, waves, rocks)
-    // sweeps across the field; 32 frames into the slide it sinks away
-    // (Slide1), fades out (Slide2), or fades from half-transparent (Slide3).
-    const look = INTRO_SLIDE[env.name] ?? INTRO_SLIDE.building;
-    const sinkTo = env.name === 'long_grass' ? -80 : -56;
-    const sinkStep = env.name === 'long_grass' ? 2 : 1;
-    let bg1x = 0, bg1y = 0, wave = 0;
-    let blend = look.slide === 3, eva = look.slide === 3 ? 8 : 16, fadeIn = 1;
-    let slide = 240, top = 80, bottom = 81, state = 1, wait = 32;
+    // WIN0 opens from the middle row, 1 px a frame to row 48, then 4 (as
+    // BattleIntroSlide1-3). The wild Pokémon, hidden in the cover or out of
+    // sight, comes into its spot on its own (entrance.ts), in shadow; once it
+    // has landed, the cover sinks or fades away.
+    const cover = COVERS[env.name] ?? null;
+    const entrance = entranceFor(env.name);
+    const clip = enemy.profile.clips.entrance;
+    const launch = clip?.events?.find((e) => e.name === 'launch')?.t ?? 0;
+    const startFrame = Math.max(1, LAUNCH_FRAME - Math.round((launch * 60) / (entrance.speed ?? 1)));
+    let top = 80, bottom = 81, state = 1;
+    let f = 0, bgx = 0, bgy = cover?.y ?? 0, wave = 0, eva = 16, fadeTimer = 0;
+    let landed = false, cleared = !cover, entered: Promise<void> | null = null, done = false;
+    enemy.onEvent = (e) => {
+      entranceFx(enemy, entrance, e, this.vfx);
+      if (e === 'land') landed = true;
+    };
     const apply = () => {
       this.window = top > 0 ? [top, bottom] : null;
-      this.trainer.x = 80 + slide;
-      enemy.screenOffset = [-slide, 0];
-      env.setEntry(state < 4 ? { x: bg1x, y: bg1y, eva: blend ? eva / 16 : 1, evb: blend ? 1 - eva / 16 : 0 } : null);
+      env.setEntry(cleared ? null : { x: bgx, y: bgy, eva: eva / 16, evb: 1 - eva / 16 });
     };
     apply();
     await this.clock.task(() => {
-      bg1x += look.scroll;
-      if (env.name === 'water') {
-        // The waves bob: BG1_Y = Cos2(angle) / 512 - 8.
-        bg1y = Math.trunc(Math.round(Math.cos((wave * Math.PI) / 180) * 4096) / 512) - 8;
-        wave += wave < 180 ? 4 : 6;
-        if (wave === 360) wave = 0;
-      }
-      if (state === 1) {
-        state = 2;
-      } else if (state === 2) {
+      f++;
+      if (state === 1) state = 2;
+      else if (state === 2) {
         top--;
         bottom++;
         if (top === 48) state = 3;
-      } else {
-        if (look.slide === 1) {
-          if (wait) wait--;
-          else if (bg1y !== sinkTo) bg1y -= sinkStep;
-        } else if (wait) {
-          // Slide2 starts blending (opaque until now) when the wait ends.
-          if (--wait === 0) blend = true;
-        } else if (eva && --fadeIn === 0) {
-          eva--;
-          fadeIn = look.slide === 2 ? 4 : 6;
+      } else if (top > 0) {
+        top -= 4;
+        bottom += 4;
+      }
+      if (f === startFrame) {
+        enemy.visible = true;
+        // Once it is over, it has landed (whatever its clip's events).
+        entered = enemy.enter(entrance).then(() => void (done = landed = true));
+      }
+      if (cover && !cleared) {
+        const stirring = !landed && f >= LAUNCH_FRAME - STIR_FRAMES && f < LAUNCH_FRAME;
+        if (cover.stir === 'bob') {
+          // The swell: BG1_Y = Cos2(angle) / 1024 - 4 (half the game's wave).
+          bgy = cover.y + Math.trunc(Math.round(Math.cos((wave * Math.PI) / 180) * 4096) / 1024) - 4;
+          wave = (wave + (wave < 180 ? 4 : 6)) % 360;
+        } else if (cover.stir === 'rise') {
+          if (f % 2 === 0) bgy++;
         }
-        if (top > 0) {
-          top -= 4;
-          bottom += 4;
+        if (!landed) {
+          // Something moves in it: the grass rustles, the sand trembles.
+          const jolt = stirring ? ((f >> 1) & 1 ? 1 : -1) : 0;
+          if (cover.stir === 'rustle') bgx = jolt;
+          if (cover.stir === 'tremble') bgy = cover.y + jolt;
+        } else if (cover.sink) {
+          bgx = 0;
+          bgy = Math.max(cover.sink[1], bgy - cover.sink[0]);
+          if (bgy === cover.sink[1]) cleared = true;
+        } else if (cover.fade && ++fadeTimer >= cover.fade) {
+          fadeTimer = 0;
+          if (--eva <= 0) cleared = true;
         }
-        if (slide > 0) slide -= 2;
-        if (slide === 0) state = 4;
       }
       apply();
-      return state === 4;
+      return state === 3 && top <= 0 && cleared && done;
     });
+    await entered;
+    enemy.onEvent = null;
 
     // SpriteCB_WildMonShowHealthbox: the healthbox slides in while the
     // shadow fades out (10 -> 0), then the front animation plays.

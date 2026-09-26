@@ -15,7 +15,8 @@ box) and from the opponent's side · starts and ends on the stance.
 ## Battle moments
 
 - [ ] `idle`: breathing reads, nothing pops at the loop point, loose parts sway
-- [ ] `intro`: bursts out with a cry that fits the species
+- [ ] `intro`: bursts out with a cry that fits the species, clear of the foe's healthbox from our side
+- [ ] `entrance`: coils, springs, tucks at the top, reaches down, lands with weight; reads bursting out of the grass (`env=grass`) and dropping in (`env=cave`)
 - [ ] `hit`: snaps away from the attacker, recovers without popping
 - [ ] `faint`: reels, collapses with weight, sinks
 

@@ -100,6 +100,11 @@ export class Animator {
     return this.current?.clip.name ?? null;
   }
 
+  /** Seconds into the current clip (its own time: a slowed clip runs slower). */
+  get time(): number {
+    return this.current?.time ?? 0;
+  }
+
   has(name: string): boolean {
     return name in this.clips;
   }

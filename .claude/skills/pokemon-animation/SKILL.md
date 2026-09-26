@@ -71,6 +71,7 @@ as Blaziken does). Rules:
 | strong ranged | ~2.3 s | 0.5 gather (charge) · hold · snap · 0.8 sustained (release → releaseEnd) · recover |
 | status | ~1.4–1.7 s | gather or rear up · the action with a moving hold · relax |
 | intro | ~1.6 s | curled crouch · burst up · cry with a moving hold · settle to stance |
+| entrance | ~1.5 s | coiled low · spring (`launch`) · knees drawn up at the top · legs reach down · land deep (`land`) · rise to stance |
 | faint | ~1.8 s | reel · sway forward · knees buckle · slump with a small bounce · sink (`root.y` -1.1) |
 
 Strikes happen in 3–6 frames; holds last 8–20 frames and never freeze (move
@@ -93,6 +94,14 @@ something 1–3°). Everything starts at `key(0)` (the stance) and ends on a key
    and the front view. Keep limbs that don't act *braced* and out of the way —
    flailing arms read as noise. The part that acts (mouth, cannons, flower,
    claws) leads the pose.
+   **Stay clear of the healthboxes**: they are drawn over the Pokémon, so a
+   body under one looks cut off. From our side the foe's box sits a few
+   pixels above our Pokémon's head and ours to its right; the foe's feet touch
+   the top of ours. So at home: raise arms wide rather than overhead, keep
+   jumps low (or lean into them instead), keep side-steps narrow, fold a faint
+   back over the heels rather than forward over the feet. Clips that travel
+   (`advance`) are free to pass. `tools/gauntlet/uiclear.mjs` checks every
+   clip that stays at home, from both sides.
 6. **Exaggeration**: GBA pixels eat subtlety. Push extremes ~1.5× further than
    feels natural in the turntable; check at `--density 1`.
 7. **Moving holds and secondary action** are mostly automatic (life layer,
@@ -139,6 +148,17 @@ existing clips in `profile.motifClips`.
 | `aura` | a self-buff peaks | aura / shield / heal sparkle |
 | `cry` | intro roar | small shake |
 | `thud` | faint hits the ground | — |
+| `launch` | entrance: the feet leave the ground | the place's path starts (bursting out of the grass, sand or sea; leaping or dropping in; sinking through water) with its spray |
+| `land` | entrance: the feet touch down | the path ends; the cover in front of it clears |
+
+The **entrance** acts out a jump straight up and down on the spot: the path
+(`src/battle3d/entrance.ts`) is added by the battle, rising from below the
+ground behind the grass, falling from above the screen or drifting down, and
+timed by `launch` and `land`, so one clip serves every place. Keep the root
+still in it (no `root.y` arc, no `advance`); give it the coil, the spring, a
+tuck at the top and a landing with weight (at least 0.3 s between `launch`
+and `land`; Blaziken's is 0.5 s). Review it with `--clips entrance --env
+grass` (bursting up) and `--env cave` (dropping in).
 
 Place events on the pose that causes them *plus the overlap delay* of the part
 that acts. Contact moves must have `advance: 1` at `impact`.
@@ -158,7 +178,10 @@ that acts. Contact moves must have `advance: 1` at `impact`.
    (on the animated joints: stop-starts, one-frame pops, dead holds, turning
    in the first 0.3 s). Aim for Blaziken's numbers: pops only on strikes and
    landings, no dead holds, no early turn in clips made from home.
-5. Record the verdict in `src/pokemon/<slug>/REVIEW.md`.
+5. Check it stays clear of the healthboxes from both sides:
+   `node tools/gauntlet/uiclear.mjs --species <slug> --clips <clip> --shots build/sheets/uiclear`
+   (clips that stay at home; `--shots` saves the worst frame).
+6. Record the verdict in `src/pokemon/<slug>/REVIEW.md`.
 
 ## Failure modes and fixes
 
@@ -174,4 +197,5 @@ that acts. Contact moves must have `advance: 1` at `impact`.
 | stutters mid-motion | a key that stops a channel halfway (a `fall()` that starts mid-descent instead of at the apex; a hop whose apex sits near the landing): fall from the top; put a hop's apex halfway across |
 | strike snaps harder than Blaziken's | under 5 frames, or a torso swing over ~50°: land, then a 0.08 s snap; cock the arm further back as it lands so the strike starts from a turnaround |
 | unreadable from our side | the back view hides it: exaggerate the silhouette, move the action above y≈92 px |
+| cut off by a healthbox (uiclear fails) | from our side: arms raised wide not overhead, a lower jump, a narrower side-step toward our box; the foe's faint folds back over its heels (slumped forward, its head falls onto our box) |
 | limbs through the body | aim directions crossing the torso: check the turntable in the rig lab |

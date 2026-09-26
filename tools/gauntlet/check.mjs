@@ -3,7 +3,8 @@
 // .claude/skills/pokemon-gauntlet/SKILL.md for the process they guard).
 //
 //   node tools/gauntlet/check.mjs --slug swampert            static gates
-//   node tools/gauntlet/check.mjs --slug swampert --render   + battles and every clip in the browser
+//   node tools/gauntlet/check.mjs --slug swampert --render   + battles, every clip and the healthbox
+//                                                            clearance (uiclear.mjs) in the browser
 //
 // Static gates read the profile (bundled from TypeScript) and the model;
 // --render needs the dev server (npm run dev) and takes a few minutes.
@@ -60,6 +61,7 @@ const REQUIRED_EVENTS = {
   status_self: ['aura'],
   status_target: ['emit'],
   intro: ['cry'],
+  entrance: ['launch', 'land'],
   faint: ['thud'],
 };
 // Bones every species of a body plan has (shells may lack a spine; some necks are one bone).
@@ -154,6 +156,9 @@ for (const name of [...MOMENT_CLIPS, ...CATEGORY_CLIPS]) {
   const lacking = need.filter((e) => !events.includes(e));
   if (lacking.length) problems.push(`missing events: ${lacking.join(', ')}`);
   if ((c.events ?? []).some((e) => e.t < 0 || e.t > c.duration)) problems.push('event outside the clip');
+  // The entrance's path (src/battle3d/entrance.ts) runs from the launch to the landing.
+  const at = (e) => (c.events ?? []).find((x) => x.name === e)?.t;
+  if (name === 'entrance' && !lacking.length && !(at('launch') < at('land') - 0.3)) problems.push('launch must come at least 0.3 s before land');
   gate(`clip ${name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s, ${keys.length} keys${events.length ? ', ' + events.join(' ') : ''}`);
 }
 
@@ -295,6 +300,15 @@ if (args.render) {
       const done = await page.evaluate(() => window.__clip.done);
       gate(`plays ${job.name}${job.move ? ` (${job.move})` : ''} as ${side}`, done && errors.length === 0, errors.slice(0, 2).join(' | '));
     }
+  }
+  // Clear of the healthboxes: nothing played at home goes under one (tools/gauntlet/uiclear.mjs).
+  const { clearance, describe, EDGE, TOLERANCE } = await import('./uiclear.mjs');
+  try {
+    for (const r of await clearance(page, { base, slug, profile })) {
+      gate(`${r.clip} as ${r.side} stays clear of the healthboxes (<= ${TOLERANCE} px past a ${EDGE} px edge)`, r.ok, describe(r).replace(/\s+/g, ' ').trim());
+    }
+  } catch (e) {
+    gate('clear of the healthboxes', false, e.message);
   }
   await browser.close();
 }
