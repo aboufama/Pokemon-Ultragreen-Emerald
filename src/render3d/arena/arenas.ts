@@ -92,6 +92,11 @@ function bladeTooth(sx: number, ppu: number): number {
 
 /** A mix of each color of a ramp toward another color (for haze and tints). */
 const tint = (r: Ramp, c: Rgb, t: number): Ramp => r.map((k) => mix(k, c, t));
+/** A ramp drawn toward its own middle by `t`: the same hues, less contrast between its shades. */
+const squeeze = (r: Ramp, t: number): Ramp => {
+  const m = mix(r[(r.length - 1) >> 1], r[r.length >> 1], 0.5);
+  return r.map((k) => mix(k, m, t));
+};
 /** A ramp with a half-step between each shade and the next (the two mixed): its own shades at the even indices. */
 const halves = (r: Ramp): Ramp => r.flatMap((c, i) => (i < r.length - 1 ? [c, mix(c, r[i + 1], 0.5)] : [c]));
 /** The far bank's trees mirrored in the water, softened toward the water's blue: a quiet band behind the wild Pokémon. */
@@ -101,8 +106,9 @@ const POND_REFLECT = tint(REFLECT, POND[3], 0.45);
  * A Hoenn route meadow: mint grass in patches whose borders are drawn as
  * blades, lit over the battle and shaded toward the sides and under the trees
  * (sun flecks through their leaves); blade tufts, clover and flower beds in
- * clusters, big tufts and flowers framing the left; a path, a pond or rain
- * puddles; round trees in rows behind, the far ones hazy.
+ * loose clusters, big tufts and flowers framing the left; a path, a pond or
+ * rain puddles; round trees in rows behind, hazy and soft. Quiet right
+ * behind and around the wild Pokémon.
  */
 function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   const { view, ground } = ctx;
@@ -216,7 +222,7 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   // A few pebbles on the path, a shade off the sand.
   if (o.path) {
     scatter(ctx, 7, 9, (x, z, sx, sy, ppu, r) => {
-      if (r > 0.14 || onPath(x, z) > -0.15 || foeCalm(ctx, sx, sy) > 0) return;
+      if (r > 0.08 || onPath(x, z) > -0.15 || foeCalm(ctx, sx, sy) > 0) return;
       ground.set(sx, sy, PATH[1]);
       if (ppu > 30) ground.set(sx + 1, sy, PATH[3]);
     });
@@ -253,12 +259,14 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
     for (let i = 0; i < n; i++) flower(c.x + ctx.rng.range(-0.7, 0.7) * (1 - i / n * 0.5), c.z + ctx.rng.range(-0.4, 0.4), kind);
   }
   // The tree line: staggered rows of round trees, the far rows hazier; bushes at its foot. It stands right
-  // behind the wild Pokémon, so it is a quiet backdrop: every row hazy, no lime highlights, few flecks
-  // and little dither in the leaves, outlines a dark green rather than near-black, olive trunks.
+  // behind the wild Pokémon, so it is a quiet backdrop: every row hazy, its greens drawn together (no lime
+  // highlights, shades close to each other, clean steps with few flecks), outlines a dark green rather
+  // than near-black, olive trunks.
   const dark = darker([G, PATH]);
-  const leaves = o.leaves.slice(0, -1);
-  const trunk = tint(TRUNK, leaves[0], 0.35);
-  const soften = (haze: number) => ({ leaves: tint(leaves, HAZE, haze), outline: mix(mix(TREE_OUTLINE, leaves[0], 0.3), HAZE, haze * 0.8), trunk: tint(trunk, HAZE, haze), speckle: 0.03, soft: 0.15 });
+  const greens = o.leaves.slice(0, -1);
+  const leaves = squeeze(greens, 0.25);
+  const trunk = tint(TRUNK, greens[0], 0.35);
+  const soften = (haze: number) => ({ leaves: tint(leaves, HAZE, haze), outline: mix(mix(TREE_OUTLINE, greens[0], 0.3), HAZE, haze * 0.8), trunk: tint(trunk, HAZE, haze), speckle: 0.012, soft: 0.05 });
   const trees = [];
   for (let row = 0; row < 3; row++) {
     const z0 = line + row * 1.7;
@@ -282,13 +290,16 @@ function meadow(ctx: ArenaContext, o: MeadowOptions): void {
   stand(ctx, trees, dark);
   // Framing the left: big tufts of grass in the foreground, cropped by the frame, with red flowers
   // (Route 101), grown taller (Route 120), or around a mossy boulder and reeds (Route 102).
-  // Tall grass is drawn toward the meadow's own green, its outline a soft dark green: framing, not a feature.
-  const blades = tint(o.blades, G[2], 0.45);
-  const bladeOutline = mix(TREE_OUTLINE, G[1], 0.5);
+  // Tall grass is drawn toward the meadow's own green, its blades' lit and shaded edges close together, its
+  // outline a soft dark green: framing, not a feature.
+  const blades = squeeze(tint(o.blades, G[2], 0.45), 0.2);
+  const bladeOutline = mix(TREE_OUTLINE, G[1], 0.55);
   const softOutline = mix(TREE_OUTLINE, G[1], 0.35);
   const tall = o.tallGrassHeight ?? 1;
   const tufts: { sprite: Sprite; x: number; z: number; mat: number }[] = [];
-  const tuftSpots = o.pond ? [[22, 106, 0.8], [36, 112, 0.7], [-8, 90, 0.8]] : [[2, 110, 1], [22, 104, 0.8], [-6, 92, 0.9], [34, 112, 0.7], [10, 84, 0.6]];
+  const tuftSpots = o.pond
+    ? [[22, 106, 0.8], [36, 112, 0.7], [-8, 90, 0.8]]
+    : [[2, 110, 1], [22, 104, 0.8], [-6, 92, 0.9], [34, 112, 0.7], ...(tall > 1 ? [] : [[10, 84, 0.6]])];
   for (const [sx, sy, s] of tuftSpots) {
     const g = view.ground(sx, sy)!;
     const w = g.ppu * 0.55 * s, h = g.ppu * 0.42 * s * Math.min(1.2, tall);
@@ -426,7 +437,7 @@ function desert(ctx: ArenaContext): void {
     if (r && !r.lit) return [band(SAND_SHADE, 1.2 + r.t * 1.6, sx, sy, 0.1), MAT.SOLID];
     if (r && r.u < 1.2 / g.ppu) return [S[6], MAT.SOLID];
     if (r) v += 1.3 * (1 - r.t);
-    if (g.z < 12.5 && rippled(g.x, g.z) > 0.5 && foeCalm(ctx, sx, sy, 12) < 0.3 && onLine(ctx, sx, sy, ripple, 0.34)) v += 1;
+    if (g.z < 9.2 && rippled(g.x, g.z) > 0.52 && foeCalm(ctx, sx, sy, 12) < 0.3 && onLine(ctx, sx, sy, ripple, 0.34)) v += 1;
     if (slope < -0.75) return [band(SAND_SHADE, 3.4 + (slope + 0.75) * 3, sx, sy, 0.1), MAT.SOLID];
     return [band(S, v, sx, sy, 0.06), MAT.SOLID];
   });
@@ -992,7 +1003,7 @@ function cave(ctx: ArenaContext): void {
   scatter(ctx, 7, 31, (x, z, sx, sy, ppu, r) => {
     if (ground.material(sx, sy) !== MAT.SOLID || foeCalm(ctx, sx, sy) > 0) return;
     const i = indexIn(GC, ground.get(sx, sy));
-    if (i >= 6 && r < 0.12 && fbm(x * 0.5, z * 0.7, 77) > 0.52) {
+    if (i >= 6 && r < 0.1 && fbm(x * 0.5, z * 0.7, 77) > 0.54) {
       const len = ppu > 50 ? 3 : 2;
       for (let k = 0; k < len; k++) {
         const c = ground.get(sx + k, sy - k);
