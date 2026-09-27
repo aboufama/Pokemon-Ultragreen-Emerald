@@ -23,6 +23,36 @@ static u8 sObjPrio[SCREEN_W];
 static u8 sObjSemi[SCREEN_W];
 static u8 sObjWin[SCREEN_W];
 
+// The remake layer's pictures (docs/ARCHITECTURE.md, "How the pictures
+// combine"), filled by the browser at each VBlank for the next frame. Pixels
+// are the GBA's colors with bit 15 set where the picture has something.
+#define LAYER_OPAQUE 0x8000u
+#define REMAKE_SPRITES 4
+
+struct RemakeBackground {
+    u32 active;                        // the picture replaces the background's pixels
+    u32 bg;                            // which background (3: the battle's)
+    u16 pixels[SCREEN_W * SCREEN_H];
+};
+
+struct RemakeSprite {
+    u32 active;                        // the picture replaces the sprite's OAM entries
+    u32 tileNum;                       // the entries with this first tile are the sprite's
+    u16 pixels[SCREEN_W * SCREEN_H];
+};
+
+struct RemakeLayers {
+    struct RemakeBackground background;
+    struct RemakeSprite sprites[REMAKE_SPRITES];
+};
+
+static struct RemakeLayers sRemake;
+
+EXPORT(PlatformRemakeLayers) struct RemakeLayers *PlatformRemakeLayers(void)
+{
+    return &sRemake;
+}
+
 static s32 SignExtend28(u32 v)
 {
     return (s32)(v << 4) >> 4;
@@ -187,11 +217,43 @@ static void Sprites(u32 line, int bitmapMode)
     }
     if (!(dispcnt & 0x1000))
         return;
+    u8 drawn[REMAKE_SPRITES][2] = { { 0 } };  // the picture, and its window copy
     for (int i = 0; i < 128; i++) {
         u16 a0 = OAM[i * 4], a1 = OAM[i * 4 + 1], a2 = OAM[i * 4 + 2];
         int affine = a0 & 0x100;
         if (!affine && (a0 & 0x200))
             continue;
+        // The remake layer's picture of a sprite stands in for its OAM entries,
+        // where the entry is in the OAM order, with its priority and mode (a
+        // window sprite gives the window its shape) and mosaic. The picture
+        // is not clipped to the sprite's box (a model can reach beyond it).
+        u32 rtile = a2 & 0x3FF, rprio = (a2 >> 10) & 3;
+        int rmode = (a0 >> 10) & 3, rmosaic = a0 & 0x1000;
+        struct RemakeSprite *remake = 0;
+        for (int r = 0; r < REMAKE_SPRITES; r++)
+            if (sRemake.sprites[r].active && sRemake.sprites[r].tileNum == rtile)
+                remake = &sRemake.sprites[r];
+        if (remake) {
+            u8 *done = &drawn[remake - sRemake.sprites][rmode == 2];
+            if (*done)
+                continue;
+            *done = 1;
+            u32 row = rmosaic ? line - line % mosV : line;
+            const u16 *src = &remake->pixels[row * SCREEN_W];
+            for (s32 sx = 0; sx < SCREEN_W; sx++) {
+                u16 c = src[rmosaic ? sx - sx % (s32)mosH : sx];
+                if (!(c & LAYER_OPAQUE))
+                    continue;
+                if (rmode == 2) {
+                    sObjWin[sx] = 1;
+                } else if (rprio < sObjPrio[sx]) {
+                    sObj[sx] = c & 0x7FFF;
+                    sObjPrio[sx] = (u8)rprio;
+                    sObjSemi[sx] = rmode == 1;
+                }
+            }
+            continue;
+        }
         int mode = (a0 >> 10) & 3;
         int shape = a0 >> 14;
         if (mode == 3 || shape == 3)
@@ -218,6 +280,7 @@ static void Sprites(u32 line, int bitmapMode)
             continue;
         u32 prio = (a2 >> 10) & 3;
         u32 pal = a2 >> 12;
+
         s32 pa = 0x100, pb = 0, pc = 0, pd = 0x100;
         if (affine) {
             u32 m = (a1 >> 9) & 31;
@@ -346,6 +409,12 @@ void PlatformPpuLine(u32 line)
             bgOn[bg] = valid && (dispcnt & (0x100 << bg));
             if (!bgOn[bg])
                 continue;
+            if (sRemake.background.active && sRemake.background.bg == (u32)bg) {
+                const u16 *src = &sRemake.background.pixels[line * SCREEN_W];
+                for (int x = 0; x < SCREEN_W; x++)
+                    sBg[bg][x] = (src[x] & LAYER_OPAQUE) ? (src[x] & 0x7FFF) : TRANSPARENT;
+                continue;
+            }
             if (mode == 0 || (mode == 1 && bg < 2))
                 TextBg(bg, line);
             else
