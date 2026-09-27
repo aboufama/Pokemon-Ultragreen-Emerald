@@ -1,0 +1,29 @@
+{
+  "height": 1.0964,
+  "slots": {
+    "enemy": {
+      "dx": 0,
+      "dz": 0,
+      "lift": 0
+    },
+    "player": {
+      "dx": 0,
+      "dz": 0,
+      "lift": 0
+    }
+  },
+  "outline": {
+    "outer": 15,
+    "inner": 8,
+    "selective": true
+  },
+  "grade": {
+    "gain": 1.1373,
+    "saturation": 1.2759,
+    "bands": [
+      0.6421,
+      1,
+      1
+    ]
+  }
+}

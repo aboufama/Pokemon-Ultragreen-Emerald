@@ -1,0 +1,24 @@
+{
+  "about": "Cascoon's skeleton for tools/models/rig_static.mjs (the upstream export is a static mesh). Positions in the upstream file's units (+Z forward, +X its left). A cocoon: a body chain up its middle (Hips at the base, Spine, Head at the top) so it can squash, lean and wobble; Opening marks the silk opening in its front between the eyes (String Shot and Poison Sting leave it); a bone per silk strand that doesn't touch the ground, to quiver on springs (the strands it rests on stay with the body). Placed from the mesh: the body chain on the axis of the ellipsoid its silk body fits, each strand's bone from where the strand leaves that ellipsoid to its tip; each strand's region holds the part of it outside the body, so the strand flexes at its root and the body stays whole.",
+  "heat": 4,
+  "joints": [
+    {"name": "Hips", "parent": null, "pos": [0, 0.0774, -0.0318]},
+    {"name": "Spine", "parent": "Hips", "pos": [0, 0.2573, -0.0318]},
+    {"name": "Head", "parent": "Spine", "pos": [0, 0.4221, -0.0318], "end": [0, 0.602, -0.0318]},
+    {"name": "Opening", "parent": "Head", "pos": [0, 0.3335, 0.3377], "end": [0, 0.3335, 0.4177]},
+    {"name": "StrandUpL", "parent": "Head", "pos": [0.1522, 0.5406, -0.1729], "end": [0.2371, 0.6602, -0.2442]},
+    {"name": "StrandR", "parent": "Spine", "pos": [-0.3104, 0.2762, -0.1323], "end": [-0.4735, 0.2624, -0.1874]},
+    {"name": "StrandL", "parent": "Spine", "pos": [0.3223, 0.2759, -0.0774], "end": [0.5294, 0.259, -0.104]},
+    {"name": "StrandUpR", "parent": "Head", "pos": [-0.2075, 0.4399, -0.2434], "end": [-0.3478, 0.5467, -0.3667]},
+    {"name": "StrandTop", "parent": "Head", "pos": [-0.001, 0.5255, 0.1987], "end": [-0.0, 0.6819, 0.3615]}
+  ],
+  "regions": [
+    {"box": {"x": [0.1799, 0.2471], "y": [0.5818, 0.6702], "z": [-0.2542, -0.1973]}, "bones": ["Head", "StrandUpL"]},
+    {"box": {"x": [-0.4835, -0.4602], "y": [0.2503, 0.2751], "z": [-0.1989, -0.1746]}, "bones": ["Spine", "StrandR"]},
+    {"box": {"x": [0.3646, 0.5394], "y": [0.2465, 0.3029], "z": [-0.116, -0.0587]}, "bones": ["Spine", "StrandL"]},
+    {"box": {"x": [-0.3578, -0.2577], "y": [0.4705, 0.557], "z": [-0.3767, -0.2865]}, "bones": ["Head", "StrandUpR"]},
+    {"box": {"x": [-0.0306, 0.0307], "y": [0.5156, 0.6919], "z": [0.2302, 0.3715]}, "bones": ["Head", "StrandTop"]},
+    {"bones": ["Hips", "Spine", "Head"]}
+  ],
+  "meshes": {"Object_1": {"follow": "nearest"}}
+}

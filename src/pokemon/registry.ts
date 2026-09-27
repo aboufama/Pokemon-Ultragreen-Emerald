@@ -23,6 +23,10 @@ const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
   mightyena: async () => (await import('./mightyena')).createProfile,
   zigzagoon: async () => (await import('./zigzagoon')).createProfile,
   wurmple: async () => (await import('./wurmple')).createProfile,
+  silcoon: async () => (await import('./silcoon')).createProfile,
+  beautifly: async () => (await import('./beautifly')).createProfile,
+  cascoon: async () => (await import('./cascoon')).createProfile,
+  dustox: async () => (await import('./dustox')).createProfile,
 };
 
 /** The body part each move uses, for species classified with tools/gauntlet/classify_moves.mjs. */

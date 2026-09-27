@@ -1,0 +1,34 @@
+{
+  "about": "Dustox's skeleton for tools/models/rig_static.mjs (the upstream export is a static mesh). Positions in the upstream file's units (height 1.12, +Z forward, +X its left). A moth held upright: Hips at the base of the thorax with the abdomen hanging below it (turning Hips against Spine curls the abdomen alone), Spine up the thorax, Head (the big head, its eyes painted on) with two-segment antennae and Mouth marking the mouth mesh in front (String Shot, Sludge Bomb); two pairs of stubby red legs on the front of the thorax (Arm: the upper pair, Leg: the lower pair); per wing (one surface, forewing and hindwing together), Wing from its root on the back out to mid-span, WingTip beyond it and WingHind for the lower half of the fan. The regions keep each wing's weights on its own bones, the antennae's and the legs' on theirs.",
+  "heat": 3,
+  "joints": [
+    {"name": "Hips", "parent": null, "pos": [0, 0.46, 0.04], "end": [0, 0.26, 0.04]},
+    {"name": "Spine", "parent": "Hips", "pos": [0, 0.46, 0.04]},
+    {"name": "Head", "parent": "Spine", "pos": [0, 0.66, 0.05], "end": [0, 1.05, 0.05]},
+    {"name": "Mouth", "parent": "Head", "pos": [0, 0.715, 0.2], "end": [0, 0.715, 0.3]},
+    {"name": "LAntenna1", "parent": "Head", "pos": [0.075, 0.93, 0.05]},
+    {"name": "LAntenna2", "parent": "LAntenna1", "pos": [0.145, 1.04, 0.09], "end": [0.215, 1.16, 0.11]},
+    {"name": "RAntenna1", "parent": "Head", "pos": [-0.075, 0.93, 0.05]},
+    {"name": "RAntenna2", "parent": "RAntenna1", "pos": [-0.145, 1.04, 0.09], "end": [-0.215, 1.16, 0.11]},
+    {"name": "LArm", "parent": "Spine", "pos": [0.11, 0.6, 0.1], "end": [0.27, 0.6, 0.13]},
+    {"name": "RArm", "parent": "Spine", "pos": [-0.11, 0.6, 0.1], "end": [-0.27, 0.6, 0.13]},
+    {"name": "LLeg", "parent": "Spine", "pos": [0.11, 0.52, 0.1], "end": [0.27, 0.5, 0.13]},
+    {"name": "RLeg", "parent": "Spine", "pos": [-0.11, 0.52, 0.1], "end": [-0.27, 0.5, 0.13]},
+    {"name": "LWing", "parent": "Spine", "pos": [0.02, 0.6, -0.2]},
+    {"name": "LWingTip", "parent": "LWing", "pos": [0.34, 0.68, -0.4], "end": [0.64, 0.9, -0.58]},
+    {"name": "LWingHind", "parent": "LWing", "pos": [0.03, 0.44, -0.26], "end": [0.36, 0.12, -0.42]},
+    {"name": "RWing", "parent": "Spine", "pos": [-0.02, 0.6, -0.2]},
+    {"name": "RWingTip", "parent": "RWing", "pos": [-0.34, 0.68, -0.4], "end": [-0.64, 0.9, -0.58]},
+    {"name": "RWingHind", "parent": "RWing", "pos": [-0.03, 0.44, -0.26], "end": [-0.36, 0.12, -0.42]}
+  ],
+  "regions": [
+    {"box": {"x": [0.0, 1], "z": [-1, -0.165]}, "bones": ["LWing", "LWingTip", "LWingHind"]},
+    {"box": {"x": [-1, 0.0], "z": [-1, -0.165]}, "bones": ["RWing", "RWingTip", "RWingHind"]},
+    {"box": {"x": [0.05, 0.4], "y": [0.91, 1.3], "z": [-0.15, 0.3]}, "bones": ["Head", "LAntenna1", "LAntenna2"]},
+    {"box": {"x": [-0.4, -0.05], "y": [0.91, 1.3], "z": [-0.15, 0.3]}, "bones": ["Head", "RAntenna1", "RAntenna2"]},
+    {"box": {"x": [0.15, 0.4], "y": [0.47, 0.67], "z": [0.0, 0.25]}, "bones": ["Spine", "LArm", "LLeg"]},
+    {"box": {"x": [-0.4, -0.15], "y": [0.47, 0.67], "z": [0.0, 0.25]}, "bones": ["Spine", "RArm", "RLeg"]},
+    {"bones": ["Hips", "Spine", "Head"]}
+  ],
+  "meshes": {"Object_1": {"follow": "nearest"}}
+}

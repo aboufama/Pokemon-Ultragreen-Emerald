@@ -56,11 +56,12 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       tail: 0.03, tail2: 0.06, tail3: 0.09, tailSpikes: 0.1, crest: 0.08,
     },
     moveClips: {},
-    // The category clips are Wurmple's versions of its three moves.
+    // Its moves' motifs, played by its own clips (it learns no move that
+    // calls others: Mimic, Mirror Move...).
     motifClips: {
-      tackle: 'physical_weak',
-      spit: 'special_weak',
-      powder: 'status_target',
+      tackle: 'tackle',
+      spit: 'poison_sting',
+      powder: 'string_shot',
     },
     hiddenParts: [],
     showcaseMoves: ['TACKLE', 'STRING_SHOT', 'POISON_STING'],
