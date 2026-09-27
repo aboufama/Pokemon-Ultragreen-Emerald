@@ -448,21 +448,36 @@ export class Battler3D {
   }
 
   /**
-   * Distance a contact move travels so the attacker ends up in front of its
-   * target, at striking distance: its own reach (what its clips are made
-   * for: 0.84 of its height from its middle, less its front) from the
-   * target's front. Between two of a kind that is 0.84 of their height
-   * apart; a small attacker comes closer to a big foe, a big one stays
-   * further from a small foe, so the blow lands on the foe's front either
-   * way.
+   * Where a contact move's travel takes the attacker (advance 1), from home,
+   * in its slot's frame: in front of its target where the target stands
+   * (each calibration places its model off the slot's centre, as its sprite
+   * sits: from the slots' centres alone a model placed back in its slot
+   * stopped far short and one placed forward overshot past the foe's side),
+   * at striking distance: its own reach (what its clips are made for: 0.84 of
+   * its height from its middle, less its front) from the target's front.
+   * Between two of a kind that is 0.84 of their height apart; a small
+   * attacker comes closer to a big foe, a big one stays further from a small
+   * foe, so the blow lands on the foe's front either way.
    */
-  approachDistance(): number {
-    if (!this.target) return 0;
-    const a = this.stage.slots[this.slot].position;
-    const b = this.stage.slots[this.target.slot].position;
+  approachVector(): THREE.Vector3 {
+    const v = new THREE.Vector3();
+    if (!this.target) return v;
+    const slot = this.stage.slots[this.slot], foeSlot = this.stage.slots[this.target.slot];
+    slot.updateWorldMatrix(true, false);
+    foeSlot.updateWorldMatrix(true, false);
+    const own = this.profile.calibration.slots[this.slot];
+    const foe = this.target.profile.calibration.slots[this.target.slot];
+    v.set(foe.dx, 0, foe.dz).applyMatrix4(foeSlot.matrixWorld).applyMatrix4(slot.matrixWorld.clone().invert());
+    v.sub(new THREE.Vector3(own.dx, 0, own.dz)).setY(0);
     const reach = (0.84 - this.frontDepth()) * this.height;
     const contact = reach + this.target.frontDepth() * this.target.height;
-    return Math.max(0, a.distanceTo(b) - contact);
+    const d = v.length();
+    return d > contact ? v.multiplyScalar((d - contact) / d) : v.set(0, 0, 0);
+  }
+
+  /** Distance a contact move travels so the attacker ends up in front of its target. */
+  approachDistance(): number {
+    return this.approachVector().length();
   }
 
   private front = 0.21;
@@ -611,7 +626,7 @@ export class Battler3D {
     const poseScale = H * (pose.scale ?? 1);
     root.rotation.set(((r.pitch ?? 0) - 7 * recoil) * DEG, yaw + (r.yaw ?? 0) * DEG, (r.roll ?? 0) * DEG, 'YXZ');
     const off = new THREE.Vector3(r.x ?? 0, r.y ?? 0, (r.z ?? 0) - 0.035 * recoil).multiplyScalar(H).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-    root.position.set(cal.dx, cal.lift, cal.dz + (pose.advance ?? 0) * this.approachDistance()).add(off);
+    root.position.set(cal.dx, cal.lift, cal.dz).addScaledVector(this.approachVector(), pose.advance ?? 0).add(off);
     const posePosition = root.position.clone();
     this.placeRoot(poseScale);
 
