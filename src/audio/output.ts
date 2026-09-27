@@ -18,11 +18,15 @@ export class AudioOutput {
   /** Older iOS: a silent <audio> element keeping the page in the playback audio category. */
   private keepAlive: HTMLAudioElement | null = null;
 
-  /** The page's audio output, or null where there is no Web Audio. */
+  private static shared: AudioOutput | null = null;
+
+  /** The page's audio output (one for the page, whoever asks), or null where there is no Web Audio. */
   static open(): AudioOutput | null {
     if (typeof window === 'undefined') return null;
+    if (AudioOutput.shared) return AudioOutput.shared;
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    return Ctx ? new AudioOutput(new Ctx({ latencyHint: 'interactive' })) : null;
+    AudioOutput.shared = Ctx ? new AudioOutput(new Ctx({ latencyHint: 'interactive' })) : null;
+    return AudioOutput.shared;
   }
 
   private constructor(ctx: AudioContext) {

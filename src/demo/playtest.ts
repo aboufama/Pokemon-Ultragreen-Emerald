@@ -16,7 +16,7 @@ import { getSpeciesProfile, profiledSpecies } from '../pokemon/registry';
 import type { Side } from '../battle/engine';
 import { movePool, moveKey, randomMoveset } from '../battle/moveset';
 import { BattleScene } from '../battle/scene';
-import { createTouchPad } from '../battle/touch_pad';
+import { mountHandheld, touchDevice } from '../ui/handheld';
 import type { Input } from '../battle/input';
 import { loadMenuGfx } from '../menus/gfx';
 import { MenuScreen } from '../menus/screen';
@@ -74,10 +74,9 @@ interface Battle {
 }
 
 export async function runPlaytest(root: HTMLElement): Promise<void> {
-  injectCss();
   const params = new URLSearchParams(location.search);
   if (params.get('sound') !== '0') sound.enable();
-  const coarse = matchMedia('(pointer: coarse)').matches;
+  const coarse = touchDevice();
   // Fully evolved Pokémon at level 50 (the Hoenn starters' final forms): the
   // earlier forms and the Route 101 Pokémon are the compiled game's.
   const roster = profiledSpecies()
@@ -88,17 +87,10 @@ export async function runPlaytest(root: HTMLElement): Promise<void> {
   const g = await loadMenuGfx();
 
   // The page: the screen, and the GBA buttons on touch screens.
-  root.className = 'pt';
-  root.dataset.pad = coarse && params.get('pad') !== '0' ? 'on' : 'off';
-  root.replaceChildren();
-  const screenBox = document.createElement('div');
-  screenBox.className = 'pt-screen';
-  screenBox.addEventListener('contextmenu', (e) => e.preventDefault());
   let menu: MenuScreen | null = null;
   let scene: BattleScene | null = null;
   const input = (): Input | null => scene?.input ?? menu?.input ?? null;
-  const pad = createTouchPad(input);
-  root.append(screenBox, pad);
+  const { screen: screenBox } = mountHandheld(root, input, { pad: coarse && params.get('pad') !== '0' });
 
   const openMenu = () => {
     menu ??= new MenuScreen(screenBox, g, coarse);
@@ -247,42 +239,3 @@ export async function runPlaytest(root: HTMLElement): Promise<void> {
     }
   }
 }
-
-function injectCss(): void {
-  if (document.getElementById('pt-css')) return;
-  const style = document.createElement('style');
-  style.id = 'pt-css';
-  style.textContent = CSS;
-  document.head.appendChild(style);
-}
-
-const CSS = `
-html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-.pt { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "screen" "pad";
-  background: #000; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-  box-sizing: border-box; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.pt-screen { grid-area: screen; position: relative; min-height: 0; overflow: hidden; }
-.pt > .gba-pad { grid-area: pad; }
-.pt[data-pad="off"] .gba-pad { display: none; }
-/* GBA buttons sized for thumbs and to fit the phone's width. */
-.pt .gba-pad { --dp: min(56px, 12.5vw); --ab: min(74px, 16vw); max-width: 600px; gap: 10px; padding: 8px 14px 16px; }
-.pt .gba-dpad { grid-template-columns: repeat(3, var(--dp)); grid-template-rows: repeat(3, var(--dp)); }
-.pt .gba-ab { grid-template-columns: var(--ab) var(--ab); grid-template-rows: calc(var(--ab) * 0.48) var(--ab) calc(var(--ab) * 0.48); column-gap: 10px; }
-.pt .gba-ab button { width: var(--ab); height: var(--ab); font-size: calc(var(--ab) * 0.32); }
-.pt .gba-mid button { width: 62px; height: 26px; }
-/* Portrait: the screen across the top, the buttons below. */
-@media (orientation: portrait) {
-  .pt { grid-template-rows: auto minmax(0, 1fr); }
-  .pt-screen { width: 100%; aspect-ratio: 3 / 2; max-height: 72vh; }
-  .pt > .gba-pad { align-self: center; }
-}
-/* Held sideways: D-pad left of the screen, A/B right, like a handheld. */
-@media (orientation: landscape) and (max-height: 540px) {
-  .pt[data-pad="on"] { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "dpad screen ab" "dpad mid ab"; }
-  .pt[data-pad="on"] > .gba-pad { display: contents; }
-  .pt[data-pad="on"] .gba-pad { --dp: min(54px, 13vh); --ab: min(72px, 17vh); }
-  .pt[data-pad="on"] .gba-dpad { grid-area: dpad; align-self: center; margin: 0 14px; }
-  .pt[data-pad="on"] .gba-ab { grid-area: ab; align-self: center; margin: 0 14px; }
-  .pt[data-pad="on"] .gba-mid { grid-area: mid; flex-direction: row; justify-self: center; align-self: center; margin: 4px 0 6px; gap: 14px; }
-}
-`;

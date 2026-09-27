@@ -4,6 +4,7 @@
 //
 //   const audio = GameAudio.open();       // null without Web Audio
 //   audio?.push(game.readAudio(), game.audioRate());  // after each frame
+//   audio?.fade(0, 0.4);                  // the console's volume, down (or up)
 //
 // The samples are resampled to the audio device's rate and queued in an
 // AudioWorklet (a ScriptProcessorNode where a worklet can't load). The queue
@@ -77,13 +78,27 @@ registerProcessor('game-stream', GameStream);
 
 export class GameAudio {
   private post: ((chunk: Float32Array) => void) | null = null;
+  /** The console's volume, after the queue. */
+  private readonly volume: GainNode;
   /** Resampling: where the next output sample falls between the last input sample and the next. */
   private phase = 0;
   private lastL = 0;
   private lastR = 0;
 
   private constructor(private readonly output: AudioOutput) {
+    this.volume = output.ctx.createGain();
+    this.volume.connect(output.ctx.destination);
     void this.connect();
+  }
+
+  /** Turn the volume to `level` (0..1) over `seconds`: the game's sound fading out as a menu takes over, or back. */
+  fade(level: number, seconds = 0): void {
+    const now = this.output.ctx.currentTime;
+    const gain = this.volume.gain;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(gain.value, now);
+    if (seconds > 0) gain.linearRampToValueAtTime(level, now + seconds);
+    else gain.setValueAtTime(level, now);
   }
 
   static open(): GameAudio | null {
@@ -103,7 +118,7 @@ export class GameAudio {
         await ctx.audioWorklet.addModule(url);
         URL.revokeObjectURL(url);
         const node = new AudioWorkletNode(ctx, 'game-stream', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-        node.connect(ctx.destination);
+        node.connect(this.volume);
         this.post = (chunk) => node.port.postMessage(chunk, [chunk.buffer]);
         return;
       } catch (e) {
@@ -119,7 +134,7 @@ export class GameAudio {
     const queue = new Stream();
     const node = ctx.createScriptProcessor(1024, 0, 2);
     node.onaudioprocess = (e) => queue.process([], [[e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1)]]);
-    node.connect(ctx.destination);
+    node.connect(this.volume);
     this.post = (chunk) => queue.write(chunk);
   }
 

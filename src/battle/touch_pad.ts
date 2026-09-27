@@ -1,6 +1,6 @@
-// On-screen GBA controls (D-pad, A/B, Start/Select) for touch and mouse.
-// Buttons stay held while the pointer is down, like the real buttons (holding
-// A or B speeds up battle text).
+// On-screen GBA controls (D-pad, A/B, Start/Select, and L/R when asked) for
+// touch and mouse. Buttons stay held while the pointer is down, like the real
+// buttons (holding A or B speeds up battle text).
 
 import type { Button, Input } from './input';
 
@@ -20,6 +20,14 @@ const CSS = `
 .gba-dpad .hub { grid-area: 2 / 2; background: #2b2e3f; border-block: 1px solid #454a63; }
 .gba-mid { display: flex; flex-direction: column; gap: 10px; align-self: flex-end; }
 .gba-mid button { width: 64px; height: 22px; border-radius: 11px; font-size: 10px; letter-spacing: 0.08em; }
+/* L and R: the shoulders, a row above the D-pad and A/B at the corners. */
+.gba-pad.shoulders { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "l . r" "dpad mid ab"; row-gap: 8px; }
+.gba-pad.shoulders .gba-dpad { grid-area: dpad; }
+.gba-pad.shoulders .gba-mid { grid-area: mid; justify-self: center; }
+.gba-pad.shoulders .gba-ab { grid-area: ab; }
+.gba-pad [data-b="L"], .gba-pad [data-b="R"] { width: 88px; height: 26px; font-size: 11px; letter-spacing: 0.08em; }
+.gba-pad [data-b="L"] { grid-area: l; justify-self: start; border-radius: 14px 6px 6px 6px; }
+.gba-pad [data-b="R"] { grid-area: r; justify-self: end; border-radius: 6px 14px 6px 6px; }
 .gba-ab { display: grid; grid-template-columns: 58px 58px; grid-template-rows: 30px 58px 30px; column-gap: 10px; }
 .gba-ab button { width: 58px; height: 58px; border-radius: 50%; font-size: 18px; background: #3b3452; border-color: #5a5078; }
 .gba-ab button.on { background: #4b4268; }
@@ -33,10 +41,10 @@ const CSS = `
 }
 `;
 
-const LABELS: Partial<Record<Button, string>> = { UP: '▲', DOWN: '▼', LEFT: '◀', RIGHT: '▶', A: 'A', B: 'B', START: 'START', SELECT: 'SELECT' };
+const LABELS: Partial<Record<Button, string>> = { UP: '▲', DOWN: '▼', LEFT: '◀', RIGHT: '▶', A: 'A', B: 'B', START: 'START', SELECT: 'SELECT', L: 'L', R: 'R' };
 
-/** `getInput` is read on each press, so the pad can exist before the scene. */
-export function createTouchPad(getInput: () => Input | null | undefined): HTMLElement {
+/** `getInput` is read on each press, so the pad can exist before the scene. `shoulders` adds L and R. */
+export function createTouchPad(getInput: () => Input | null | undefined, o: { shoulders?: boolean } = {}): HTMLElement {
   if (!document.getElementById('gba-pad-css')) {
     const style = document.createElement('style');
     style.id = 'gba-pad-css';
@@ -80,5 +88,9 @@ export function createTouchPad(getInput: () => Input | null | undefined): HTMLEl
   ab.className = 'gba-ab';
   ab.append(button('B'), button('A'));
   pad.append(dpad, mid, ab);
+  if (o.shoulders) {
+    pad.classList.add('shoulders');
+    pad.append(button('L'), button('R'));
+  }
   return pad;
 }

@@ -236,6 +236,8 @@ export class RemakeLayer {
    * lives on (its clips, its arena) in the others.
    */
   drawPictures = true;
+  /** The last frame was a battle's, with everything its 3D needs loaded (a page can show it from now on). */
+  battleShown = false;
 
   constructor(private readonly game: Game, info: GameInfo) {
     this.layouts = info.structs;
@@ -287,6 +289,7 @@ export class RemakeLayer {
 
   /** A frame is about to be drawn: prepare its pictures. */
   onFrameStart(): void {
+    this.battleShown = false;
     if (this.mode === 'off') return;
     this.clearPictures();
     const state = readBattleState(this.layouts, this.game.memory(), (this.game.exports().RemakeState as () => number)(), this.NO_BATTLER);
@@ -308,6 +311,7 @@ export class RemakeLayer {
       this.hideLoading(state);
       return;
     }
+    this.battleShown = true;
 
     stage.update(FRAME_SECONDS);
     // Every body lives on (its clip runs) while its sprite blinks or is away.

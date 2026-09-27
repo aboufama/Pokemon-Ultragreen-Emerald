@@ -7,7 +7,7 @@
 import type { Bitmap, RGB } from '../gba/bitmap';
 import { clear } from '../gba/bitmap';
 import { GbaScreen } from '../battle/screen';
-import { type Button, Input } from '../battle/input';
+import { type Button, type Keymap, Input } from '../battle/input';
 import { FrameClock } from '../battle/clock';
 import { TEXT_FRAMES } from '../battle/scene';
 import { encodeText, soundCues } from '../gba/font';
@@ -57,10 +57,11 @@ export class MenuScreen {
   private acc = 0;
   private disposed = false;
 
-  constructor(parent: HTMLElement, readonly g: MenuGfx, fill: boolean) {
+  /** `fill`: the screen fills its box (touch screens); `keys`: the page's keymap (the playtest's by default). */
+  constructor(parent: HTMLElement, readonly g: MenuGfx, fill: boolean, keys?: Keymap) {
     this.screen = new GbaScreen(parent, undefined, fill);
     this.fb = this.screen.ui;
-    this.input = new Input(window);
+    this.input = new Input(window, keys);
     this.screen.element.addEventListener('pointerdown', () => this.input.press('A'));
     const loop = (now: number) => {
       if (this.disposed) return;
@@ -221,9 +222,12 @@ export class MenuScreen {
   /**
    * A list menu in a framed window: `rows` visible (16 px each), scrolling
    * with the arrows of scroll_indicator.png. Resolves the chosen index, or
-   * null for B. `start` is the initial cursor; `keep` leaves the window up.
+   * null for B. `start` is the initial cursor; `keep` leaves the window up;
+   * `extra` ends the list on START or SELECT too (with the item under the
+   * cursor); with `random`, SELECT hops the cursor down the list a few
+   * times and chooses where it lands (button 'SELECT').
    */
-  async list(items: ListItem[], r: Rect, opts: { start?: number; keep?: boolean; extra?: (b: Button) => boolean } = {}): Promise<{ index: number | null; remove: () => void; button?: Button }> {
+  async list(items: ListItem[], r: Rect, opts: { start?: number; keep?: boolean; extra?: (b: Button) => boolean; random?: boolean } = {}): Promise<{ index: number | null; remove: () => void; button?: Button }> {
     const rows = Math.floor(r.h / 16);
     let cursor = Math.min(items.length - 1, Math.max(0, opts.start ?? 0));
     let top = Math.max(0, Math.min(cursor - rows + 1, items.length - rows));
@@ -246,9 +250,26 @@ export class MenuScreen {
     });
     let index: number | null = null;
     let button: Button | undefined;
+    let hops = 0, hopTimer = 0;
     await this.clock.until(() => {
       tick++;
       const n = items.length;
+      if (hops > 0) {
+        if (++hopTimer < 6) return false;
+        hopTimer = 0;
+        cursor = (cursor + 1) % n;
+        top = Math.max(0, Math.min(cursor, Math.max(top, cursor - rows + 1)));
+        items[cursor]?.onHover?.();
+        if (--hops > 0) return false;
+        index = cursor;
+        button = 'SELECT';
+        return true;
+      }
+      if (opts.random && n > 1 && this.input.pressed('SELECT')) {
+        sound.playSE('se_select');
+        hops = 5 + Math.floor(Math.random() * n);
+        return false;
+      }
       let moved = false;
       if (this.input.pressed('UP') && cursor > 0) { cursor--; moved = true; }
       else if (this.input.pressed('DOWN') && cursor < n - 1) { cursor++; moved = true; }

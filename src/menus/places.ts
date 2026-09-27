@@ -50,7 +50,16 @@ class ArenaPreview {
   }
 }
 
-export async function choosePlace(m: MenuScreen, places: Place[], start = 0): Promise<string | null> {
+export interface PlaceOptions {
+  /**
+   * The battle starts as its transition does: the wild battle music by
+   * default. The game page starts the compiled game's battle instead, whose
+   * own music plays through the transition (src/game/demo.ts).
+   */
+  startBattle?: (arena: string) => void;
+}
+
+export async function choosePlace(m: MenuScreen, places: Place[], start = 0, o: PlaceOptions = {}): Promise<string | null> {
   let about = '';
   const preview = new ArenaPreview(m);
   const removeScene = m.show((fb: Bitmap) => {
@@ -79,7 +88,8 @@ export async function choosePlace(m: MenuScreen, places: Place[], start = 0): Pr
     // A wild battle starts (CreateBattleStartTask): the battle music, and the
     // place's transition over the arena, the windows gone, to black.
     removeScene();
-    sound.playBGM('mus_vs_wild');
+    if (o.startBattle) o.startBattle(places[index].arena);
+    else sound.playBGM('mus_vs_wild');
     await wildTransition(stage.pipeline, m.clock, transitionKind(places[index].arena));
     m.fadeAmount = 16;
     return places[index].arena;
