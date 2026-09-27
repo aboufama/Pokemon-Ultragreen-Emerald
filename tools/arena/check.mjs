@@ -19,6 +19,10 @@
 //   - every place is as sparse as the sea, the way Emerald's own battle
 //     backgrounds are: few colors, a few broad tones, marks no more than the
 //     sea's, at most two props showing, the far view hazed;
+//   - no light pools: the ground is lit in bands by distance, never in a
+//     pool of light under or between the battlers, nor an ellipse, disc or
+//     ring of light anywhere (and the old pools in reference/arenas/ still
+//     fail the test);
 //   - with --render: in the battle view, the Pokémon (Blaziken, Sceptile,
 //     Swampert) are the most saturated and the highest-contrast things on
 //     screen.
@@ -27,9 +31,10 @@
 import { execSync } from 'node:child_process';
 import { readFile, readdir, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { importTs } from '../gauntlet/tsimport.mjs';
 import { ROOT } from '../gauntlet/species.mjs';
-import { calm, compose, focus, propsShowing, shownMask, sparse } from './screen.mjs';
+import { battleFeet, calm, compose, focus, lightPools, propsShowing, shownMask, sparse } from './screen.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, all) => (a.startsWith('--') ? [a.slice(2), all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? true : all[i + 1]] : null)).filter(Boolean));
 const results = [];
@@ -94,6 +99,21 @@ const SPARSE = [
 const MAX_PROPS_SPARSE = 2;
 
 /**
+ * No light pools. The user saw the huge light ovals of Route 101 and Granite
+ * Cave ("the huge light ovals look like shit"): the ground is lit the way
+ * Emerald's own backgrounds light it, in bands by distance, never in a pool
+ * of light under or between the battlers, nor an ellipse, disc or ring of
+ * light anywhere (screen.mjs lightPools(), its limits in POOLS there). The
+ * old Route 101 and Granite Cave, as they were painted (their painted area,
+ * from screen pixel -32, -24, the far view cut out, in reference/arenas/),
+ * must still fail it, so the test can't slacken without this check failing.
+ */
+const OLD_POOLS = [
+  { label: 'the old Route 101', file: 'reference/arenas/grass-light-pool.png', origin: [-32, -24], pools: 1, ovals: 0 },
+  { label: 'the old Granite Cave', file: 'reference/arenas/cave-light-pool.png', origin: [-32, -24], pools: 1, ovals: 1 },
+];
+
+/**
  * The Pokémon are the focus (with --render): each arena is rendered in the
  * browser with the three species facing each other (every one of them on
  * both sides), no UI, and measured with screen.mjs focus() on what the
@@ -108,10 +128,39 @@ const MAX_PROPS_SPARSE = 2;
 const PAIRS = [['blaziken', 'swampert'], ['sceptile', 'blaziken'], ['swampert', 'sceptile']];
 
 const app = await importTs('tools/arena/entry.ts');
-const { ARENAS, paintArena, battlerBox, propRect, BATTLE_CAMERA, groundPointAt, makeBattleCamera } = app;
+const { ARENAS, MAT, paintArena, battlerBox, propRect, BATTLE_CAMERA, groundPointAt, makeBattleCamera } = app;
 const camera = makeBattleCamera(BATTLE_CAMERA);
 const player = groundPointAt(camera, ...BATTLE_CAMERA.anchors.player);
 const enemy = groundPointAt(camera, ...BATTLE_CAMERA.anchors.enemy);
+
+/** An 8-bit RGBA PNG (as preview.mjs --ground writes it) as { data, width, height }. */
+function readPng(buf) {
+  let width = 0, height = 0;
+  const idat = [];
+  for (let at = 8; at < buf.length; ) {
+    const len = buf.readUInt32BE(at), type = buf.toString('ascii', at + 4, at + 8), body = buf.subarray(at + 8, at + 8 + len);
+    if (type === 'IHDR') {
+      width = body.readUInt32BE(0);
+      height = body.readUInt32BE(4);
+      if (body[8] !== 8 || body[9] !== 6 || body[12] !== 0) throw new Error('not an 8-bit RGBA PNG without interlace');
+    } else if (type === 'IDAT') idat.push(body);
+    at += 12 + len;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const data = new Uint8ClampedArray(width * height * 4);
+  const row = width * 4;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (row + 1)];
+    for (let x = 0; x < row; x++) {
+      const v = raw[y * (row + 1) + 1 + x];
+      const a = x >= 4 ? data[y * row + x - 4] : 0, b = y ? data[(y - 1) * row + x] : 0, c = x >= 4 && y ? data[(y - 1) * row + x - 4] : 0;
+      const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+      const pred = [0, a, b, (a + b) >> 1, pa <= pb && pa <= pc ? a : pb <= pc ? b : c][filter];
+      data[y * row + x] = (v + pred) & 255;
+    }
+  }
+  return { data, width, height };
+}
 
 // Every arena is a Hoenn place the menus can list (the playtest's places and
 // the battle page's picker are built from the registry).
@@ -215,6 +264,18 @@ for (const name of Object.keys(ARENAS)) {
   if (m.props > MAX_PROPS_SPARSE) missed.push(`props showing ${m.props} <= ${MAX_PROPS_SPARSE}`);
   sparseShown.push(`props showing ${m.props} <= ${MAX_PROPS_SPARSE}`);
   gate(`${name}: as sparse as the sea`, missed.length === 0, missed.length ? `missed: ${missed.join('; ')}` : sparseShown.join(', '));
+  // No light pools on its ground.
+  const pools = lightPools(g, battleFeet(ctx.view, player, enemy), MAT.BACKDROP);
+  gate(`${name}: no light pools`, pools.found.length === 0, pools.found.join('; ') || pools.figures);
+}
+
+// The test still catches the old light pools: Route 101's pale middle, Granite Cave's pool and its beam's foot.
+for (const old of OLD_POOLS) {
+  const png = readPng(await readFile(join(ROOT, old.file)));
+  const found = lightPools({ ...png, ox: old.origin[0], oy: old.origin[1] }, battleFeet(seaCtx.view, player, enemy), MAT.BACKDROP);
+  const caught = found.pools.length >= old.pools && found.ovals.length >= old.ovals;
+  const want = `${old.pools} pool${old.ovals ? ` and ${old.ovals} oval` : ''}`;
+  gate(`no light pools: fails ${old.label} (${old.file})`, caught, caught ? found.found.join('; ') : `wanted ${want}, found ${found.pools.length} and ${found.ovals.length}: ${found.found.join('; ') || found.figures}`);
 }
 
 if (args.render) {

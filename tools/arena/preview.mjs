@@ -3,15 +3,19 @@
 // (the painted ground with the props standing on it, no Pokémon, no ground
 // shader life), in a second, for designing an arena without the browser:
 //
-//   node tools/arena/preview.mjs [arena,arena|all] [--wide] [--boxes] [--scale 3] [--out build/arenas]
+//   node tools/arena/preview.mjs [arena,arena|all] [--wide] [--boxes] [--ground] [--scale 3] [--out build/arenas]
 //
 //   --wide    the whole painted area (the screen and the camera shake's margins)
 //   --boxes   outline the battlers' boxes (props never enter them) and dim what
 //             the healthboxes and the text box cover
+//   --ground  the painted ground at one pixel per GBA pixel, the far view cut
+//             out: what the light-pool test measures (reference/arenas/ keeps
+//             the old light pools this way)
 //
-// Writes <out>/<arena>.paint.png (and .wide.png), and prints how calm and how
-// sparse it is where the battle shows it (the measures check.mjs holds
-// against the sea's; see the arena skill). Judge the result in the browser too
+// Writes <out>/<arena>.paint.png (and .wide.png, .ground.png), and prints how
+// calm and how sparse it is where the battle shows it (the measures check.mjs
+// holds against the sea's; see the arena skill) and how near its ground comes
+// to a light pool. Judge the result in the browser too
 // (/?mode=stage&env=<arena>): the ground's life, the Pokémon and their
 // shadows are only there.
 
@@ -19,16 +23,16 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { importTs } from '../gauntlet/tsimport.mjs';
-import { calm, compose as composeWith, propsShowing, shownMask, sparse } from './screen.mjs';
+import { battleFeet, calm, compose as composeWith, lightPools, propsShowing, shownMask, sparse } from './screen.mjs';
 import { ROOT } from '../gauntlet/species.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (k) => argv.includes(`--${k}`);
 const opt = (k, d) => (argv.includes(`--${k}`) ? argv[argv.indexOf(`--${k}`) + 1] : d);
-const scale = Number(opt('scale', 3));
+const SCALE = Number(opt('scale', 3));
 const out = join(ROOT, opt('out', 'build/arenas'));
 
-const { ARENAS, paintArena, battlerBox, propRect, BATTLE_CAMERA, groundPointAt, makeBattleCamera } = await importTs('tools/arena/entry.ts');
+const { ARENAS, MAT, paintArena, battlerBox, propRect, BATTLE_CAMERA, groundPointAt, makeBattleCamera } = await importTs('tools/arena/entry.ts');
 const compose = (ctx, x0, y0, w, h) => composeWith(ctx, propRect, x0, y0, w, h);
 const camera = makeBattleCamera(BATTLE_CAMERA);
 const player = groundPointAt(camera, ...BATTLE_CAMERA.anchors.player);
@@ -72,7 +76,7 @@ const chunk = (type, data) => {
 };
 
 /** Write RGBA pixels as a PNG, each pixel `scale` x `scale` (nearest neighbor). */
-async function save(img, w, h, path) {
+async function save(img, w, h, path, scale = SCALE) {
   const W = w * scale, H = h * scale;
   const raw = Buffer.alloc(H * (W * 4 + 1));
   for (let y = 0; y < H; y++) {
@@ -105,10 +109,18 @@ for (const name of names) {
     if (flag('boxes')) overlay(ctx, wide, g.ox, g.oy, g.width, g.height);
     await save(wide, g.width, g.height, join(out, `${name}.wide.png`));
   }
+  if (flag('ground')) {
+    const g = ctx.ground;
+    const img = new Uint8ClampedArray(g.data.length);
+    for (let i = 0; i < img.length; i += 4) if (g.data[i + 3] && g.data[i + 3] !== MAT.BACKDROP) img.set([g.data[i], g.data[i + 1], g.data[i + 2], 255], i);
+    await save(img, g.width, g.height, join(out, `${name}.ground.png`), 1);
+  }
   const mask = shownMask(battlerBox(ctx, 'player'));
   const img = compose(ctx, 0, 0, 240, 160);
   const c = calm(img, mask, battlerBox(ctx, 'enemy'));
   const s = sparse(img, mask);
-  const figures = `busy ${c.busy.toFixed(1)}  strong ${c.strong.toFixed(1)}%  specks ${c.specks.toFixed(1)}  marks ${c.marks.toFixed(1)}  open ${c.open.toFixed(0)}%  foe ${c.foe.toFixed(1)}  props ${propsShowing(ctx, propRect, mask)}  |  colors ${s.colours}  tones ${s.tones.toFixed(0)}%  far darks ${s.farDark.toFixed(0)}  far contrast ${s.farRange.toFixed(0)}`;
+  const p = lightPools(ctx.ground, battleFeet(ctx.view, player, enemy), MAT.BACKDROP);
+  const pools = `${p.found.length ? `LIGHT POOLS ${p.pools.length}, OVALS ${p.ovals.length}` : 'no light pools'}: beside ${p.under ? `${(p.under.beside * 100).toFixed(0)}%` : '-'}  oval ${p.oval ? p.oval.ellipse.toFixed(2) : '-'}`;
+  const figures = `busy ${c.busy.toFixed(1)}  strong ${c.strong.toFixed(1)}%  specks ${c.specks.toFixed(1)}  marks ${c.marks.toFixed(1)}  open ${c.open.toFixed(0)}%  foe ${c.foe.toFixed(1)}  props ${propsShowing(ctx, propRect, mask)}  |  colors ${s.colours}  tones ${s.tones.toFixed(0)}%  far darks ${s.farDark.toFixed(0)}  far contrast ${s.farRange.toFixed(0)}  |  ${pools}`;
   console.log(`${name.padEnd(11)} ${ms.toFixed(0).padStart(4)} ms  ${figures}  -> ${join(out, name)}.paint.png`);
 }
