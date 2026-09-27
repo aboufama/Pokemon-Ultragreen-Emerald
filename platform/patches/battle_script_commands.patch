@@ -1,0 +1,73 @@
+battle_script_commands.c: the page's hacks for testing (platform/include/hacks.h).
+
+The EXP a Pokémon gains is multiplied (Cmd_getexp, after the Lucky Egg and the
+other bonuses, before the message says it); a ball's catch odds become
+certain (Cmd_handleballthrow); a hit's damage becomes enough to knock the
+foe out (the adjust*damage commands, after Endure and the Focus Band, before
+the HP bar moves). With the hacks off each call gives back what it is given.
+
+--- a/src/battle_script_commands.c
++++ b/src/battle_script_commands.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_WASM
++#include "hacks.h"
++#endif
+ #include "battle.h"
+ #include "battle_message.h"
+ #include "battle_anim.h"
+@@ -1694,6 +1697,10 @@
+             gLastUsedItem = gBattleMons[gBattlerTarget].item;
+         }
+     }
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the page's hacks (platform/include/hacks.h): the player's hits knock out.
++    gBattleMoveDamage = HackHitDamage(gBattleMoveDamage);
++#endif
+     gBattlescriptCurrInstr++;
+ }
+ 
+@@ -1737,6 +1744,10 @@
+             gLastUsedItem = gBattleMons[gBattlerTarget].item;
+         }
+     }
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the page's hacks (platform/include/hacks.h): the player's hits knock out.
++    gBattleMoveDamage = HackHitDamage(gBattleMoveDamage);
++#endif
+     gBattlescriptCurrInstr++;
+ }
+ 
+@@ -3395,6 +3406,10 @@
+                     {
+                         i = STRINGID_EMPTYSTRING4;
+                     }
++#ifdef PLATFORM_WASM
++                    // PLATFORM_WASM: the page's hacks (platform/include/hacks.h): EXP times the multiplier.
++                    gBattleMoveDamage = HackExp(gBattleMoveDamage);
++#endif
+ 
+                     // get exp getter battler
+                     if (gBattleTypeFlags & BATTLE_TYPE_DOUBLE)
+@@ -5895,6 +5910,10 @@
+             gLastUsedItem = gBattleMons[gBattlerTarget].item;
+         }
+     }
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the page's hacks (platform/include/hacks.h): the player's hits knock out.
++    gBattleMoveDamage = HackHitDamage(gBattleMoveDamage);
++#endif
+     gBattlescriptCurrInstr++;
+ }
+ 
+@@ -10006,6 +10025,10 @@
+             }
+         }
+ 
++#ifdef PLATFORM_WASM
++        // PLATFORM_WASM: the page's hacks (platform/include/hacks.h): every ball catches.
++        odds = HackCatchOdds(odds);
++#endif
+         if (odds > 254) // mon caught
+         {
+             BtlController_EmitBallThrowAnim(B_COMM_TO_CONTROLLER, BALL_3_SHAKES_SUCCESS);

@@ -380,6 +380,7 @@ const REMAKE_CONSTANTS = [
   ['constants/battle.h', 'B_POSITION_'],
   ['constants/battle.h', 'B_SIDE_'],
   ['remake_state.h', 'REMAKE_'],
+  ['hacks.h', 'HACK_'],
 ];
 
 function gameConstants() {

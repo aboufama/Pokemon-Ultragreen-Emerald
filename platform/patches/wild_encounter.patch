@@ -1,0 +1,53 @@
+wild_encounter.c: the page's hacks for testing (platform/include/hacks.h).
+
+Wild Pokémon in grass and water never come (StandardWildEncounter), or come on
+every step (WildEncounterCheck's odds and the 60% chance on a new kind of
+tile, AllowWildCheckOnNewMetatile). With the hack off both roll as the game
+does.
+
+--- a/src/wild_encounter.c
++++ b/src/wild_encounter.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_WASM
++#include "hacks.h"
++#endif
+ #include "battle_setup.h"
+ #include "battle_pike.h"
+ #include "battle_pyramid.h"
+@@ -501,6 +504,11 @@
+ // Returns true if it will try to create a wild encounter.
+ static bool8 WildEncounterCheck(u32 encounterRate, bool8 ignoreAbility)
+ {
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the page's hacks (platform/include/hacks.h): a wild Pokémon on every step.
++    if (HackEncounters() == HACK_ENCOUNTERS_ALWAYS)
++        return TRUE;
++#endif
+     encounterRate *= 16;
+     if (TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG_MACH_BIKE | PLAYER_AVATAR_FLAG_ACRO_BIKE))
+         encounterRate = encounterRate * 80 / 100;
+@@ -532,6 +540,11 @@
+ // skips the wild encounter check entirely.
+ static bool8 AllowWildCheckOnNewMetatile(void)
+ {
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the page's hacks (platform/include/hacks.h): a wild Pokémon on every step.
++    if (HackEncounters() == HACK_ENCOUNTERS_ALWAYS)
++        return TRUE;
++#endif
+     if (Random() % 100 >= 60)
+         return FALSE;
+     else
+@@ -556,6 +569,11 @@
+ 
+     if (sWildEncountersDisabled == TRUE)
+         return FALSE;
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the page's hacks (platform/include/hacks.h): no wild Pokémon.
++    if (HackEncounters() == HACK_ENCOUNTERS_NEVER)
++        return FALSE;
++#endif
+ 
+     headerId = GetCurrentMapWildMonHeaderId();
+     if (headerId == HEADER_NONE)

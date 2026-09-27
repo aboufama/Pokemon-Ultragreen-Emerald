@@ -9,8 +9,11 @@
 // The page opens on a start screen drawn like the game's main menu
 // (src/menus/start.ts): PLAY THE GAME runs the game from power-on; DEMO
 // BATTLES sets up wild battles on the GBA screen and plays them in the game
-// (./demo.ts), back to the start screen after. ?play=1 goes straight to the
-// game.
+// (./demo.ts), back to the start screen after; HACKS sets the hacks for
+// testing (./hacks.ts: fast forward, EXP multiplier, wild Pokémon, catching,
+// one-hit knockouts), which the H key or the HACKS button also opens over
+// the game, paused, with its helps (heal the party, items, money). ?play=1
+// goes straight to the game.
 //
 // ?battle=BLAZIKEN:50,SWAMPERT:50[,GRASS] starts a test battle as soon as
 // the game can (platform/game/remake_test.c): the player's Pokémon and the
@@ -38,6 +41,8 @@ import { MenuScreen } from '../menus/screen';
 import { startScreen } from '../menus/start';
 import { sound } from '../audio/sound';
 import { type DemoConsole, demoBattles } from './demo';
+import { type Hacks, applyHacks, gameHelps, loadHacks, saveHacks } from './hacks';
+import { hacksMenu } from '../menus/hacks';
 
 declare global {
   interface Window {
@@ -50,7 +55,7 @@ declare global {
 const FRAME_MS = 1000 / 59.7275;
 const SAVE_KEY = 'ultragreen.flash';
 const RTC_KEY = 'ultragreen.rtcOffset';
-const KEY_HINT = 'Arrows move · X is A · Z is B · Enter is START · Backspace is SELECT · A and S are L and R';
+const KEY_HINT = 'Arrows move · X is A · Z is B · Enter is START · Backspace is SELECT · A and S are L and R · H opens HACKS';
 const BUTTON_BITS: [Button, number][] = (['A', 'B', 'SELECT', 'START', 'RIGHT', 'LEFT', 'UP', 'DOWN', 'R', 'L'] as const).map((b) => [b, KEYS[b]]);
 
 // ---------------------------------------------------------------- input
@@ -119,6 +124,10 @@ function storeSave(game: Game) {
 class Runner {
   /** The game steps (and plays its sound). */
   running = false;
+  /** Held under a menu (the hacks'): no frames, no sound. */
+  paused = false;
+  /** Frames the game runs for each of the GBA's (fast forward: its sound is off meanwhile). */
+  speed = 1;
   /** The game's save is kept (the demo battles' games are not). */
   saves = true;
   onError: (e: unknown) => void = () => undefined;
@@ -171,12 +180,12 @@ class Runner {
   private readonly tick = async (now: number) => {
     const elapsed = now - (this.last || now);
     this.last = now;
-    if (!this.running) {
+    if (!this.running || this.paused) {
       this.owed = 0;
       requestAnimationFrame(this.tick);
       return;
     }
-    this.owed = Math.min(this.owed + elapsed, FRAME_MS * 4);
+    this.owed = Math.min(this.owed + elapsed * this.speed, FRAME_MS * 4 * this.speed);
     try {
       while (this.owed >= FRAME_MS) {
         // The game waits while the remake layer loads what a battle needs.
@@ -184,6 +193,9 @@ class Runner {
           this.owed = 0;
           break;
         }
+        // Fast forward: only the frames that show get the remake's pictures
+        // (the battle lives on in the others), as the page's manual mode does.
+        this.layer.drawPictures = this.speed === 1 || this.owed < FRAME_MS * 3;
         const before = this.game.vblanks();
         if (!(await this.step())) {
           this.owed = 0;
@@ -192,7 +204,8 @@ class Runner {
         this.owed -= FRAME_MS * Math.max(1, this.game.vblanks() - before);
         this.waiters = this.waiters.filter((w) => !(w.done() && (w.resolve(), true)));
       }
-      this.audio?.push(this.game.readAudio(), this.game.audioRate());
+      const samples = this.game.readAudio();
+      if (this.speed === 1) this.audio?.push(samples, this.game.audioRate());
       this.show();
     } catch (e) {
       this.running = false;
@@ -214,7 +227,7 @@ interface Loaded {
 }
 
 /** The game and what the remake layer reads of it: most of the page's download. */
-async function loadTheGame(manual: boolean, clock: number[] | undefined): Promise<Loaded> {
+async function loadTheGame(manual: boolean, clock: number[] | undefined, hacks: Hacks | null): Promise<Loaded> {
   const url = new URL('game/pokeemerald.wasm', document.baseURI);
   const [module, info] = await Promise.all([WebAssembly.compileStreaming(fetch(url)), loadGameInfo()]);
   let layer: RemakeLayer | null = null;
@@ -228,6 +241,8 @@ async function loadTheGame(manual: boolean, clock: number[] | undefined): Promis
     // each frame it prepares the frame's pictures.
     onFrameStart: () => layer?.onFrameStart(),
     onVBlank: (count) => onVBlank?.(count),
+    // The hacks, at every power-on and soft reset.
+    onInstance: (exports) => hacks && applyHacks(exports, info.constants, hacks),
   });
   await game.init();
   layer = new RemakeLayer(game, info);
@@ -244,9 +259,12 @@ async function main() {
   // R); the buttons drive the menu over the game while there is one.
   let menu: MenuScreen | null = null;
   const input = new Input(window, GAME_KEYS);
+  // The HACKS button (or H) opens the hacks over the game.
+  let requestHacks = () => {};
   const { screen: box } = mountHandheld(document.getElementById('app')!, () => menu?.input ?? input, {
     pad: touch && params.get('pad') !== '0' && !manual,
     shoulders: true,
+    extras: manual ? [] : [{ label: 'HACKS', press: () => requestHacks() }],
     hint: touch ? undefined : KEY_HINT,
   });
   const screen = new GbaScreen(box, undefined, touch);
@@ -254,7 +272,9 @@ async function main() {
   status.id = 'status';
   status.textContent = 'Loading…';
   box.append(status);
-  const loading = loadTheGame(manual, params.get('time')?.split(',').map(Number));
+  // The hacks: none for tools (manual mode plays the game as the ROM does).
+  const hacks = manual ? null : loadHacks();
+  const loading = loadTheGame(manual, params.get('time')?.split(',').map(Number), hacks);
   loading.catch((e) => (status.textContent = `Could not load the game: ${(e as Error).message}`));
 
   if (manual) {
@@ -271,7 +291,13 @@ async function main() {
   let step = 'start';
   let demo: DemoConsole | null = null;
   let loadedGame: Game | null = null;
-  window.__page = { step: () => (step === 'demo' && demo ? demo.step : step), game: () => loadedGame };
+  let constants: Record<string, number> | null = null;
+  void loading.then(({ game, info }) => {
+    loadedGame = game;
+    constants = info.constants;
+  });
+  let inHacks = false;
+  window.__page = { step: () => (inHacks ? 'hacks' : step === 'demo' && demo ? demo.step : step), game: () => loadedGame };
 
   const openMenu = (g: MenuGfx) => {
     if (!menu) {
@@ -293,6 +319,9 @@ async function main() {
     (started ??= loading.then(({ game, info, layer }) => {
       loadedGame = game;
       const runner = new Runner(game, layer, screen, audio, input, () => menu === null);
+      // The hacks as they are now (they may have changed while the game loaded).
+      applyHacks(game.exports(), info.constants, hacks!);
+      runner.speed = hacks!.speed;
       runner.onError = (e) => {
         status.textContent = e instanceof GameHalt ? `The game stopped: ${e.message}` : `Error: ${(e as Error).message}`;
         console.error(e);
@@ -322,6 +351,32 @@ async function main() {
     return;
   }
 
+  /**
+   * The HACKS menu: over the game (held while it is open), with its helps,
+   * or from the start screen without them. A change is kept and set in the
+   * game at once.
+   */
+  const openHacks = async (g: MenuGfx, runner: Runner | null) => {
+    inHacks = true;
+    if (runner) runner.paused = true;
+    const m = openMenu(g);
+    m.fadeAmount = 16;
+    await hacksMenu(m, {
+      hacks: hacks!,
+      changed: () => {
+        saveHacks(hacks!);
+        if (loadedGame && constants) applyHacks(loadedGame.exports(), constants, hacks!);
+        if (runner) runner.speed = hacks!.speed;
+      },
+      helps: runner ? gameHelps(() => runner.game.exports()) : null,
+    });
+    inHacks = false;
+    if (runner) {
+      closeMenu();
+      runner.paused = false;
+    }
+  };
+
   /** PLAY THE GAME: after the demo battles, from power-on again. */
   const play = async (g: MenuGfx | null, reboot: boolean) => {
     const { runner } = await ready(g);
@@ -341,6 +396,16 @@ async function main() {
   // The start screen shows while the game is still loading.
   const g = await loadMenuGfx();
   status.textContent = '';
+  // H or the HACKS button, while the game shows (playing, or a demo battle).
+  requestHacks = () => {
+    if (menu || inHacks || !started) return;
+    void started.then(({ runner }) => {
+      if (!menu && !inHacks && runner.running) void openHacks(g, runner);
+    });
+  };
+  addEventListener('keydown', (e) => {
+    if (e.code === 'KeyH' && !e.repeat) requestHacks();
+  });
   let demoRan = false;
   let choice = 0;
   for (;;) {
@@ -350,7 +415,12 @@ async function main() {
     choice = await startScreen(m, [
       { label: 'PLAY THE GAME', about: 'Your journey in Hoenn.' },
       { label: 'DEMO BATTLES', about: 'Battle wild POKéMON in 3D now.' },
+      { label: 'HACKS', about: 'Cheats to test the game faster.' },
     ], choice);
+    if (choice === 2) {
+      await openHacks(g, null);
+      continue;
+    }
     // The rest of the page waits for the game.
     if (!loadedGame) status.textContent = 'Loading the game…';
     const { runner, demo: c } = await ready(g);

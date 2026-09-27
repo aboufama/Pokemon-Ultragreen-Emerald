@@ -226,11 +226,24 @@ from power-on; DEMO BATTLES (`src/game/demo.ts`) sets a wild battle up in the
 battle playtest's menus (the Pokémon, drawn in 3D, at level 50, the moves, the
 place, whose arena shows live) and plays it in the game as a test battle, the
 remake's transition over the arena and the game's own music through it, then
-offers another. The page is laid out as a handheld (`src/ui/handheld.ts`, as
-the playtest): the screen across a phone held upright with the GBA buttons
-under it (L and R at their corners), or between the D-pad and A/B held
-sideways; one keymap for the game and its menus (`GAME_KEYS`,
-`src/battle/input.ts`).
+offers another. HACKS (also H, or the HACKS button, over the game, which
+holds meanwhile) is a menu drawn as the game's OPTION menu (`src/menus/hacks.ts`)
+for testing faster: fast forward (the page runs several frames a frame, the
+remake drawing only the ones shown), and the game's own hacks: EXP times a
+multiplier, wild Pokémon never or on every step, every ball catching, the
+player's hits knocking out, and helps (heal the party; Rare Candies, Poké Balls
+and Full Restores; money). The game's hacks are `platform/game/hacks.c`
+(`platform/include/hacks.h`), which the decomp asks at the points its patches
+name (`battle_script_commands.patch`, `wild_encounter.patch`); the page sets
+them at every power-on (`src/game/hacks.ts`, kept in the browser). All off,
+which is how the game starts and how the tools run it, each hook gives back
+what it is given: the boot and the opening compare with the ROM as before.
+The page is laid out as a handheld (`src/ui/handheld.ts`, as the playtest):
+the screen across a phone held upright with the GBA buttons under it on the
+console's indigo body (`src/battle/touch_pad.ts`: the D-pad's cross, A and B
+with their letters beside them, START and SELECT under the D-pad, L and R at
+the corners), or between the D-pad and A/B held sideways; one keymap for the
+game and its menus (`GAME_KEYS`, `src/battle/input.ts`).
 
 ## Content milestones
 

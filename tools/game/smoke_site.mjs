@@ -3,7 +3,8 @@
 // serve build/site under the repository's path, as GitHub Pages does, and
 //
 //   - open the front page on its start screen and choose PLAY THE GAME: the
-//     compiled game boots and runs;
+//     compiled game boots and runs, and H holds it under the HACKS menu;
+//   - open HACKS from the start screen: a change is kept;
 //   - choose DEMO BATTLES: set a battle up in its menus (Treecko against a
 //     wild Wurmple in the grass), battle it in the game drawn in 3D, run from
 //     it, and get the question of another battle;
@@ -111,8 +112,38 @@ const arenaDrawn = (page) => page.evaluate((at) => {
     const later = await page.evaluate(() => window.__page.game()?.vblanks() ?? 0);
     ok = (await page.evaluate(() => window.__page.step())) === 'game' && later > at + 30;
     if (!ok) problems.push(`game: PLAY THE GAME didn't run the game (VBlank ${at} then ${later})`);
+    // H: the HACKS menu over the game, held meanwhile; B back to it.
+    await press('KeyH', 1500);
+    const held = await page.evaluate(() => [window.__page.step(), window.__page.game().vblanks()]);
+    await page.waitForTimeout(1000);
+    const stillHeld = await page.evaluate(() => window.__page.game().vblanks()) === held[1];
+    await press('KeyZ', 1500);
+    const back = await page.evaluate(() => window.__page.step());
+    const hacks = held[0] === 'hacks' && stillHeld && back === 'game';
+    if (!hacks) problems.push(`game: H didn't hold the game under the HACKS menu (${held[0]}, held ${stillHeld}, then ${back})`);
+    ok &&= hacks;
   }
-  console.log(`${ok ? 'ok  ' : 'FAIL'}  the start screen, and the game boots from PLAY THE GAME`);
+  console.log(`${ok ? 'ok  ' : 'FAIL'}  the start screen, the game boots from PLAY THE GAME, and H holds it under the HACKS menu`);
+  await page.close();
+}
+
+// HACKS from the start screen: EXP x2, kept in the browser.
+{
+  const { page, started, press, step } = await frontPage('hacks');
+  let ok = false;
+  if (started) {
+    await press('ArrowDown');
+    await press('ArrowDown');
+    await press('KeyX', 1200);
+    const open = (await step()) === 'hacks';
+    await press('ArrowDown');
+    await press('ArrowRight');
+    await press('KeyZ', 1200);
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('ultragreen.hacks.v1') ?? '{}').exp);
+    ok = open && kept === 2 && (await step()) === 'start';
+    if (!ok) problems.push(`hacks: the menu ${open ? 'opened' : "didn't open"}; EXP kept as ${kept}; back at ${await step()}`);
+  }
+  console.log(`${ok ? 'ok  ' : 'FAIL'}  the HACKS menu keeps a change`);
   await page.close();
 }
 
