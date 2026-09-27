@@ -1,10 +1,12 @@
 // Move choreography: picks the attacker's clip for a move and reacts to its
 // events with VFX and the target's hit reaction.
 //
-// Every move has a motif (src/battle3d/motifs.ts: bite, kick, breath, jet,
-// beam, leaf volley, quake...) read from its name, effect, contact flag and
-// type. The clip is chosen per species: an explicit per-move clip, else the
-// species' clip for the motif (strong variant first), else the category clip
+// Every move a species can know has its own clip, named after the move
+// (src/battle3d/actions.ts: MOVE_DOUBLE_KICK plays 'double_kick'). Every move
+// also has a motif (src/battle3d/motifs.ts: bite, kick, breath, jet, beam,
+// leaf volley, quake...) read from its name, effect, contact flag and type:
+// a move outside the species' own (one Mimic or Mirror Move calls) plays the
+// species' clip for its motif (strong variant first), else the category clip
 // (physical/special x weak/strong, status). Effects take their shape from the
 // motif, their look from the move's type, and leave from the species'
 // emitter for that motif (mouth, cannons, flower, hands...).
@@ -22,6 +24,7 @@ import { toScreen } from '../render3d/stage';
 import type { Battler3D } from './battler';
 import type { VfxSystem } from './vfx';
 import { MOTIFS, type Motif, isStrong, motifOf } from './motifs';
+import { moveClipName, sameAction } from './actions';
 import { TYPE_COLOR, statusSprite, typeFx } from './type_fx';
 
 export type AnimCategory = 'physical_weak' | 'physical_strong' | 'special_weak' | 'special_strong' | 'status_self' | 'status_target';
@@ -47,14 +50,20 @@ export function categorize(move: MoveData): AnimCategory {
 }
 
 /**
- * Clip for a move: per-move override, then the motif clip for the body part
- * the species performs it with (`<motif>@<part>`, from moveParts), then the
- * motif clip (strong variants first), then the category clip.
+ * Clip for a move: per-move override, then the move's own clip (named after
+ * it) or one of the same action's, then the motif clip for the body part the
+ * species performs it with (`<motif>@<part>`, from moveParts), then the motif
+ * clip (strong variants first), then the category clip.
  */
 export function clipFor(attacker: Battler3D, move: MoveData): string {
   const p = attacker.profile;
   const explicit = p.moveClips[move.const];
   if (explicit && p.clips[explicit]) return explicit;
+  // The move's own clip, or one of the same action's (./actions.ts).
+  for (const m of sameAction(move.const)) {
+    const own = p.moveClips[m] ?? moveClipName(m);
+    if (p.clips[own]) return own;
+  }
   const motif = motifOf(move);
   const part = p.moveParts?.[move.const];
   const bases = part ? [`${motif}@${part}`, motif] : [motif];

@@ -16,7 +16,9 @@
 //   tick(frames) (no rendering), joints(names) — these two feed
 //   tools/gauntlet/motion.mjs — and ids(), boxMask(side), play(clip): which
 //   object owns each GBA pixel, what a healthbox covers, and another clip in
-//   place, for tools/gauntlet/uiclear.mjs }
+//   place, for tools/gauntlet/uiclear.mjs; contacts: at each impact (a
+//   toss's grab) how close the attacker's body came to the foe's, for
+//   tools/gauntlet/check.mjs }
 
 import * as THREE from 'three';
 import { GbaScreen } from '../battle/screen';
@@ -52,10 +54,19 @@ declare global {
       boxMask: (side: 'player' | 'enemy') => number[];
       /** Play another clip in place (after start()'s), from where the body is; done again at its end. */
       play: (clip: string) => void;
+      /** Perform a move in place as the battle does (its clip, effects, the foe's reaction); done again at its end. */
+      perform: (move: string) => void;
       done: boolean;
       /** Frames stepped so far, and the frames a move's hits (or a faint's shrink) landed on. */
       frame: number;
       hits: number[];
+      /**
+       * At each impact (and a toss's grab) of a clip played on its own: the
+       * gap between the attacker's body and the foe's (their nearest
+       * surface points), in the foe's heights: about 0 when the blow lands
+       * on it.
+       */
+      contacts: { frame: number; event: string; reach: number }[];
       label: string;
       /** The clip that plays, its length and events. */
       info: { clip: string; duration: number; events: { t: number; name: string }[] };
@@ -64,6 +75,46 @@ declare global {
 }
 
 const DT = 1 / 60;
+
+/** Points on a body's surface as it is posed now (skinned), world space: every `step`th vertex of its visible meshes. */
+function surfacePoints(b: Battler3D, step: number): THREE.Vector3[] {
+  const out: THREE.Vector3[] = [];
+  const v = new THREE.Vector3();
+  b.inst.root.updateWorldMatrix(true, true);
+  b.inst.root.traverseVisible((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry?.attributes.position) return;
+    const count = mesh.geometry.attributes.position.count;
+    for (let i = 0; i < count; i += step) {
+      mesh.getVertexPosition(i, v);
+      out.push(v.clone().applyMatrix4(mesh.matrixWorld));
+    }
+  });
+  return out;
+}
+
+/** The gap between two bodies' surfaces, in `unit`s: 0 where they touch or overlap. */
+function gapBetween(a: Battler3D, b: Battler3D, unit: number): number {
+  const pa = surfacePoints(a, 2), pb = surfacePoints(b, 2);
+  // Only the parts of each body facing the other can be nearest: bucket b's points on a grid.
+  const cell = unit * 0.1;
+  const grid = new Map<string, THREE.Vector3[]>();
+  const keyOf = (p: THREE.Vector3) => `${Math.floor(p.x / cell)},${Math.floor(p.y / cell)},${Math.floor(p.z / cell)}`;
+  for (const p of pb) {
+    const k = keyOf(p);
+    (grid.get(k) ?? grid.set(k, []).get(k)!).push(p);
+  }
+  let best = Infinity;
+  // Near misses first (within two cells), then everything if nothing is that close.
+  for (const p of pa) {
+    const cx = Math.floor(p.x / cell), cy = Math.floor(p.y / cell), cz = Math.floor(p.z / cell);
+    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
+      for (const q of grid.get(`${cx + dx},${cy + dy},${cz + dz}`) ?? []) best = Math.min(best, p.distanceTo(q));
+    }
+  }
+  if (best === Infinity) for (const p of pa) for (let i = 0; i < pb.length; i += 7) best = Math.min(best, p.distanceTo(pb[i]));
+  return best / unit;
+}
 
 function macrotask(): Promise<void> {
   return new Promise((resolve) => {
@@ -161,12 +212,18 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
   for (let i = 0; i < 20; i++) update();
   render();
 
+  /** A clip's events: a faint's shrink, and how close the body came to the foe at each blow. */
+  const recordContacts = (e: string) => {
+    if (e === 'shrink') api.hits.push(api.frame);
+    if (e === 'impact' || e === 'grab') api.contacts.push({ frame: api.frame, event: e, reach: gapBetween(attacker, defender, defender.height) });
+  };
   const playing = moveName ? clipFor(attacker, moveData(moveName)) : clipName;
   const clip = attacker.profile.clips[playing];
   const api = {
     done: false,
     frame: 0,
     hits: [] as number[],
+    contacts: [] as { frame: number; event: string; reach: number }[],
     label,
     info: { clip: playing, duration: clip?.duration ?? 0, events: clip?.events ?? [] },
     start() {
@@ -185,9 +242,7 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
         // A hit plays with the knock-back the move director adds in battle;
         // a faint's moment is its shrink (the battle plays SE_FAINT there).
         if (clipName === 'hit') attacker.recoil(1);
-        attacker.onEvent = (e) => {
-          if (e === 'shrink') api.hits.push(api.frame);
-        };
+        attacker.onEvent = recordContacts;
         void attacker.play(clipName).then(finish);
       }
     },
@@ -200,7 +255,10 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
       render();
     },
     tick(frames: number) {
-      for (let i = 0; i < frames; i++) update();
+      for (let i = 0; i < frames; i++) {
+        api.frame++;
+        update();
+      }
     },
     joints(names: string[]) {
       stage.scene.updateMatrixWorld(true);
@@ -230,7 +288,21 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
     play(clip: string) {
       api.done = false;
       if (clip === 'hit') attacker.recoil(1);
+      attacker.onEvent = recordContacts;
       void attacker.play(clip, { fade: 0.15 }).then(() => (api.done = true));
+    },
+    perform(move: string) {
+      api.done = false;
+      const m = moveData(move);
+      void performMove(attacker, defender, m, vfx, {
+        onHit: () => {
+          api.hits.push(api.frame);
+          api.contacts.push({ frame: api.frame, event: 'hit', reach: gapBetween(attacker, defender, defender.height) });
+        },
+      }).then(() => {
+        api.done = true;
+        defender.release();
+      });
     },
     boxMask(side: 'player' | 'enemy') {
       const fb = createBitmap(240, 160);

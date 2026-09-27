@@ -16,10 +16,18 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { speciesBrief } from './brief.mjs';
-import { lintClips, travelOf } from './cliplint.mjs';
+import { lintClips } from './cliplint.mjs';
+import { clipProblems, clipRoles, duplicates, poseDistance } from './fundamentals.mjs';
 import { readGlbJson } from './rigmap.mjs';
-import { CATEGORY_CLIPS, MOMENT_CLIPS, ROOT, clipOf, gameData, loadProfile, reviewJobs } from './species.mjs';
+import { ROOT, clipOf, gameData, loadProfile } from './species.mjs';
 import { importTs } from './tsimport.mjs';
+
+const { SITUATIONS, MULTI_HIT_EFFECTS, MANY_HIT_EFFECTS, TWO_TURN_EFFECTS } = await importTs('src/battle3d/situations.ts');
+const { SAME_ACTION, moveClipName, sameAction } = await importTs('src/battle3d/actions.ts');
+/** How far apart (degrees) a multi-hit run's clips may hand over at the foe (the next one blends in over 0.12 s). */
+const HANDOVER = 30;
+/** How far (in the foe's heights) a blow may stop short of the foe's body at its impact (--render). */
+const REACH = 0.1;
 
 function parseArgs(argv) {
   const args = {};
@@ -55,12 +63,6 @@ const MAX_HEAD_YAW = 20;
 const MAX_COLOR_LOSS = 1.0;
 
 const REQUIRED_EVENTS = {
-  physical_weak: ['impact'],
-  physical_strong: ['impact'],
-  special_weak: ['release'],
-  special_strong: ['release'],
-  status_self: ['aura'],
-  status_target: ['emit'],
   intro: ['cry'],
   faint: ['shrink'],
 };
@@ -142,61 +144,139 @@ for (const side of ['enemy', 'player']) {
 }
 gate(`color fit (loss <= ${MAX_COLOR_LOSS})`, !!cal.colorFit && cal.colorFit.loss <= MAX_COLOR_LOSS, cal.colorFit ? `loss ${cal.colorFit.loss}` : 'not fitted: --phase color');
 
-// 7. Clips.
+// 7. Clips: every situation, and every move it can know.
 const clips = profile.clips;
-for (const name of [...MOMENT_CLIPS, ...CATEGORY_CLIPS]) {
-  const c = clips[name];
-  if (!c) {
-    gate(`clip ${name}`, false, 'missing');
-    continue;
-  }
+const brief10 = await speciesBrief(slug);
+const pool = brief10.moves;
+/** Structure every clip keeps (keys in order from 0 to its length, its events inside it). */
+function structure(name, c) {
   const problems = [];
   if (c.generic) problems.push('still the generic placeholder');
   const keys = c.keys ?? [];
-  if (name === 'idle' && !c.loop) problems.push('idle must loop');
-  if (keys.length < (name === 'idle' ? 3 : 4)) problems.push(`only ${keys.length} keys`);
+  const idle = name === 'idle' || /^idle_/.test(name);
+  if (!!c.loop !== idle) problems.push(idle ? `${name} must loop` : 'only idles loop');
+  if (keys.length < 3) problems.push(`only ${keys.length} keys`);
   if (keys[0]?.t !== 0) problems.push('first key not at 0');
   if (Math.abs((keys.at(-1)?.t ?? 0) - c.duration) > 1e-6) problems.push('last key not at duration');
   if (keys.some((k, i) => i && k.t <= keys[i - 1].t)) problems.push('keys not in time order');
-  const events = (c.events ?? []).map((e) => e.name);
-  const need = REQUIRED_EVENTS[name] ?? [];
-  const lacking = need.filter((e) => !events.includes(e));
-  if (lacking.length) problems.push(`missing events: ${lacking.join(', ')}`);
   if ((c.events ?? []).some((e) => e.t < 0 || e.t > c.duration)) problems.push('event outside the clip');
+  return problems;
+}
+for (const name of brief10.situations) {
+  const c = clips[name];
+  if (!c) {
+    gate(`situation ${name}`, false, `missing: ${SITUATIONS[name] ?? ''}`);
+    continue;
+  }
+  const problems = structure(name, c);
+  const events = (c.events ?? []).map((e) => e.name);
+  const lacking = (REQUIRED_EVENTS[name] ?? []).filter((e) => !events.includes(e));
+  if (lacking.length) problems.push(`missing events: ${lacking.join(', ')}`);
   if (name === 'faint') {
     const shrink = (c.events ?? []).find((e) => e.name === 'shrink');
     if (shrink && c.duration - shrink.t < SHRINK_FRAMES / 60 - 1e-6) problems.push(`ends ${(c.duration - shrink.t).toFixed(2)} s after its shrink (the shrink takes ${(SHRINK_FRAMES / 60).toFixed(2)} s)`);
     const r = (k) => k.pose.root ?? {};
-    if (keys.some((k) => (r(k).y ?? 0) < FAINT_LIMITS.sink)) problems.push(`sinks into the ground (root.y below ${FAINT_LIMITS.sink}): a faint curls over and shrinks away`);
-    if (keys.some((k) => Math.abs(r(k).pitch ?? 0) > FAINT_LIMITS.tip || Math.abs(r(k).roll ?? 0) > FAINT_LIMITS.tip)) problems.push(`topples over (root tipped past ${FAINT_LIMITS.tip}°): a faint curls over and shrinks away`);
+    if (c.keys.some((k) => (r(k).y ?? 0) < FAINT_LIMITS.sink)) problems.push(`sinks into the ground (root.y below ${FAINT_LIMITS.sink}): a faint curls over and shrinks away`);
+    if (c.keys.some((k) => Math.abs(r(k).pitch ?? 0) > FAINT_LIMITS.tip || Math.abs(r(k).roll ?? 0) > FAINT_LIMITS.tip)) problems.push(`topples over (root tipped past ${FAINT_LIMITS.tip}°): a faint curls over and shrinks away`);
   }
-  gate(`clip ${name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s, ${keys.length} keys${events.length ? ', ' + events.join(' ') : ''}`);
+  gate(`situation ${name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s, ${c.keys.length} keys${events.length ? ', ' + events.join(' ') : ''}`);
 }
 
-// 8. Motif clips: events their effects need.
-const motifClipNames = new Map();
-for (const [k, v] of Object.entries(profile.motifClips ?? {})) if (v) motifClipNames.set(v, k.replace(/_strong$/, ''));
-for (const name of Object.keys(clips)) if (data.MOTIFS[name.replace(/_strong$/, '')]) motifClipNames.set(name, name.replace(/_strong$/, ''));
-for (const [clipName, motif] of motifClipNames) {
-  const c = clips[clipName];
-  if (!c) {
-    gate(`motif clip ${motif} -> ${clipName}`, false, 'clip does not exist');
+// Every move in its movepool has its own clip (and its variants): made for
+// that move, or for a move of the same action (src/battle3d/actions.ts),
+// never another move's or a category clip.
+const ownClip = (moveConst) => {
+  for (const m of sameAction(moveConst)) {
+    const name = profile.moveClips?.[m] ?? moveClipName(m);
+    if (clips[name]) return { name, via: m };
+  }
+  return null;
+};
+const inPool = new Set(pool.map((m) => m.const));
+for (const [m, target] of Object.entries(profile.moveClips ?? {})) {
+  const allowed = sameAction(m).map(moveClipName);
+  const ok = allowed.some((a) => target === a || target.startsWith(`${a}_`));
+  if (inPool.has(m)) gate(`moveClips ${m} -> ${target}`, ok, ok ? '' : `plays a clip made for another move: give ${m.replace('MOVE_', '')} its own (${allowed[0]})`);
+  else if (!ok) warn(`moveClips ${m} -> ${target}`, 'a move it can\'t know: remove the entry');
+}
+for (const m of pool) {
+  const move = data.moves[m.const];
+  const own = ownClip(m.const);
+  const motif = data.motifOf(move);
+  if (!own) {
+    gate(`move ${m.name}`, false, `no clip: ${moveClipName(m.const)} (${motif}: ${data.MOTIFS[motif].body}) [${m.sources.join(',')}]`);
     continue;
   }
-  const info = data.MOTIFS[motif];
+  const c = clips[own.name];
+  const problems = structure(own.name, c);
   const events = (c.events ?? []).map((e) => e.name);
-  const main = info.kind === 'contact' ? 'impact' : info.kind === 'ranged' ? (motif === 'quake' ? 'impact' : 'release') : info.events[0];
-  const lacking = (info.requires ?? (main ? [main] : [])).filter((e) => !events.includes(e));
-  const ok = lacking.length === 0;
-  gate(`motif clip ${motif} -> ${clipName}`, ok && !c.generic, ok ? (c.generic ? 'generic placeholder' : events.join(' ')) : `needs ${lacking.map((e) => `a '${e}'`).join(' and ')} event`);
-  // A toss carries the foe from its grab to its impact: the grab comes first, with the attacker at the foe.
-  const at = (e) => (c.events ?? []).find((x) => x.name === e)?.t;
-  if (motif === 'toss' && ok) {
-    const order = at('grab') < at('impact') && (at('throw') === undefined || (at('grab') < at('throw') && at('throw') < at('impact')));
-    gate(`motif clip ${clipName}: grab, throw, impact in order`, order, `grab ${at('grab')} s, throw ${at('throw') ?? '-'} s, impact ${at('impact')} s`);
+  const info = data.MOTIFS[motif];
+  const twoTurn = TWO_TURN_EFFECTS.has(move.effect);
+  // The events its effects need: a contact move's impact, a ranged one's release, a status move's own.
+  let need = info.requires ?? (info.kind === 'contact' ? ['impact'] : info.kind === 'ranged' ? (motif === 'quake' ? ['impact'] : ['release']) : info.events.slice(0, 1));
+  // A two-turn move's first turn is its _charge (a burrow's dig): its strike needs the rest.
+  if (twoTurn) need = need.filter((e) => e !== 'dig');
+  const lacking = need.filter((e) => !events.includes(e));
+  if (lacking.length) problems.push(`needs ${lacking.map((e) => `a '${e}'`).join(' and ')} event`);
+  gate(`move ${m.name} -> ${own.name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s ${events.join(' ')}${own.via !== m.const ? ` (the same action as ${own.via.replace('MOVE_', '')})` : ''}`);
+  // Its variants: each hit of a multi-hit move, a two-turn move's first turn.
+  const variants = [];
+  if (MULTI_HIT_EFFECTS.has(move.effect)) variants.push('_first', ...(MANY_HIT_EFFECTS.has(move.effect) ? ['_next'] : []), '_last');
+  if (twoTurn) variants.push('_charge');
+  for (const v of variants) {
+    const vc = clips[own.name + v];
+    if (!vc) {
+      gate(`move ${m.name} ${v.slice(1)} -> ${own.name + v}`, false, `missing: ${v === '_charge' ? 'the first turn (gathering power, burrowing, storing energy)' : v === '_first' ? 'the first hit: leap in, strike, stay at the foe' : v === '_next' ? 'a hit between: strike again from the foe (another limb, another angle), stay' : 'the last hit: strike from the foe, go home'}`);
+      continue;
+    }
+    const ve = (vc.events ?? []).map((e) => e.name);
+    const vp = structure(own.name + v, vc);
+    const vneed = v === '_charge' ? (ve.includes('charge') || ve.includes('dig') ? [] : ["a 'charge' (or a burrow's 'dig')"]) : ve.includes(info.kind === 'contact' ? 'impact' : 'release') ? [] : [`a '${info.kind === 'contact' ? 'impact' : 'release'}'`];
+    if (vneed.length) vp.push(`needs ${vneed.join(' and ')} event`);
+    gate(`move ${m.name} ${v.slice(1)} -> ${own.name + v}`, vp.length === 0, vp.join('; ') || `${vc.duration.toFixed(2)} s ${ve.join(' ')}`);
   }
-  if (['breath', 'jet', 'beam'].includes(motif) && !events.includes('releaseEnd')) warn(`motif clip ${clipName}`, 'sustained motif without releaseEnd: the stream runs until the clip ends');
 }
+
+// Moves outside its movepool that one of its moves can call (Mimic, Mirror
+// Move, Metronome, Assist, Nature Power) play its clip for their motif: every
+// motif resolves to a clip of its own (motifClips, or a clip named after it).
+const CALLERS = ['MOVE_MIMIC', 'MOVE_MIRROR_MOVE', 'MOVE_METRONOME', 'MOVE_ASSIST', 'MOVE_NATURE_POWER'];
+if (pool.some((m) => CALLERS.includes(m.const))) {
+  const unmapped = Object.keys(data.MOTIFS).filter((mo) => mo !== 'other' && !clips[profile.motifClips?.[mo] ?? mo] && !clips[profile.motifClips?.[`${mo}_strong`] ?? `${mo}_strong`]);
+  gate('every motif has a clip (for moves Mimic or Mirror Move call)', unmapped.length === 0, unmapped.length ? `map these in motifClips to its closest clip: ${unmapped.join(', ')}` : '');
+}
+
+// 8. The fundamentals (tools/gauntlet/fundamentals.mjs): contact moves travel
+// to the foe and strike it there; wind-ups, snaps, follow-through, moving
+// holds, settling; no two clips the same animation.
+const roles = clipRoles(profile, pool, data.moves);
+for (const [name, c] of Object.entries(clips)) {
+  if (c.generic) continue;
+  const problems = clipProblems(name, c, roles.get(name), profile.poses?.stance);
+  if (problems.length) for (const p of problems) gate(`clip ${name}: ${p.rule}`, false, p.what);
+}
+const sharedAction = (a, b) => [...Object.values(SAME_ACTION)].some((g) => g.map(moveClipName).includes(a) && g.map(moveClipName).includes(b));
+const dupes = duplicates(Object.fromEntries(Object.entries(clips).filter(([, c]) => !c.generic)), sharedAction);
+gate('every clip its own animation (no copies)', dupes.length === 0, dupes.map(([a, b, far]) => `${a} = ${b} (${far.toFixed(1)}°)`).join('; '));
+// A multi-hit run hands over at the foe: its _first ends, its _next starts and ends, its _last and 'return_home' start in one pose.
+{
+  const handovers = [];
+  for (const [name] of Object.entries(clips)) {
+    const base = name.replace(/_(first|next|last)$/, '');
+    if (base === name || !clips[`${base}_first`]) continue;
+    const endOf = (n) => clips[n].keys.at(-1).pose, startOf = (n) => clips[n].keys[0].pose;
+    for (const [from, to] of [[`${base}_first`, `${base}_next`], [`${base}_first`, `${base}_last`], [`${base}_next`, `${base}_last`], [`${base}_first`, 'return_home']]) {
+      if (!clips[from] || !clips[to] || name !== from) continue;
+      const d = poseDistance(endOf(from), startOf(to));
+      if (d > HANDOVER) handovers.push(`${from} ends ${d.toFixed(0)}° from where ${to} starts`);
+    }
+  }
+  if (Object.keys(clips).some((n) => /_first$/.test(n))) gate(`multi-hit runs hand over in one pose (within ${HANDOVER}°)`, handovers.length === 0, handovers.join('; '));
+}
+
+// Clip mistakes that read as robotic (tools/gauntlet/cliplint.mjs): planted
+// pivots, half-aimed bones, hitches after snaps, rushed turns.
+for (const i of lintClips(clips)) if (i.kind !== 'slide') warn(`clip ${i.clip}: ${i.kind}`, i.what);
 
 // 9. Emitters and dynamics.
 const builtins = ['mouth', 'eyes', 'hands', 'feet', 'body'];
@@ -213,15 +293,6 @@ for (const chain of profile.dynamics ?? []) {
 }
 if (!(profile.dynamics ?? []).length) warn('no spring chains', 'loose parts (tail, ears, fins, leaves, wings) should sway: add profile.dynamics');
 
-// Clip mistakes that read as robotic (tools/gauntlet/cliplint.mjs): slides,
-// planted pivots, half-aimed bones, hitches after snaps.
-// Every clip acts in place: the compiled game moves the sprite, the body follows it.
-for (const [name, c] of Object.entries(clips)) {
-  const travel = travelOf(c);
-  gate(`clip ${name} acts in place`, !travel, travel ? `${travel}: the game moves the sprite; strike from the spot (the pokemon-animation skill, "Acting in place")` : '');
-}
-for (const i of lintClips(clips)) if (i.kind !== 'travel') warn(`clip ${i.clip}: ${i.kind}`, i.what);
-
 // Moves by body part (tools/gauntlet/classify_moves.mjs): every part must be
 // one the file offered; a missing file only warns (Jev needs an API key).
 const partsPath = join(ROOT, 'src/pokemon', slug, 'moves.json');
@@ -233,35 +304,15 @@ if (existsSync(partsPath)) {
   warn('moves by body part', 'no moves.json: run tools/gauntlet/classify_moves.mjs (Jev), or keep emitterFor per motif');
 }
 
-// 10. Moves: showcase and motif coverage.
-const learnable = new Set(species.learnset.map((l) => l.move));
+// 10. Showcase moves (the demo's picks).
 const showcase = (profile.showcaseMoves ?? []).map((m) => (m.startsWith('MOVE_') ? m : `MOVE_${m}`));
 // Four, or every move it can learn when it learns fewer (Wurmple: three).
-const learnsMoves = (await speciesBrief(slug)).moves;
-const showcaseCount = Math.min(4, learnsMoves.length);
+const showcaseCount = Math.min(4, pool.filter((m) => m.const !== 'MOVE_STRUGGLE').length);
 gate(`${showcaseCount} showcase moves`, showcase.length === showcaseCount && showcase.every((m) => data.moves[m]), showcase.join(', '));
 for (const m of showcase) {
   const clip = clipOf(data, profile, m);
   gate(`showcase ${m.replace('MOVE_', '')} -> ${clip}`, !!clips[clip] && !clips[clip].generic, `${data.motifOf(data.moves[m])} motif`);
 }
-// Every move it can learn (level-up, TM/HM, tutor) whose motif no clip
-// depicts plays a category clip made for another action: list them. A
-// category clip that does depict a motif says so in motifClips.
-const uncovered = { level: {}, other: {} };
-for (const m of learnsMoves) {
-  const move = data.moves[m.const];
-  const motif = data.motifOf(move);
-  if (motif === 'other' || profile.moveClips[m.const]) continue;
-  const part = profile.moveParts?.[m.const];
-  const bases = part ? [`${motif}@${part}`, motif] : [motif];
-  const keys = bases.flatMap((b) => (data.isStrong(move) ? [`${b}_strong`, b] : [b]));
-  if (keys.some((k) => clips[profile.motifClips?.[k] ?? k])) continue;
-  const bucket = m.sources.some((src) => src.startsWith('L')) ? uncovered.level : uncovered.other;
-  (bucket[motif] ??= []).push(m.name);
-}
-const list = (b) => Object.entries(b).map(([motif, names]) => `${motif}: ${names.join(', ')}`).join('; ');
-if (Object.keys(uncovered.level).length) warn('level-up moves whose motif has no clip', list(uncovered.level));
-if (Object.keys(uncovered.other).length) warn('TM/tutor moves whose motif has no clip', list(uncovered.other));
 
 // 11. Review log.
 const reviewPath = join(ROOT, 'src/pokemon', slug, 'REVIEW.md');
@@ -308,16 +359,61 @@ if (args.render) {
     }
     gate(`battle with ${slug} as ${side} runs to the end`, state?.phase === 'end' && !state?.error && errors.length === 0, state?.error ?? errors.slice(0, 2).join(' | ') ?? '');
   }
-  for (const job of reviewJobs(data, profile, [...learnable])) {
-    for (const side of ['enemy', 'player']) {
+  // Every move performed as the battle does, and every other clip played,
+  // from both sides against itself: each plays to its end without errors,
+  // and each blow lands on the foe (its body touches the foe's at every
+  // impact: the gap between them at most REACH of the foe's height).
+  for (const side of ['player', 'enemy']) {
+    errors = [];
+    const q = new URLSearchParams({ mode: 'clipreview', species: slug, enemy: slug, attacker: side, clip: 'idle' });
+    await page.goto(`${base}?${q}`, { waitUntil: 'load' });
+    await page.waitForFunction(() => window.__ready === true && !!window.__clip, null, { timeout: 180000 });
+    await page.evaluate(() => window.__clip.start());
+    const run = async (what, arg) => {
       errors = [];
-      const q = new URLSearchParams({ mode: 'clipreview', species: slug, enemy: slug, attacker: side, ...(job.move ? { move: job.move } : { clip: job.clip }) });
-      await page.goto(`${base}?${q}`, { waitUntil: 'load' });
-      await page.waitForFunction(() => window.__ready === true && !!window.__clip, null, { timeout: 180000 });
-      await page.evaluate(() => window.__clip.start());
-      for (let i = 0; i < 30 && !(await page.evaluate(() => window.__clip.done)); i++) await page.evaluate(() => window.__clip.step(10));
-      const done = await page.evaluate(() => window.__clip.done);
-      gate(`plays ${job.name}${job.move ? ` (${job.move})` : ''} as ${side}`, done && errors.length === 0, errors.slice(0, 2).join(' | '));
+      await page.evaluate(([w, a]) => {
+        window.__clip.contacts.length = 0;
+        window.__clip[w](a);
+      }, [what, arg]);
+      for (let i = 0; i < 80 && !(await page.evaluate(() => window.__clip.done)); i++) await page.evaluate(() => window.__clip.tick(6));
+      // Settle back into idle before the next.
+      await page.evaluate(() => window.__clip.tick(20));
+      return { done: await page.evaluate(() => window.__clip.done), contacts: await page.evaluate(() => window.__clip.contacts.slice()), errors: errors.slice() };
+    };
+    const blows = (name, r, contact) => {
+      if (!contact) return;
+      const far = r.contacts.filter((c) => c.reach > REACH);
+      gate(`${name} lands on the foe as ${side}`, r.contacts.length > 0 && far.length === 0, r.contacts.length ? r.contacts.map((c) => `${c.event} gap ${c.reach.toFixed(2)}`).join(', ') + (far.length ? `: the blow must reach the foe's body (gap <= ${REACH} of its height)` : '') : 'no blow landed');
+    };
+    for (const m of pool) {
+      const move = data.moves[m.const];
+      const r = await run('perform', m.const.replace('MOVE_', ''));
+      gate(`performs ${m.name} as ${side}`, r.done && r.errors.length === 0, r.errors.slice(0, 2).join(' | '));
+      const role = roles.get(ownClip(m.const)?.name);
+      blows(`${m.name}`, r, role?.contact && !(clips[ownClip(m.const)?.name]?.events ?? []).some((e) => e.name === 'dig') ? true : false);
+      // A multi-hit run from its first hit to its last; a first hit, then home.
+      const own = ownClip(m.const)?.name;
+      if (own && MULTI_HIT_EFFECTS.has(move.effect)) {
+        const run1 = [`${own}_first`, ...(MANY_HIT_EFFECTS.has(move.effect) ? [`${own}_next`] : []), `${own}_last`].filter((c) => clips[c]);
+        for (const c of run1) {
+          const rr = await run('play', c);
+          gate(`plays ${c} as ${side}`, rr.done && rr.errors.length === 0, rr.errors.slice(0, 2).join(' | '));
+          blows(c, rr, role?.contact);
+        }
+        if (clips[`${own}_first`] && clips.return_home) {
+          await run('play', `${own}_first`);
+          const rr = await run('play', 'return_home');
+          gate(`plays ${own}_first then return_home as ${side}`, rr.done && rr.errors.length === 0, rr.errors.slice(0, 2).join(' | '));
+        }
+      }
+      if (own && TWO_TURN_EFFECTS.has(move.effect) && clips[`${own}_charge`]) {
+        const rr = await run('play', `${own}_charge`);
+        gate(`plays ${own}_charge as ${side}`, rr.done && rr.errors.length === 0, rr.errors.slice(0, 2).join(' | '));
+      }
+    }
+    for (const name of brief10.situations.filter((n) => clips[n] && n !== 'idle' && !/^idle_/.test(n))) {
+      const r = await run('play', name);
+      gate(`plays ${name} as ${side}`, r.done && r.errors.length === 0, r.errors.slice(0, 2).join(' | '));
     }
   }
   // Clear of the healthboxes: nothing played at home goes under one (tools/gauntlet/uiclear.mjs).

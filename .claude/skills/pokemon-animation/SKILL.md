@@ -1,6 +1,6 @@
 ---
 name: pokemon-animation
-description: Author battle animation clips for a Pokémon in this repo at the reference (Blaziken) quality — poses, keyframes, timing, events, and choreography that fits the species' anatomy, its type and the move's name (bite, beam, water jet from cannons, leaf volley...). Use when writing or fixing any clip in src/pokemon/<slug>/clips.ts, when a clip looks stiff, floaty, sliding or "flailing", or when a move should use a body part (mouth, cannons, flower, tail) differently.
+description: Author battle animation clips for a Pokémon in this repo at the reference (Blaziken) quality — contact moves that leap to the foe and land on it, a clip of its own for every move in the species' movepool (a Double Kick kicks twice, a Mega Punch is a haymaker) and for every battle situation, with anticipation, snaps, follow-through and weight, fitting the species' anatomy and type. Use when writing or fixing any clip in src/pokemon/<slug>/clips.ts, when a clip looks stiff, floaty, sliding, "flailing" or strikes the air, or when a move should use a body part (mouth, cannons, flower, tail) differently.
 ---
 
 # Pokémon battle animation
@@ -11,32 +11,82 @@ handful of good key poses into fluid, living motion — so your job is the
 honest weight. Read `src/pokemon/blaziken/clips.ts` before writing anything: it
 is the finished reference set, and its header explains the channels.
 
-## Acting in place: the game moves the sprite
+## Engage the foe: contact moves go to it and strike it
 
-The battles are the compiled game's (docs/ARCHITECTURE.md, "Remake layer"):
-its move animations move the Pokémon's sprite (a lunge of 10-30 px toward
-the foe, a shake, a hop, a slide off the screen) and the 3D body follows the
-sprite exactly. The clip is the **acting on top**, in place: the body strikes,
-breathes, rears up and flinches where it stands, and the game's own motion
-carries it. So a clip never travels and never leaps:
+The standard is Blaziken's: **a Pokémon that uses a contact move leaps (or
+dashes, pounces, flutters, rolls) to the foe, strikes it there, and goes back
+home.** A punch lands on the foe, a kick connects, a bite closes on it, a
+tackle slams into it. Never strike the air from home: that is the failure the
+user called "animated fundamentally wrong".
 
-- `advance` stays 0 (the game makes the lunge);
-- the root stays over the spot: `root.x`, `root.z` within ±0.1 heights (a
-  lean, a curl back), `root.y` at most 0.02 (a heel lift; crouches below 0
-  are fine);
-- a contact strike reaches from home: coil, then drive the hips and spine
-  toward the foe (a lean of 15-35°, weight onto the front foot), the striking
-  limb or the jaws extending at it, follow-through, recover. The reach sells
-  the hit; the game adds the travel;
-- spins (`root.yaw`), rearing (`root.pitch`) and every pose of the body are
-  acting and stay.
+How it works in the compiled game (src/remake/acting.ts, layer.ts): when a
+move's animation starts, the attacker's body leaves its sprite and plays the
+move's clip; `advance` carries it toward the foe (0 at home, 1 in front of
+the foe, where the engine puts it by both bodies' sizes), and the game holds
+its own animation until the clip's first effect event, so the game's hit
+sparks, sounds and the foe's shake start on your `impact`. The foe flinches
+and is knocked back on it. Then the body comes home and follows its sprite
+again. The rules, all gated (`tools/gauntlet/fundamentals.mjs`, and
+`check.mjs --render` for the reach):
 
-`tools/gauntlet/cliplint.mjs` reports a clip that travels or leaps
-(`travel`) and `tools/gauntlet/check.mjs` fails it; the remake also holds
-every body in place (`Battler3D.inPlace`), so a travelling clip would only
-show its legs tucked in the air. The game draws the move's effects (sparks,
-flames, water) with its own sprites; the clip's events (`impact`,
-`release`...) mark the moments for the review tools.
+- a contact move's clip starts at home (`advance` 0), is at the foe
+  (`advance` >= 0.95) on every `impact`, and ends at home (`advance` 0, the
+  stance);
+- **it reaches the foe's body**: at every impact the attacker's body touches
+  the foe's (the gap between their surfaces at most 0.1 of the foe's height,
+  measured against itself as the foe, both sides). `advance` 1 stops at
+  striking distance, not touching: the blow itself closes it, the limb at
+  full extension into the foe, the hips and spine driving in, a tackle
+  lunging its whole body in (`root.z` forward) and bouncing off;
+- the travel is a leap or steps, never a slide: whenever `advance` changes
+  between two keys, the feet are off the ground in one of them (`plantFeet:
+  0` with the legs tucked and a `root.y` arc, or one foot lifted mid-step);
+  landings bend the knees (`LAND`);
+- a ranged move fires from home (`advance` 0.35 at most: a step in);
+- a multi-hit move plays once per hit (the next section) and a toss grabs
+  the foe at `advance` 1.
+
+## Every move its own clip, and every situation
+
+Every move the species can know has its own clip, named after the move:
+`MOVE_DOUBLE_KICK` plays `double_kick`, `MOVE_SAND_ATTACK` `sand_attack`
+(src/battle3d/actions.ts). Its movepool is its level-up moves and its
+pre-evolutions', its TM/HM and tutor moves, its family's egg moves and
+Struggle: `node tools/gauntlet/brief.mjs --slug <slug>` lists them, each with
+the clips it needs. **The clip is that move's action**, not its category's:
+a Double Kick kicks twice, a Mega Kick is one huge kick, a Stomp comes down
+on the foe, a Blaze Kick spins with a flaming heel, a Mega Punch is a
+haymaker, a Sky Uppercut rises through the foe, a Headbutt leads with the
+skull, a Quick Attack is a blur, a Body Slam is a leap and crush, Growl is a
+cute snarl, Roar a thunderous one, Screech a piercing shriek.
+`reference/move-actions.md` says what each move's action is. Only moves that
+are the same action may share one clip (`SAME_ACTION` in actions.ts:
+Protect and Detect, Absorb and its stronger forms, Rollout and Ice Ball...);
+the gauntlet fails a clip copied from another (`distinct`) and a move that
+plays another move's clip.
+
+Variants, by the move's effect (the game plays its animation per hit and
+per turn):
+
+| move | clips |
+|---|---|
+| multi-hit (Double Kick, Fury Swipes, Pin Missile, Bullet Seed, Triple Kick) | `<move>` a lone hit (in, strike, home), `<move>_first` (in, strike, **stay at the foe**), `<move>_next` for moves of 3+ hits (strike again from there: the other limb, another angle; stay), `<move>_last` (strike, then home). One impact each. `_first` ends, `_next` starts and ends, `_last` and `return_home` start in one pose (within 30°). Ranged ones fire from home the same way |
+| two-turn (Solar Beam, Dig, Dive, Bide, Fly, Skull Bash) | `<move>_charge` the first turn (gathering light, burrowing out of sight with `dig`, storing energy: a `charge` or `dig` event), then `<move>` the strike (Dig's starts underground where the first turn left it) |
+
+And every situation (src/battle3d/situations.ts, `SITUATIONS`), each its own
+clip: `idle`, `intro`, `hit`, `hit_strong`, `faint`; `dodge` (a move misses
+it), `unaffected` (no effect, or it protected itself), `return_home` (from
+the foe back home after a run of hits); the status animations
+(`status_sleep`, `status_poison`, `status_burn`, `status_paralysis`,
+`status_freeze`, `status_confusion`, `status_infatuation`, `status_curse`,
+`status_nightmare`, `status_wrapped`); the states that last, as loops
+(`idle_asleep` while asleep, `idle_tired` at a quarter of its HP or less);
+`stat_up`, `stat_down`, `level_up`, `drained` (Leech Seed), `healed`,
+`focus` (Focus Punch's setup), `hang_on` (Focus Band, Endure); what the game
+only says: `flinch`, `recharge`, `wake`, `shake_off`, `break_free` (out of a
+Poké Ball); the weather each turn: `weather_rain`, `weather_sun`,
+`weather_sand`, `weather_hail`; and its ability's (`intimidate` for
+Intimidate). The brief lists them with what each looks like.
 
 ## What the engine already does (don't fight it)
 
@@ -79,11 +129,12 @@ as Blaziken does). Rules:
   bones (a bone aimed in only some keys snaps halfway).
 - `post` — rotations after aims; `pelvis: { x, y, z }` in model heights (y
   -0.05 is a crouch); `root: { x, y, z, yaw, pitch, roll }` moves the whole
-  body (spins, rearing; `root.y` in heights, never above 0.02: see "Acting in
-  place"); `advance` stays 0 (the game moves the sprite toward the foe);
-  `plantFeet` pins feet with IK (1 = planted), `plantLeft`/`plantRight`
-  per hind leg, `plantFront` for a quadruped's front feet; `fx.<channel>` drives
-  effect meshes; `expression` picks an eye-atlas cell; `scale` pulses the body.
+  body (jumps, lunges, spins, rearing; `root.y` in heights: a leap's arc,
+  below 0 underground); `advance` 0..1 travels toward the foe (see "Engage
+  the foe"); `plantFeet` pins feet with IK (1 = planted),
+  `plantLeft`/`plantRight` per hind leg, `plantFront` for a quadruped's front
+  feet; `fx.<channel>` drives effect meshes; `expression` picks an eye-atlas
+  cell; `scale` pulses the body.
 - Use small reusable deltas (`GUARD`, `CHAMBER`, `jaw(deg)`, `bend(spine,
   chest, neck, head)`, `TUCK`, `LAND`) so keys read like a shot list.
 - A spin can end at `root.yaw: 360`; blends back to idle take the short way.
@@ -93,8 +144,9 @@ as Blaziken does). Rules:
 | clip | length | shape |
 |---|---|---|
 | hit | ~0.6 s | 3-frame snap into the flinch, ease back, a small overshoot, settle |
-| weak contact | ~1.0 s | 0.13 wind-up · lean in, weight forward · snap strike (the limb or jaws reach at the foe) · 0.2 follow-through · recover |
-| strong contact | ~1.6 s | 0.3 coil (crouch, wind back) · drive the hips and spine at the foe · strike at full reach · follow-through · settle deep · recover |
+| weak contact | ~1.3 s | 0.13 wind-up · 0.25 leap in (legs tucked, `root.y` arc) · land at the foe · snap strike into its body · 0.2 follow-through · hop home |
+| strong contact | ~2.1 s | 0.3 coil (crouch, wind back) · spring up and in · strike at the top or on landing, driving into the foe · follow-through · land deep · hop home |
+| multi-hit | ~0.9 s a hit | `_first`: wind-up · leap in · strike · settle into a guard at the foe; `_next`: 0.08-0.15 re-cock · strike · guard; `_last`: re-cock · strike · follow-through · hop home |
 | weak ranged | ~1.2 s | 0.24 breath in · 0.1 snap · release · recoil · settle |
 | strong ranged | ~2.3 s | 0.5 gather (charge) · hold · snap · 0.8 sustained (release → releaseEnd) · recover |
 | status | ~1.4–1.7 s | gather or rear up · the action with a moving hold · relax |
@@ -103,7 +155,9 @@ as Blaziken does). Rules:
 
 Strikes happen in 3–6 frames; holds last 8–20 frames and never freeze (move
 something 1–3°). Everything starts at `key(0)` (the stance) and ends on a key at
-`duration` that returns to the stance, except the faint, which ends curled.
+`duration` that returns to the stance, except the faint, which ends curled,
+the hits that stay at the foe (`_first`, `_next`) and a two-turn move's
+`_charge` (underground, in the sky).
 
 **The faint is not a death.** As in the 3D games, the Pokémon is worn out:
 it curls over (a crouch on its heels, arms folded in, head bowed, eyes
@@ -121,10 +175,11 @@ fold (Swampert: bowed deeper, its head fins splayed and it looked face down).
    lunge, wind back before a swing, inhale (chest up, head back) before a breath.
 2. **Follow-through**: the striking limb carries past the target and hangs a
    moment; the body settles after the strike; the head recoils after a blast.
-3. **In place, with reach**: no travel and no leaps (the game moves the
-   sprite); a strike is the whole body reaching from its spot, the hips and
-   spine driving toward the foe, the feet planted (`plantFeet: 1`), arcs in
-   the limbs and the spine rather than the root.
+3. **Engage, along arcs, never sliding**: contact moves go to the foe and
+   land on its body; travel is a leap along an arc (`root.y`, `plantFeet: 0`
+   and tucked legs in the air, `LAND` on arrival) or real steps, and a
+   strike drives the hips, spine and limb through the foe. Never move
+   `advance` with the feet planted; never strike the air from home.
 4. **Weight**: heavy species (Blastoise, Swampert, Venusaur) move slower, lower,
    with bigger landings and screen shake on stomps; light ones (Sceptile) are
    quick and springy. Timing sells mass.
@@ -164,12 +219,14 @@ says what the body does; the species decides *how*:
   and down; Rapid Spin withdraws and spins; Earthquake rears up and stomps;
   Withdraw pulls into the shell; Synthesis turns up to the light.
   `reference/motif-cookbook.md` has a recipe for every motif with body-plan
-  variants (its leaps and travel are the game's to make: act them in place).
+  variants, `reference/move-actions.md` each move's own action.
 
 Clip lookup per move (src/battle3d/director.ts `clipFor`): `moveClips[MOVE]` →
-`<motif>_strong` (strong moves) → `<motif>` → the category clip. Name motif
-clips after the motif (`bite`, `jet`, `jet_strong`, `beam`, `quake`...) or map
-existing clips in `profile.motifClips`.
+the move's own clip (named after it) or one of the same action's →
+`<motif>@<part>` → `<motif>_strong` (strong moves) → `<motif>` → the category
+clip. The motif clips are for moves outside the movepool that Mimic or Mirror
+Move call: map every motif to the species' closest clip in
+`profile.motifClips` (the gauntlet checks every motif resolves).
 
 ## Events
 
@@ -188,7 +245,8 @@ existing clips in `profile.motifClips`.
 | `shrink` | a faint is curled up | the body shrinks away into its middle (SE_FAINT); the clip holds the curl for `SHRINK_FRAMES` after it |
 
 Place events on the pose that causes them *plus the overlap delay* of the part
-that acts. A contact move's `impact` is on its strike at full reach.
+that acts. A contact move's `impact` is on its strike at full reach, at the
+foe, the body touching it.
 
 ## Workflow for one clip
 
@@ -197,7 +255,12 @@ that acts. A contact move's `impact` is on its strike at full reach.
 2. `node tools/shots/move_sheet.mjs --species <slug> --moves <MOVE> --attacker enemy --density 3 --every 4 --frames 24 --out build/sheets/<slug>-<clip>.png`
    (and `--attacker player`). Look at every frame. `--clips intro,hit` for moments.
 3. Fix what reads wrong (see below), repeat. Then check at `--density 1`.
-4. Measure it next to the reference:
+4. Hold it to the fundamentals: `node tools/gauntlet/fundamentals.mjs
+   --species <slug> --clip <clip>` (travel to the foe and back, the wind-up,
+   a snap strike, follow-through, moving holds, settling on the stance, no
+   copies), and check its blows land: `node tools/gauntlet/check.mjs --slug
+   <slug> --render` (`<move> lands on the foe`: the gap at each impact).
+   Then measure it next to the reference:
    `node tools/gauntlet/cliplint.mjs --species <slug>` (static: slides, pivots
    on planted feet, aims missing from some keys, torso swings over 500°/s,
    limb hitches after an eased key) and
@@ -216,8 +279,10 @@ that acts. A contact move's `impact` is on its strike at full reach.
 |---|---|
 | stiff / robotic | extremes not pushed; every key eased; add anticipation and a breakdown key |
 | floaty | holds too long, settles too soft: shorten the holds, add a pelvis dip |
-| travels or leaps (cliplint `travel`) | the game moves the sprite: act in place, reach with the hips, spine and limbs; `advance` 0, the root on its spot |
-| a strike that doesn't reach | the lean is too small: drive the hips and spine 15-35° at the foe, weight on the front foot, the limb at full extension on the `impact` key |
+| strikes the air from home (`travel`: impact with advance 0) | a contact move goes to the foe: wind up, leap in (`advance` to 1 along a `root.y` arc, legs tucked), land, strike, hop home |
+| a blow that doesn't land (`lands on the foe` gap over 0.1) | at `advance` 1 the bodies are at striking distance, not touching: extend the limb fully into the foe, drive the hips and spine in, lunge the body (`root.z` 0.1-0.3) for a tackle or a bite |
+| slides to the foe (`travel`: advance changes with both feet planted) | leap (`plantFeet: 0`, `TUCK`, `root.y` arc) or step (one foot lifted at a time) |
+| the same animation as another move (`distinct`) | each move is its own action: see reference/move-actions.md |
 | flailing arms | arms not acting: brace them (`CHAMBER`/`BRACED`), let the acting part lead |
 | effect from the wrong place | emitter / `emitterFor`; verify with `/?mode=clipreview&mark=<emitter>` |
 | pop at a key | an aimed bone missing from some keys; an ease after a snap; a big pose change in < 3 frames |

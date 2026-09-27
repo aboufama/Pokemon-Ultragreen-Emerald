@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Everything the game says about a species, for writing its brief and
-// choosing which clips it needs: Pokédex entry, types, stats, and every move
-// it can use in Emerald (level-up, TM/HM, tutor) with the move's motif and
-// the clip it plays: the species' own clip once it has a profile, else the
-// category clip it falls back to. Motifs used by several of its moves, and by
-// its showcase moves, deserve bespoke clips.
+// Everything the game says about a species, for writing its brief and its
+// clips: Pokédex entry, types, stats, abilities, and every move it can know in
+// Emerald (its movepool: its level-up moves and its pre-evolutions', TM/HM,
+// tutor and egg moves, and Struggle) with the move's motif, the clips it
+// needs (its own, named after it, and its multi-hit or two-turn variants)
+// and the clip it plays now; then the situation clips every species has.
 //
 //   node tools/gauntlet/brief.mjs --slug swampert [--json]
 
@@ -15,6 +15,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { importTs } from './tsimport.mjs';
 import { loadProfile } from './species.mjs';
+
+const { moveClipName } = await importTs('src/battle3d/actions.ts');
+const { MULTI_HIT_EFFECTS, MANY_HIT_EFFECTS, TWO_TURN_EFFECTS, SITUATIONS, ABILITY_SITUATIONS } = await importTs('src/battle3d/situations.ts');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -57,6 +60,34 @@ async function moveDescriptions() {
 // Gen 3 decides physical or special by the move's type.
 const PHYSICAL_TYPES = new Set(['NORMAL', 'FIGHTING', 'FLYING', 'GROUND', 'ROCK', 'BUG', 'GHOST', 'POISON', 'STEEL']);
 
+/** The species it evolves from, nearest first (Beautifly: Silcoon, Wurmple). */
+export function preEvolutions(allSpecies, slug) {
+  const from = {};
+  for (const [s, d] of Object.entries(allSpecies)) for (const e of d.evolutions ?? []) (from[e.into] ??= []).push(s);
+  const out = [];
+  for (let cur = from[slug]?.[0]; cur; cur = from[cur]?.[0]) out.push(cur);
+  return out;
+}
+
+/** A family's egg moves (egg_moves.h lists them under its first form). */
+function eggMoves(src, speciesConst) {
+  const m = src.match(new RegExp(`egg_moves\\(${speciesConst.replace('SPECIES_', '')},([\\s\\S]*?)\\)`));
+  return m ? [...m[1].matchAll(/MOVE_(\w+)/g)].map((x) => `MOVE_${x[1]}`) : [];
+}
+
+/**
+ * The clips a move needs (src/battle3d/actions.ts, situations.ts): its own,
+ * and a multi-hit move's _first, _next (more than two hits) and _last, a
+ * two-turn move's _charge.
+ */
+export function neededClips(move) {
+  const own = moveClipName(move);
+  const out = [own];
+  if (MULTI_HIT_EFFECTS.has(move.effect)) out.push(own + '_first', ...(MANY_HIT_EFFECTS.has(move.effect) ? [own + '_next'] : []), own + '_last');
+  if (TWO_TURN_EFFECTS.has(move.effect)) out.push(own + '_charge');
+  return out;
+}
+
 /** Moves listed for a species in a C table ([SPECIES_X] = ... up to the next entry). */
 function tableMoves(src, speciesConst, pattern) {
   const start = src.indexOf(`[${speciesConst}]`);
@@ -87,11 +118,21 @@ export async function speciesBrief(slug) {
   const heightDm = Number(entry.match(/\.height = (\d+)/)?.[1] ?? 0);
   const weightHg = Number(entry.match(/\.weight = (\d+)/)?.[1] ?? 0);
 
-  const levelUp = species.learnset.map((l) => ({ ...l, source: `L${l.level}` }));
-  const tm = tableMoves(await read('tmhm_learnsets.h'), species.const, /\.(\w+) = TRUE/g).map((move) => ({ move, source: 'TM/HM' }));
-  const tutor = tableMoves(await read('tutor_learnsets.h'), species.const, /TUTOR\(MOVE_(\w+)\)/g).map((move) => ({ move, source: 'tutor' }));
+  // Its family before it: a Pokémon keeps the moves it learned before evolving.
+  const allSpecies = JSON.parse(await readFile(join(ROOT, 'src/data/generated/species.json'), 'utf8'));
+  const pre = preEvolutions(allSpecies, slug);
+  const tmSrc = await read('tmhm_learnsets.h');
+  const tutorSrc = await read('tutor_learnsets.h');
+  const levelUp = [slug, ...pre].flatMap((s) => allSpecies[s].learnset.map((l) => ({ ...l, source: s === slug ? `L${l.level}` : `L${l.level}:${s}` })));
+  const tm = [slug, ...pre].flatMap((s) => tableMoves(tmSrc, allSpecies[s].const, /\.(\w+) = TRUE/g)).map((move) => ({ move, source: 'TM/HM' }));
+  const tutor = [slug, ...pre].flatMap((s) => tableMoves(tutorSrc, allSpecies[s].const, /TUTOR\(MOVE_(\w+)\)/g)).map((move) => ({ move, source: 'tutor' }));
+  // Egg moves are the family's first form's (a Grovyle hatched as a Treecko keeps them).
+  const base = allSpecies[[slug, ...pre].at(-1)];
+  const egg = eggMoves(await read('egg_moves.h'), base.const).map((move) => ({ move, source: 'egg' }));
+  // Any Pokémon out of PP struggles.
+  const always = [{ move: 'MOVE_STRUGGLE', source: 'always' }];
   const seen = new Map();
-  for (const m of [...levelUp, ...tm, ...tutor]) {
+  for (const m of [...levelUp, ...tm, ...tutor, ...egg, ...always]) {
     const data = moves[m.move];
     if (!data) continue;
     const type = data.type.replace('TYPE_', '');
@@ -101,6 +142,7 @@ export async function speciesBrief(slug) {
       contact: data.flags.includes('FLAG_MAKES_CONTACT'), target: data.target.replace('MOVE_TARGET_', '').toLowerCase(),
       description: descriptions[m.move] ?? '',
       motif: motifOf(data), motifByName: !!namedMotif(data), clip: clipOf(data), sources: [],
+      effect: data.effect, needs: neededClips(data),
     };
     if (!e.sources.includes(m.source)) e.sources.push(m.source);
     seen.set(m.move, e);
@@ -120,8 +162,10 @@ export async function speciesBrief(slug) {
     elevation: species.elevation,
     stockAnims: { front: species.frontAnim, back: species.backAnim },
     pokedex: { category, heightM: heightDm / 10, weightKg: weightHg / 10, text: dexText },
+    abilities: species.abilities,
     movesAtLevel50: at50,
     moves: all,
+    situations: [...Object.keys(SITUATIONS), ...species.abilities.filter((a) => ABILITY_SITUATIONS[a]).map((a) => ABILITY_SITUATIONS[a].clip)],
     motifs: Object.fromEntries(Object.entries(motifs).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => [k, { kind: MOTIFS[k].kind, body: MOTIFS[k].body, events: MOTIFS[k].requires ?? MOTIFS[k].events, moves: v }])),
   };
 }
@@ -138,7 +182,8 @@ if (args.slug && import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.log(`Level 50 moveset (Gen 3 wild rule): ${b.movesAtLevel50.join(', ')}`);
     console.log('\nMotifs across its moves (most common first) — clip each motif that matters:');
     for (const [motif, m] of Object.entries(b.motifs)) console.log(`  ${motif.padEnd(10)} ${m.kind.padEnd(8)} ${m.moves.join(', ')}${m.events.length ? `  [events: ${m.events.join(', ')}]` : ''}`);
-    console.log('\nMoves:');
-    for (const m of b.moves) console.log(`  ${m.const.padEnd(22)} ${m.type.padEnd(9)} ${String(m.power).padStart(3)}  ${m.motif.padEnd(10)} -> ${m.clip.padEnd(16)} ${m.sources.join(',')}`);
+    console.log(`\nMovepool (${b.moves.length} moves): each needs the clips listed (its own, and its variants); it plays <now> today`);
+    for (const m of b.moves) console.log(`  ${m.const.padEnd(22)} ${m.type.padEnd(9)} ${String(m.power).padStart(3)} ${m.contact ? 'contact' : '       '}  ${m.motif.padEnd(10)} needs ${m.needs.join(', ').padEnd(36)} now ${m.clip.padEnd(16)} ${m.sources.join(',')}`);
+    console.log(`\nSituations (${b.situations.length}): ${b.situations.join(', ')}`);
   }
 }

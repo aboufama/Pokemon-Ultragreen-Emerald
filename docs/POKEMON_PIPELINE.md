@@ -149,22 +149,44 @@ sprite's shadow implies.
 
 ## 6. Clips
 
-One clip per category, plus `idle` (loop), `intro` (sent out / appears), `hit` and
-`faint`. Categories come from move data, so every move in the game maps to one
+A clip of its own for **every move the species can know** (its movepool:
+its level-up moves and its pre-evolutions', TM/HM, tutor, its family's egg
+moves, Struggle; `node tools/gauntlet/brief.mjs --slug <slug>` lists them),
+named after the move (`MOVE_DOUBLE_KICK` plays `double_kick`,
+src/battle3d/actions.ts), each that move's own action: a Double Kick kicks
+twice, a Mega Punch is a haymaker, a Headbutt leads with the skull
+(`.claude/skills/pokemon-animation/reference/move-actions.md`). Only moves of
+the same action share one (`SAME_ACTION`). Contact moves leap to the foe,
+land on its body and come home. Variants:
+
+| move | clips |
+|---|---|
+| multi-hit (Double Kick, Fury Swipes, Bullet Seed) | `<move>`, `<move>_first` (in, strike, stay), `<move>_next` (3+ hits), `<move>_last` (strike, home); one `impact` each |
+| two-turn (Solar Beam, Dig, Bide) | `<move>_charge` (the first turn: `charge`, or a burrow's `dig`), `<move>` (the strike) |
+
+And a clip for **every battle situation** (src/battle3d/situations.ts):
+`idle` (loop), `intro`, `hit`, `hit_strong`, `faint`, `dodge`, `unaffected`,
+`return_home`, the ten status animations, the `idle_asleep` and `idle_tired`
+loops, `stat_up`, `stat_down`, `level_up`, `drained`, `healed`, `focus`,
+`hang_on`, `flinch`, `recharge`, `wake`, `shake_off`, `break_free`, the four
+weather reactions, and its ability's (`intimidate`).
+
+Moves outside the movepool (called by Mimic or Mirror Move) play the
+species' clip for their motif (`motifClips`), else the category clip
 (`src/battle3d/director.ts`, `categorize`):
 
-| category | rule | events the director reacts to |
-|---|---|---|
-| `physical_weak` | makes contact, power < 75 | `impact` (once per hit) |
-| `physical_strong` | makes contact, power ≥ 75 (or variable) | `impact` |
-| `special_weak` | no contact, power < 75 | `release` (projectile) |
-| `special_strong` | no contact, power ≥ 75 | `charge`, `release` (stream), `releaseEnd` |
-| `status_self` | power 0, targets the user | `aura` |
-| `status_target` | power 0, targets the foe | `emit` |
-| `intro` / `faint` | send-out / fainting | `cry` / `shrink` |
+| motif kind | events the director reacts to |
+|---|---|
+| contact (a claw, a punch, a tackle...) | `impact` (once per hit); a toss's `grab`, `throw`; a burrow's `dig` |
+| ranged (a breath, a beam, a jet...) | `charge`, `release`, `releaseEnd` (a stream) |
+| status | `emit` (at the foe), `aura` (on itself) |
+| `intro` / `faint` | `cry` / `shrink` |
 
-- **Per-move overrides** go in `moveClips` (e.g. `MOVE_DOUBLE_KICK: 'physical_weak_kick'`).
-  Multi-hit clips emit one `impact` per hit.
+`tools/gauntlet/check.mjs` holds all of it: the movepool and its variants,
+the situations, the fundamentals (`tools/gauntlet/fundamentals.mjs`: travel
+to the foe, wind-ups, snap strikes, follow-through, moving holds, no copies)
+and, with `--render`, that every blow lands on the foe.
+
 - **Channels:**
   - `advance` 0..1 travels toward the target; contact moves reach 1 at `impact`.
   - `root` moves and turns the whole body, in units of its height (jumps, spins).

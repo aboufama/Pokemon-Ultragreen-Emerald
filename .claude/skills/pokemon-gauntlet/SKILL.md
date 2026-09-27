@@ -1,6 +1,6 @@
 ---
 name: pokemon-gauntlet
-description: Bring one Pokémon species into this repo's 3D battle system at the reference (Blaziken) quality, end to end — a species brief from the game's own data, the pre-rigged model, rig map, a stance with the stock Emerald sprites' posture that faces the foe, calibration, springs and effect emitters, a bespoke clip for every attack category and for the move motifs its moves need, frame-by-frame review from both sides, and the automated gates. Use for "add <species>", "run the gauntlet for X", "rig/animate a new Pokémon", or finishing a species that fails tools/gauntlet/check.mjs.
+description: Bring one Pokémon species into this repo's 3D battle system at the reference (Blaziken) quality, end to end — a species brief from the game's own data, the pre-rigged model, rig map, a stance with the stock Emerald sprites' posture that faces the foe, calibration, springs and effect emitters, a clip of its own for every move in its movepool (contact moves leaping to the foe and landing on it; a Double Kick kicks twice) and for every battle situation, frame-by-frame review from both sides, and the automated gates. Use for "add <species>", "run the gauntlet for X", "rig/animate a new Pokémon", or finishing a species that fails tools/gauntlet/check.mjs.
 ---
 
 # The Pokémon gauntlet
@@ -8,12 +8,24 @@ description: Bring one Pokémon species into this repo's 3D battle system at the
 You are adding one species. The bar is Blaziken (`src/pokemon/blaziken/`):
 it looks like its stock sprites from both sides, every attack reads as *this*
 creature doing *that* move (Flamethrower comes from its beak with its arms
-braced; a kick drives its whole weight at the foe from where it stands), and
-it never freezes. Its clips act in place: in the compiled game's battles the
-game moves the sprite and the body follows (the pokemon-animation skill,
-"Acting in place"). The gates in
-`tools/gauntlet/check.mjs` must all pass, and your own frame-by-frame review
-must back them up. Load the `pokemon-animation` skill before writing clips.
+braced; Blaze Kick leaps to the foe and lands a spinning flaming kick on it,
+then hops home), and it never freezes. What the user asked of every species,
+in their words: *they must satisfy every attack type and move depending on
+what the move is (punch, kick, double kick etc), not just standard attacks;
+use the fundamentals of animated 3D characters; a comprehensive move set for
+every Pokémon*, and contact moves *jump toward the opposing Pokémon and
+actually engage with it, like Blaziken does*. So:
+
+- **every move in its movepool has its own clip** (named after the move), and
+  its multi-hit and two-turn variants;
+- **every battle situation has its own clip** (hit, dodge, the status
+  conditions, sleep, weather, flinch...);
+- **contact moves travel to the foe and land on its body**, then come home.
+
+The gates in `tools/gauntlet/check.mjs` hold all of it (the movepool, the
+situations, the fundamentals and, with `--render`, that every blow lands),
+and your own frame-by-frame review must back them up. Load the
+`pokemon-animation` skill before writing clips.
 
 Work only in `src/pokemon/<slug>/`, `public/assets/pokemon/<slug>/` and one
 line of `src/pokemon/registry.ts`, unless a shared fix is truly needed (then
@@ -55,9 +67,12 @@ and the render fails).
 node tools/gauntlet/brief.mjs --slug <slug>
 ```
 
-prints the Pokédex entry, types, stats, the Gen 3 level-50 moveset and every
-move it can use (level-up, TM/HM, tutor) with the move's **motif** (the body
-action: bite, beam, jet, quake...). Look at the stock sprites
+prints the Pokédex entry, types, stats, abilities, the Gen 3 level-50
+moveset, and its whole **movepool**: every move it can know (its level-up
+moves and its pre-evolutions', TM/HM, tutor, its family's egg moves,
+Struggle), each with its motif (the kind of action: bite, beam, jet,
+quake...) and the clips it needs; then the situation clips. That list is your
+work order. Look at the stock sprites
 (`public/assets/gba/pokemon/<slug>/front.png`, `back.png`; tile them at 4×).
 Then decide, and write into `index.ts`:
 
@@ -66,10 +81,12 @@ Then decide, and write into `index.ts`:
   the Pokédex often says: Blastoise's shell spouts, Venusaur's flower).
 - `showcaseMoves`: four learnable moves that show it off — one physical, one
   special, one status and its signature — preferring its level-up moves.
-- Which motifs get bespoke clips: the showcase moves' motifs, the two or three
-  motifs most common in its learnset, and anything iconic (Blastoise: `jet`,
-  `bite`, `shield`, `spin`; Venusaur: `beam`, `throw`, `powder`, `vine`).
-- `emitters` / `emitterFor`: where each of those effects leaves the body.
+- How it travels to the foe, from its body plan and character: a biped's
+  leap, a quadruped's pounce or dash (Linoone runs in straight lines,
+  Zigzagoon zigzags), a heavy species' lumbering hop (Swampert), a
+  caterpillar's scrunch-and-spring, a cocoon's hop and topple, a moth's
+  flutter. Every contact clip uses it, re-timed per move.
+- `emitters` / `emitterFor`: where each of its effects leaves the body.
 
 ## 2. Model
 
@@ -196,31 +213,45 @@ Jev's motif for moves the motif table doesn't name. It needs
 
 ## 7. Clips
 
-Follow the **pokemon-animation** skill. Required: `idle` (loop), `intro`,
-`hit`, `faint`, the six category clips (`physical_weak`, `physical_strong`,
-`special_weak`, `special_strong`, `status_self`, `status_target`), plus the
-motif clips you chose in step 1 (named after the motif, e.g. `bite`, `jet`,
-`jet_strong`, or mapped in `motifClips`). Replace every generic placeholder.
+Follow the **pokemon-animation** skill and `reference/move-actions.md`.
+Required, all bespoke to the species (none may stay a generic placeholder):
+
+- every **situation** the brief lists (`idle`, `intro`, `hit`, `hit_strong`,
+  `faint`, `dodge`, `unaffected`, `return_home`, the status animations, the
+  `idle_asleep` and `idle_tired` loops, the stat and message situations, the
+  weather, its ability's);
+- every **move in its movepool**, a clip named after the move (`mega_kick`,
+  `sand_attack`), each that move's own action; a multi-hit move's `_first`,
+  `_next` (3+ hits) and `_last`, a two-turn move's `_charge`. Only moves of
+  the same action (`SAME_ACTION` in src/battle3d/actions.ts) may share one;
+- `motifClips` mapping every motif to its closest clip, for moves Mimic or
+  Mirror Move call from outside its movepool (the gate lists the unmapped).
+
 Each clip carries the events its effects need. Keep `clips.ts` organised like
-Blaziken's: helpers, reusable deltas, then one commented clip per action.
+Blaziken's: helpers and reusable deltas (the stance, guard, tuck, landing,
+its travel in and out), then one commented clip per move and situation.
+Split it into several files when it grows (`clips/moves_contact.ts`,
+`clips/situations.ts`...).
 
 Reuse before you author, but never at the expense of quality:
 
+- **Its travel and deltas**: write the leap in, the landing and the hop home
+  once as helpers (keys with the species' own tuck, arc and weight) and use
+  them in every contact clip, varied by move (a Quick Attack is a low streak,
+  a Body Slam a high arc, a Mega Kick a long run-up).
+- **Its family's clips**: an evolution line shares its choreography: a
+  Grovyle's Leaf Blade is a Sceptile's re-posed on its own stance and
+  proportions and re-timed for its weight. Rebuild the action on your STANCE
+  and look at it on your model; never paste a clip unchanged.
 - **Animations the model shipped** (step 2): an official `attack01` or
-  `damage01` is better than one you would write. Reuse the ones that read
-  from both battle views and fit the category, keyed on your stance. There is
-  no importer yet, so say in your report that the species has them.
-- **Clips of finished species with the same body plan**: Blaziken's clips are
-  STANCE plus deltas. Rebuild an action on your STANCE, re-time it for your
-  species' weight, and make the parts it uses its own (Sceptile slashes with
-  its arm leaves, not claws).
-- **One clip for several moves** (`motifClips`, `moveClips`) when the motion
-  genuinely reads right for all of them.
-- **Enough distinct clips**: every category clip bespoke to the species, plus
-  motif clips for the showcase moves and for every motif@part group of three
-  or more moves whose motion differs from the category clip. When moves that
-  look different share a clip, the battle reads as repetitive, and that
-  costs quality.
+  `damage01` is better than one you would write; say in your report that the
+  species has them (there is no importer yet).
+- Never one clip for moves that look different: the gauntlet fails a clip
+  copied from another (`distinct`) and a move mapped to another move's clip.
+
+This is a lot of clips (40 to 70 moves, 36 situations). Work in batches by
+action family (the claws, the kicks, the tackles, the breaths, the status
+moves), render and review each batch, and commit as you go.
 
 ## 8. Review — the part that makes the quality
 
@@ -238,8 +269,9 @@ any that goes under a healthbox: from our side the foe's box is only a few
 pixels above our Pokémon's head and ours is to its right (see the
 pokemon-animation skill); `--shots` saves the worst frames.
 
-Open the sheets and look at every frame: anticipation, follow-through, arcs,
-no sliding, the effect leaving the right body part, the silhouette readable
+Open the sheets and look at every frame: anticipation, the leap to the foe
+and the blow landing **on its body**, follow-through, arcs, no sliding, the
+hop home, the effect leaving the right body part, the silhouette readable
 from our side (cropped by the text box) and the opponent's side. Fix, re-render,
 and tick the clip in `src/pokemon/<slug>/REVIEW.md` only when it is right. When
 all clips pass, export the GIFs at game resolution and watch them once more:
@@ -257,18 +289,24 @@ http://127.0.0.1:<port>/game.html?battle=<SPECIES>:5,ZIGZAGOON:3,GRASS   (ours)
 http://127.0.0.1:<port>/game.html?battle=TORCHIC:5,<SPECIES>:3,GRASS    (the wild one)
 ```
 
-X is A, arrows move, Z is B. Watch the intro (the wild one in shadow, ours
-coming out of its ball), a few moves each way, the hits and a faint: the body
-must follow the game's sprite motion and act in place, read clearly at the
-GBA's pixels and stay under the text box and clear of the healthboxes.
+X is A, arrows move, Z is B. The page has the game's move animations wait
+for the 3D attacker's blow (with `&manual=1`, add `&hold=1`). A battle's moves are the
+wild rule's (its last four level-up moves); give it others with
+`<SPECIES>:<LEVEL>:<MOVE>/<MOVE>/...`. Watch the intro (the wild one in
+shadow, ours coming out of its ball), moves each way, the hits and a faint:
+contact moves must leap to the foe, land on it as the game's hit effects
+flash, and come home; everything reads clearly at the GBA's pixels and stays
+under the text box and clear of the healthboxes.
 Screenshot the canvas with Playwright (`page.screenshot` with the canvas's
 box) and look at the frames.
 
 ## 9. Gates and handoff
 
 ```sh
-node tools/gauntlet/check.mjs --slug <slug>            # static gates (+ clip lint warnings)
-node tools/gauntlet/check.mjs --slug <slug> --render   # + battles both ways, every clip plays
+node tools/gauntlet/check.mjs --slug <slug>            # static gates: movepool, situations, fundamentals
+node tools/gauntlet/check.mjs --slug <slug> --render   # + battles both ways, every move performed and
+                                                       #   every clip played, each blow landing on the foe
+node tools/gauntlet/fundamentals.mjs --species <slug>  # the fundamentals alone, clip by clip
 node tools/gauntlet/motion.mjs --species <slug>,blaziken   # fluidity next to the reference
 npx tsc --noEmit
 ```
@@ -277,9 +315,10 @@ npx tsc --noEmit
 are the bar: pops only on strikes, no dead holds, and no turn in the first
 0.3 s of a move (a pivot on the spot before a move reads as mechanical).
 
-All gates pass; fix warnings where they point at real gaps (a motif its moves
-use a lot still on a category clip, no springs). Commit
+All gates pass; fix warnings where they point at real gaps (no springs, a
+rushed turn). Commit
 `src/pokemon/<slug>/`, `public/assets/pokemon/<slug>/` and the registry line
 with a message that says what the species does (e.g. "Blastoise: cannon jets,
-shell spin, braced bite"). Report: the brief, the clips and motif clips, the
-gate output, and anything you could not get right.
+shell spin, braced bite"). Report: the brief, how it travels, the clips (a
+line per action family), the gate output, and anything you could not get
+right.
