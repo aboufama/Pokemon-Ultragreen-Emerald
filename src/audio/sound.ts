@@ -15,16 +15,13 @@
 // beginning at that moment; sound effects asked for before then are dropped.
 // The songs are extracted from the decomp by tools/extract/extract_sound.py.
 //
-// Phones: every tap resumes the audio (iOS suspends it when the page is left
-// or a call comes in, and starts it only from a tap's touchend), a silent
-// sound starts inside the tap (older iOS unlocks only on a sound started
-// there), and on iOS the game plays through the ring/silent switch as a video
-// does (navigator.audioSession 'playback'; before Safari 16.4 a looping
-// silent <audio> element does the same). Where an AudioWorklet can't load,
-// the engine runs on the main thread in a ScriptProcessorNode.
+// The audio starts, and keeps playing on phones, as ./output.ts says. Where
+// an AudioWorklet can't load, the engine runs on the main thread in a
+// ScriptProcessorNode.
 
 import { asset } from '../gba/assets';
 import { M4AEngine, type SoundBank } from './m4a';
+import { AudioOutput } from './output';
 
 declare global {
   interface Window {
@@ -74,16 +71,13 @@ registerProcessor('m4a', M4AProcessor);
 }
 
 export class Sound {
+  private output: AudioOutput | null = null;
   private ctx: AudioContext | null = null;
   private post: ((m: Message) => void) | null = null;
   private loading: Promise<void> | null = null;
   /** The BGM that should be playing (null after a stop or fade). */
   private bgm: string | null = null;
-  private unlockPress = false;
   private analyser: AnalyserNode | null = null;
-  private gestured = false;
-  /** Older iOS: a silent <audio> element keeping the page in the playback audio category. */
-  private keepAlive: HTMLAudioElement | null = null;
   error: string | null = null;
   /** How the engine runs: in an AudioWorklet, or on the main thread (a ScriptProcessorNode). */
   mode: 'worklet' | 'script' | null = null;
@@ -97,69 +91,15 @@ export class Sound {
 
   /** Turn sound on: load the engine and the songs, and start audio on the first press. */
   enable(): void {
-    if (this.ctx || typeof window === 'undefined') return;
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    this.ctx = new Ctx({ latencyHint: 'interactive' });
+    if (this.ctx) return;
+    this.output = AudioOutput.open();
+    if (!this.output) return;
+    this.ctx = this.output.ctx;
     window.__sound = this;
-    // iOS: sound plays with the ring/silent switch on silent, like a video.
-    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
-    if (session) {
-      try {
-        session.type = 'playback';
-      } catch {
-        // Not settable here: the silent <audio> fallback below covers it.
-      }
-    }
     this.loading = this.load().catch((e: unknown) => {
       this.error = String(e);
       console.warn('sound:', e);
     });
-    // Browsers start audio only from a user gesture (touchend on iOS); iOS
-    // also suspends it ('interrupted') after a call or the app switcher.
-    const gesture = () => {
-      if (!this.gestured && this.ctx?.state !== 'running') this.unlockPress = true;
-      this.gestured = true;
-      if (document.hidden || !this.ctx) return;
-      if (this.ctx.state !== 'running') {
-        void this.ctx.resume();
-        this.startSilence(this.ctx);
-      }
-      if (!session) this.playbackCategory();
-    };
-    for (const type of ['keydown', 'pointerdown', 'pointerup', 'touchend', 'click']) window.addEventListener(type, gesture, { capture: true });
-    // A hidden page pauses the game, and its sound with it.
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) void this.ctx?.suspend();
-      else if (this.gestured) void this.ctx?.resume();
-    });
-  }
-
-  /** A one-sample silent sound started inside a gesture: older iOS unlocks Web Audio only on one. */
-  private startSilence(ctx: AudioContext): void {
-    try {
-      const src = ctx.createBufferSource();
-      src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-      src.connect(ctx.destination);
-      src.start(0);
-    } catch {
-      // A closed or failed context: nothing to unlock.
-    }
-  }
-
-  /**
-   * Safari before 16.4 (no navigator.audioSession): a looping silent <audio>
-   * element started in a gesture puts the page in the playback audio category,
-   * so Web Audio plays with the ring/silent switch on silent.
-   */
-  private playbackCategory(): void {
-    if (!/iP(hone|ad|od)|Macintosh.*Mobile/.test(navigator.userAgent) || (this.keepAlive && !this.keepAlive.paused)) return;
-    if (!this.keepAlive) {
-      this.keepAlive = new Audio(silentWav());
-      this.keepAlive.loop = true;
-      this.keepAlive.setAttribute('playsinline', '');
-    }
-    void this.keepAlive.play().catch(() => undefined);
   }
 
   /** The BGM that is playing (or waiting for a fade-out to end). */
@@ -174,9 +114,7 @@ export class Sound {
 
   /** True once, for the press that started audio (the title keeps showing for it). */
   takeUnlockPress(): boolean {
-    const r = this.unlockPress;
-    this.unlockPress = false;
-    return r;
+    return this.output?.takeUnlockPress() ?? false;
   }
 
   /** Resolves when the engine is loaded (or failed to load). */
@@ -289,31 +227,6 @@ export class Sound {
     this.note(`fanfare ${song}`);
     this.post!({ type: 'fanfare', song, frames });
   }
-}
-
-/** Half a second of silence as a WAV data URL (8 kHz, 8-bit mono). */
-function silentWav(): string {
-  const n = 4000;
-  const bytes = new Uint8Array(44 + n);
-  const view = new DataView(bytes.buffer);
-  const text = (at: number, s: string) => [...s].forEach((c, i) => (bytes[at + i] = c.charCodeAt(0)));
-  text(0, 'RIFF');
-  view.setUint32(4, 36 + n, true);
-  text(8, 'WAVE');
-  text(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, 8000, true);
-  view.setUint32(28, 8000, true);
-  view.setUint16(32, 1, true);
-  view.setUint16(34, 8, true);
-  text(36, 'data');
-  view.setUint32(40, n, true);
-  bytes.fill(128, 44);
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return `data:audio/wav;base64,${btoa(bin)}`;
 }
 
 /** The game's sound (silent until enabled). */
