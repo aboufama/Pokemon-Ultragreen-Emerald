@@ -8,11 +8,13 @@ export const MOMENT_CLIPS = ['idle', 'intro', 'hit', 'faint'] as const;
 
 type ProfileFactory = (palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }) => Promise<SpeciesProfile>;
 
+// In national dex order.
 const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
-  wurmple: async () => (await import('./wurmple')).createProfile,
   sceptile: async () => (await import('./sceptile')).createProfile,
   blaziken: async () => (await import('./blaziken')).createProfile,
   swampert: async () => (await import('./swampert')).createProfile,
+  poochyena: async () => (await import('./poochyena')).createProfile,
+  wurmple: async () => (await import('./wurmple')).createProfile,
 };
 
 /** The body part each move uses, for species classified with tools/gauntlet/classify_moves.mjs. */
