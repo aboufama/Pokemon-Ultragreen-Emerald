@@ -84,6 +84,74 @@ showed the 2D sprite for those frames, and the faint's picture followed the
 sprite's slide down, so its curl and shrink were not seen. Both are fixed in
 the layer since.
 
+## Moves: blades, claws and chops
+
+The Treecko line's shared choreography (src/pokemon/treecko/line/strikes.ts)
+built on this species' kit. Reviewed frame by frame from both sides at game
+resolution (contact sheets every 6 frames, the attacker as the foe and as
+ours). Every blow's contact is measured for the lead branch's approach (at
+advance 1 the fronts stop 0.15 of a height apart, mirror match), from the
+posed body at each impact: the gap to the foe's body in its heights (the
+gate wants 0.1 or less).
+
+Treecko acts with its big three-fingered hands on short arms: a cut is a
+knife-hand, Pound the flat of the hand, Rock Smash a hammer fist. It is small
+and quick (tempo 0.86): each action is a fast hop in, the blow and a hop home.
+In this branch's engine it lands beside the foe (the slot-centre approach and
+its calibration's sideways offset); the lead branch puts it in front.
+
+- [x] `pound`: the hand rises beside the big head, a quick hop in, a flat-handed smack down on the foe's head held a beat, hop home (gap 0.02)
+- [x] `cut`: the hand raised up beside the head edge-first, a hop in, a knife-hand chop straight down through the foe (0.01)
+- [x] `fury_cutter`: both hands raised high beside the head, a hop in, two quick crossing chops (right, then left across it), bug flashes, home (0.01 / 0.02)
+- [x] `brick_break`: the hand drawn up, the other forward, a high hop, a karate chop as it drops onto the foe, landing deep (0.01)
+- [x] `aerial_ace`: a fast, high spring, the chop as it drops, past the foe, home at once (0.01)
+- [x] `rock_smash`: the fist raised beside the head, a hop in, a rear back and a hammer fist down onto the foe (0.01)
+- [x] `crush_claw`: both hands reared up and open beside the head, driven down onto the foe, gripping, the crush, a wrench free (0.01)
+
+## Moves: punches, kicks, the tail, slams and the jaws
+
+Built from the line's choreography (src/pokemon/treecko/line/punches.ts and
+body.ts) on this species' kit, reviewed frame by frame from both sides
+(contact sheets every 5 or 6 frames, zoomed on the blows). Gaps as above: the
+posed body at each impact against the mirror match's foe with the lead
+branch's approach (fronts 0.15 of a height apart), in the foe's heights.
+
+Small and quick: every one is a short hop in, the blow and a hop home. Its
+fists are its big three-fingered hands curled shut; its tail is thick and
+heavy, the weapon of Slam and Iron Tail.
+
+- [x] `mega_punch`: the haymaker with the fist cocked up beside the big head, the looping blow, carried across (0.01)
+- [x] `thunder_punch`: the charged fist, a crouch and a high hop, the overhand from the air, landing on the foe (0.01)
+- [x] `dynamic_punch`: the slow coil, the launch, the long lunge and the straight punch, the held extension (0.01)
+- [x] `focus_punch`: still, eyes shut, then the spring and the straight punch from the hip (0.01)
+- [x] `counter`: takes the blow behind crossed arms, then an uppercut up into the foe (0.04)
+- [x] `mega_kick`: turning side-on in the air, the chambered knee and the side kick with the body leaning away, a hop round, home (0.05)
+- [x] `slam`: springs in and turns its back, the big tail reared up and whipped down onto the foe, spinning round on the hop home (0.06)
+- [x] `iron_tail`: a leaping spin, the thick tail held rigid and swung round through the foe (0.05)
+- [x] `body_slam`: a leap and a belly-flop onto the foe, the tail sticking up, rolls off, home (0.02)
+- [x] `crunch`: head low, jaws parting, a lunge, the bite and the head shakes, a wrench free (0.01)
+
+## Moves: tackles, rams and shoves; the throw and the burrow
+
+From the line's choreography (src/pokemon/treecko/line/tackles.ts and
+grapples.ts) on this species' kit, reviewed from both sides (every 6 or 7
+frames); Seismic Toss also played as the move, the foe carried and thrown.
+Gaps as above.
+
+- [x] `quick_attack`: barely a crouch, a long, low, flat dash, the right shoulder driven into the foe and it springs straight back home off it: the fastest clip it has (gap 0.02)
+- [x] `pursuit`: it slinks low, head level with the shoulders and eyes narrowed, stalking, then darts in from the shadows and drives the right elbow into the foe (0.02)
+- [x] `frustration`: a tantrum: it stamps one foot, then the other, shaking its head with its fists clenched, then flings itself at the foe and pounds it with both fists, twice (0.01 / 0.00)
+- [x] `return`: a glad look back over its shoulder at its trainer, then a big bounding leap and a full-body tackle with the left shoulder, arms tucked; it bounces off, lands light and hops home, happy (0.01)
+- [x] `facade`: puffed up with chest out and arms flexed (a brave front), then head down and a ram with the forehead; it rebounds a little dazed and shakes its head clear (0.01)
+- [x] `secret_power`: it gathers the hidden power with its hands cupped together low, eyes shut, draws both hands back to its hips, springs in and thrusts both palms into the foe (0.02)
+- [x] `strength`: a heave: it drops into a deep squat against the foe with both arms scooping in low under it, then drives up out of the squat, arms heaving up, and holds it there straining (0.02)
+- [x] `double_edge`: a deep loaded crouch and a yell, a headlong launch like a missile with the arms swept back, and the recoil throws it back off the foe: it lands staggering, hurt, shakes it off and hops home (0.01)
+- [x] `endeavor`: hurt and panting, it gathers its resolve, springs in and drives its shoulder into the foe with the heels dug in, straining and trembling, eyes screwed shut (0.01)
+- [x] `struggle`: spent: a heavy, clumsy hop, a wild swipe flung on past, then it stumbles on into the foe butting it with its head; the effort hurts it and it drags itself home (0.01 / 0.01)
+- [x] `seismic_toss`: a springy dash in with the hands flung open, it clamps on (grab), sinks, springs up and back toward mid-field with the foe hugged low in front, spinning round with it, and hurls it down into its own place (throw), where it crashes (impact) while it lands and watches, then home (grab gap 0.01)
+- [x] `dig_charge`: Dig's first turn: a crouch with its eyes on the ground ahead, a springy hop and a head-first dive into the ground (dig: the dirt flies), arms overhead together; it stays down out of sight
+- [x] `dig`: from underground at home it tunnels over (the ground heaving along its way), rights itself under the foe and bursts up with a rising cut of the right forearm, the tail trailing out of the ground (impact), drops in front of it, holds the crouch and hops home (0.02)
+
 ## Showcase moves in battle
 
 - [x] a full battle with treecko as ours and as the opponent (autoplay, both

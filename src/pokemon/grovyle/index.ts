@@ -3,52 +3,65 @@ import { applyCalibration } from '../profile';
 import { DEFAULT_OVERLAP } from '../../anim/animator';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS, EXPRESSIONS } from './clips';
+import { CLIPS } from './clips';
 import calibration from './calibration.json';
+
+/**
+ * Eye atlas (the model's eye texture): 4 x 2 expressions, each a pair of
+ * cells (one per eye). The eye mesh maps the open pair (bottom row, first
+ * pair), so each expression is given relative to it, in pairs.
+ */
+export const EXPRESSIONS: Record<string, [number, number]> = {
+  open: [0, 0],
+  happy: [1, 0],
+  angry: [2, 0],
+  hurt: [3, 0],
+  closed: [0, -1],
+  focus: [1, -1],
+  half: [2, -1],
+  wide: [3, -1],
+};
 
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
   const cal = calibration as SpeciesProfile['calibration'];
   return {
-    slug: 'treecko',
+    slug: 'grovyle',
     rig: RIG,
     poses: { stance: STANCE },
     clips: CLIPS,
     // The model has no effect meshes.
     effectParts: [],
     effects: {},
-    expressions: { material: 'Eye', cell: [0.5, 0.25], cells: EXPRESSIONS },
+    expressions: { material: 'eye', cell: [0.25, 0.5], cells: EXPRESSIONS },
     brief: {
       bodyPlan: 'biped',
       character:
-        'A small, light (5 kg) and quick wood gecko, the protector of its forest tree: cool, calm and collected, it never panics and glares right back at a bigger foe without giving an inch. It stands square to the foe with its big three-fingered hands held out wide, moves in quick, springy bursts, smacks with its hands and swings its thick leaf tail to slam foes.',
+        'A swift forest ninja (21.6 kg, 0.9 m) that leaps from branch to branch in the thick forest: coiled low on its long legs and leaning forward, it springs at the foe in high, light bounds, cuts with the big leaves on its forearms and is back in its crouch before the foe reacts; cool and sharp-eyed, it never stands still.',
       powerSource:
-        'Grass power drawn from sunlight and living things: it drains the foe\'s strength through its outstretched hands into its body (Absorb, Mega Drain, Giga Drain), spits seeds and fires Solar Beam from its mouth, and slams foes with its heavy leaf-shaped tail (Slam, Iron Tail).',
+        'Grass power from its leaves: it cuts with the big leaves that grow from its forearms (Leaf Blade, Fury Cutter) and flings volleys off them, fires seeds and Solar Beam from its mouth, and draws the foe\'s strength in through its hands (Absorb, Giga Drain); the leaves on its head and tail stream behind it (Pokédex: they hide it in the overgrown forest).',
     },
-    // Effects leave the built-in points: the mouth (seeds, Solar Beam, and the
-    // moves that fall back to the spit), the hands, the eyes (Leer's glint).
-    emitters: {},
+    // The big leaves on its forearms: the far end of each forearm's mesh is the leaf tip.
+    emitters: {
+      leaves: { bones: ['forearmR', 'forearmL'], about: 'the big leaves that grow from its forearms' },
+    },
     emitterFor: {
-      // Stars and leaves (Swift) and the clod of mud (Mud-Slap) leave its hand as the arm whips across.
-      throw: 'hands',
-      fling: 'hands',
+      // Leaf and star volleys fly off the forearm leaves as the arms whip across.
+      throw: 'leaves',
       // Toxic and Leech Seed are spat from the mouth.
       powder: 'mouth',
     },
-    // The leaf tail: heavy and a little loose, so it lags and swings on its
-    // own; the chain ripples out along its length (overlap below).
+    // The tail and its leaf brush on springs (a little loose: it trails the leaps).
     dynamics: [
-      { bones: ['tail', 'tail2', 'tail3', 'tail4', 'tail5'], damping: 0.2, elasticity: 0.14, maxDrift: 0.35 },
+      { bones: ['tail', 'tail2'], damping: 0.18, elasticity: 0.12, maxDrift: 0.4 },
     ],
-    overlap: {
-      ...DEFAULT_OVERLAP,
-      tail2: 0.07, tail3: 0.08, tail4: 0.09, tail5: 0.1,
-    },
+    // Overlapping action: the tail's brush trails its root.
+    overlap: { ...DEFAULT_OVERLAP, tail2: 0.08 },
     moveClips: {},
     motifClips: {
       // Moves outside its movepool (Mimic can call any move) play the closest
       // of its own move clips: the same body part doing the same kind of thing.
       strike: 'cut',
-      strike_strong: 'crush_claw',
+      strike_strong: 'leaf_blade',
       punch: 'mega_punch',
       kick: 'mega_kick',
       bite: 'crunch',
@@ -97,8 +110,7 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       other: 'safeguard',
     },
     hiddenParts: [],
-    // Its first moves (Route 101 at level 5: Pound and Leer; Absorb at 6, Quick Attack at 11).
-    showcaseMoves: ['POUND', 'ABSORB', 'LEER', 'QUICK_ATTACK'],
+    showcaseMoves: ['LEAF_BLADE', 'BULLET_SEED', 'AGILITY', 'DETECT'],
     palette: palettes.normal,
     shinyPalette: palettes.shiny,
     calibration: cal,
