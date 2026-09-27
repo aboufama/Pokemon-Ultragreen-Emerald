@@ -248,6 +248,22 @@ all clips pass, export the GIFs at game resolution and watch them once more:
 node tools/shots/clip_gifs.mjs --species <slug> --out build/clips/<slug>
 ```
 
+Then watch it in the compiled game, where it will be played: the game page's
+test battle puts it on either side (`node tools/gauntlet/setup_worktree.mjs`
+copied the compiled game into the worktree):
+
+```text
+http://127.0.0.1:<port>/game.html?battle=<SPECIES>:5,ZIGZAGOON:3,GRASS   (ours)
+http://127.0.0.1:<port>/game.html?battle=TORCHIC:5,<SPECIES>:3,GRASS    (the wild one)
+```
+
+X is A, arrows move, Z is B. Watch the intro (the wild one in shadow, ours
+coming out of its ball), a few moves each way, the hits and a faint: the body
+must follow the game's sprite motion and act in place, read clearly at the
+GBA's pixels and stay under the text box and clear of the healthboxes.
+Screenshot the canvas with Playwright (`page.screenshot` with the canvas's
+box) and look at the frames.
+
 ## 9. Gates and handoff
 
 ```sh
