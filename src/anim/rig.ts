@@ -61,6 +61,14 @@ export interface LegChain {
   foot: string;
   /** Which way the middle joint bends: 1 = forward like a knee (default), -1 = back like a quadruped's front leg. */
   bend?: number;
+  /**
+   * Where the foot stays planted, in model heights (default: at its posed
+   * x/z, at its height in the bind pose). For quadrupeds, whose legs hang
+   * from the spine and the hips: pinned, the feet stay put while the body
+   * leans, coils and swings over them. Also for models whose bind pose holds
+   * a foot off the ground.
+   */
+  plantAt?: Vec3;
 }
 
 export interface RigProfile {
@@ -126,7 +134,8 @@ export class Rig {
       if (!pair) continue;
       for (const leg of [pair.left, pair.right]) {
         const foot = this.node(leg.foot)!;
-        this.footBind.set(leg.foot, { pos: this.modelPos(foot, new THREE.Vector3()), q: this.modelQuat(foot, new THREE.Quaternion()) });
+        const pos = leg.plantAt ? new THREE.Vector3(...leg.plantAt) : this.modelPos(foot, new THREE.Vector3());
+        this.footBind.set(leg.foot, { pos, q: this.modelQuat(foot, new THREE.Quaternion()) });
       }
     }
   }
@@ -265,9 +274,14 @@ export class Rig {
       if (weight <= 0) continue;
       const bind = this.footBind.get(leg.foot)!;
       const current = this.modelPos(this.node(leg.foot)!, new THREE.Vector3());
-      // Keep the posed x/z (stance width, steps) but pin the foot to the ground.
+      // Keep the posed x/z (stance width, steps) but pin the foot to the
+      // ground; a foot with a plant point stays on it.
       const target = current.clone();
       target.y = THREE.MathUtils.lerp(current.y, bind.pos.y, weight);
+      if (leg.plantAt) {
+        target.x = THREE.MathUtils.lerp(current.x, bind.pos.x, weight);
+        target.z = THREE.MathUtils.lerp(current.z, bind.pos.z, weight);
+      }
       this.solveTwoBone(leg, target);
       // Foot keeps its planted orientation.
       const footInfo = this.info(leg.foot)!;
