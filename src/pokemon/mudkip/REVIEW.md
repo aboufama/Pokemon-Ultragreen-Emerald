@@ -1,127 +1,197 @@
 # Mudkip review log
 
-Every clip, watched frame by frame from both sides: contact sheets at
-`--density 2` (every 4-5 frames, cropped to each slot) while iterating and
-the moments at `--density 3`, then the GIFs at game resolution
-(`tools/shots/clip_gifs.mjs`, tiled every 3 frames), and the compiled game's
-test battles filmed frame by frame (`tools/remake/run.mjs`): our Mudkip in
-`MUDKIP:10,ZIGZAGOON:8,GRASS` (send-out, Tackle, Growl, Mud-Slap, Water Gun)
-and the wild one in `TORCHIC:10,MUDKIP:10,GRASS` (its entrance, Mud-Slap,
-Growl, Water Gun) and `TORCHIC:10,MUDKIP:5,GRASS` (Tackle, a hit, its faint).
-Reviewed against the checklist: anticipation before the action ·
-follow-through after it · arcs, no sliding (feet planted) · the effect leaves
-the right emitter · the silhouette reads from our side (back view, cropped by
-the text box) and from the opponent's side · starts and ends on the stance.
+Every clip, watched frame by frame from both sides: contact sheets of each
+move performed as the battle does, against itself (every 6 frames, the enemy
+block then the player block, with a zoom on the first blow), each situation
+played on its own, and the gap between the two bodies read at every blow
+(in the foe's heights, both sides, at all four stop-motion phases the battle
+can start a move on; 0.1 or less lands); then the healthbox clearance
+(`tools/gauntlet/uiclear.mjs`) for every clip played at home. Reviewed
+against the checklist: anticipation before the action · a contact move
+leaps to the foe and the blow lands on its body, then it comes home ·
+follow-through after it · arcs, no sliding (feet planted or clearly
+airborne) · the effect leaves the right emitter · it is *that* move's action
+(reference/move-actions.md) · the silhouette reads from our side (back view,
+cropped by the text box) and from the opponent's side · starts and ends on
+the stance.
 
-Acting in place: no clip travels (`advance` 0, the root on its spot). The
-game's own sprite motion (Tackle's 16 px lunge, Take Down's wind-up and
-lunge, Mud-Slap's jerk back) carries the body, and the clips are timed to
-it: the ram lands on Tackle's lunge (the splat on frame 6), the chin scoop
-on Mud-Slap's jerk back and the toss as the clods fly, the spit as Water
-Gun's water leaves (frame 1), the open mouth with Growl's double cry.
+How it travels: a pup that is mostly head, light and bouncy. It crouches
+back onto its haunches (the coil), springs into a bounding pounce with all
+four feet off the ground, the front paws reaching and the hind legs kicking
+out behind (0.2-0.35 of its height up; a second bound for the running
+charges), lands front paws first in front of the foe and closes the last
+0.15 of its height with the blow itself (its crown, its paws, its tail fin,
+its whole body), and bounces home in two hops, curled at the top of each.
 
 Rig notes that shaped every clip:
 
 - Mudkip is mostly head (the head bone moves 974 of its vertices), so its
-  head, jaw and head fin trail the body by 0.045 s instead of the default
-  0.065 (index.ts `overlap`): with the default, the wild Mudkip's ram came
-  four frames after the game's lunge and splat.
+  head, jaw and head fin trail the body by 0.045 s (index.ts `overlap`);
+  head-led blows land about 0.04 s after their key.
 - The fin on its head rides the head. Thrown back with the head, it points
-  at our camera and from behind the head reads as a round stub (the send-out
-  cry, Growl's rear, the Mud-Slap toss all did). Every pose that tips the
-  head back keeps the fin upright with a post rotation (`finUp`, 90% of the
-  back-pitch). `bones.fin.x` does not: applied after the stance's twist, it
-  tips the fin sideways.
-- The front legs are planted by IK like the hind legs (`rig.frontLegs`);
-  rearing up frees them part way (`plantFront` 0.3-0.5) so the chest can
-  rise without the paws leaving the ground.
+  at our camera and from behind the head reads as a round stub: every pose
+  that tips the head back keeps the fin upright (`finUp`).
+- The front legs are planted by IK like the hind legs; rearing or pawing
+  frees them (`plantFront`).
+- A blow's gap is read from the pose on screen, which stop motion (15 poses
+  a second) may have sampled up to four frames before the impact: every blow
+  is on the foe by then (build note: a blow timed mid-travel read short at
+  some phases).
 
-## Battle moments
+## Situations
 
-- [x] `idle`: the life layer's breathing, weight shift and gaze drift, a slow head tilt and an easy wag of the tail fin (twice per tilt); the head fin and tail fin sway on springs; blinks; the loop point is the stance
-- [x] `intro`: curled up small with its eyes shut, it pops up onto its haunches, head thrown up and mouth wide in a cheerful cry (happy eyes, the head swaying), comes down onto its front paws and settles with a wag of its tail fin; the cry comes as the ball's pink tint fades
-  - fixed after review: the rear was bigger and later (the ball's tint hid the first half of it); from our side the fin, thrown back with the head, read as a round cap: now kept upright (`finUp`)
-- [x] `hit`: a 3-frame snap into a wince, the head back and the tail fin flicking up, hurt eyes; the sprung knock-back carries it and it shakes it off
-- [x] `faint`: a tired sway with its eyes half shut, then its legs fold and it lies down on its belly like a sleeping pup, head resting tilted, tail fin curled round its side, eyes shut, and shrinks away (worn out, never dying)
-  - fixed for the healthboxes: as the foe, its head laid forward in front of its feet went under our healthbox (8 px): it settles back as it lies down
-  - in the compiled game the faint was cut short (the body followed the game's sliding sprite and vanished when the game freed it): a remake-layer issue fixed on the branch (d385e08), not in this worktree's base
+- [x] `idle`: the life layer's breathing, weight shift and gaze drift, a slow head tilt and an easy wag of the tail fin; head fin and tail fin sway on springs; the loop point is the stance
+- [x] `intro`: curled up small with its eyes shut, it pops up onto its haunches with its head thrown up and its mouth wide in a cheerful cry (a moving hold, the head swaying), comes down onto its front paws and settles with a wag
+- [x] `hit`: a 3-frame snap into a wince, the head back and the tail fin flicking up, hurt eyes; recovers
+- [x] `hit_strong`: knocked back onto its haunches and skidded back, front paws lifting, then plants itself and shakes its head hard; reads bigger than `hit` from both sides
+- [x] `faint`: a tired sway with its eyes half shut, then its legs fold and it lies down on its belly like a sleeping pup, head resting tilted, tail fin curled round, eyes shut, and shrinks away (worn out, never dying)
+- [x] `dodge`: a quick hop to its left ducking low, the tail fin swinging, and a bounce back on guard
+  - fixed after review: the landing came 0.1 s after the hop's snap (a hitch); a beat later
+- [x] `unaffected`: blinks at the foe unimpressed, tilts its head and gives a dismissive flick of its tail fin
+- [x] `return_home`: from the foe it coils and bounces home in two hops
+- [x] `status_sleep`: its eyes droop, its head nods, nods again and sinks, a slow sway, then it straightens
+- [x] `status_poison`: a sickly shudder, hunched low with its head hanging and the tail fin drooping, wincing
+- [x] `status_burn`: yelps and hops up off its feet, lands and turns to lick at the burn, then shakes it off
+  - fixed after review: the turn back from licking was a rush (83° in 0.14 s); a beat longer with a breakdown
+- [x] `status_paralysis`: seizes rigid, legs locked stiff and splayed, head jerking with each jolt, tail fin twitching
+- [x] `status_freeze`: locked mid-crouch, straining in tiny tremors, eyes squeezed shut
+- [x] `status_confusion`: wobbles off balance, its head swimming round in a slow circle, a stagger each way
+- [x] `status_infatuation`: sways dreamily with its head tilted and happy eyes, the tail fin wagging slowly
+- [x] `status_curse`: flattens itself low in pain, head pressed down and tail fin clamped, shuddering
+- [x] `status_nightmare`: asleep, it writhes: the head tossing, a front paw twitching up, whimpering
+- [x] `status_wrapped`: strains outward against the bind twice, legs braced stiff and head thrown up, grimacing
+- [x] `idle_asleep`: a loop: lying on its belly, head resting tilted on its paws, eyes shut, slow deep breaths
+- [x] `idle_tired`: a loop: panting with its mouth open and its head low, the tail fin drooping, still facing the foe
+- [x] `stat_up`: rears up proudly onto its haunches, front paws raised, chest out, a fierce little cry
+- [x] `stat_down`: shrinks back low and small, head drawn in, tail fin tucked, unsteady
+- [ ] `level_up`: a happy bounce straight up, all four feet off the ground, then a proud cry and a wag
+  - fails the clearance from our side (the bounce took the head fin 29 px under the foe's box, frame 16): to fix
+- [x] `drained`: sags as the energy leaves, head dropping and legs wobbling, then steadies
+- [x] `healed`: a long happy breath out, eyes shut, and a wiggle all over
+- [x] `focus`: crouched low and coiled, the head fin tipped at the foe, still but for a tremor
+- [x] `hang_on`: staggers, legs buckling, catches itself and stays up, teeth gritted
+- [x] `flinch`: jerks back onto its haunches with its eyes shut, falters, shakes its head
+- [x] `recharge`: head hanging, panting hard, too worn out to move
+- [x] `wake`: jolts awake, blinks, shakes the sleep out of its head, back on guard
+- [x] `shake_off`: a hard wet-pup shake from head to tail, a stamp of its front paws, back on guard
+  - fixed after review: the shake turned 63° in 0.12 s (a rush); smaller and quicker
+- [x] `break_free`: bursts back out with a bounce, shakes itself, stamps crossly and yaps, settles
+- [x] `weather_rain`: turns its face up into the rain with happy eyes, wagging its tail fin (a Water type in its element)
+- [x] `weather_sun`: squints and turns its face away from the glare, head ducked, then peers back
+- [x] `weather_sand`: braces low with its head turned from the wind and its eyes shut, tail fin clamped
+- [x] `weather_hail`: flinches as the stones strike, flattening itself with its head ducked, a shiver
 
-## Attack categories
+## Moves
 
-- [x] `physical_weak`: Tackle (also Facade, Secret Power; Rock Smash, Rollout, Dig and Dive by fallback) — the head dips and the haunches load for an instant, then the hind legs drive and the head goes down so its crown and fin ram the foe on the game's lunge (impact on the splat, frame 6), it bounces off with the head flung up and shakes the daze out of its head, eyes squeezed shut
-  - fixed after review: the head shake was too small to read at game size; in the compiled game the ram came 4 frames after the splat (it now drives by 0.07 s, the head trails less)
-- [x] `physical_strong`: Take Down (also Double-Edge, Return, Frustration, Endeavor, Strength, Waterfall; Iron Tail and Body Slam by fallback) — backs into a low crouch with its head lowered like a bull while the game winds its sprite back, holds there quivering with its tail fin lashing, rams with everything on the game's lunge (splat on frame 35), presses through the foe, then the recoil: it rocks back wincing and shakes it off
-  - fixed for the healthboxes: as the foe, the face driven down in front of its feet went under our healthbox (21 px): the ram drives with the hips and spine, the head no lower than Tackle's
-- [x] `special_weak`: Water Gun (also Water Pulse; Whirlpool, Icy Wind, Rock Tomb and Snore by fallback) — a quick gulp with the head up, then the front of the body drives down at the foe with the head kept level so the wide jaws face it, braced on all fours while the water flies from the mouth, then the mouth shuts and the head comes back up
-  - fixed after review: at game size the first spit was too small to read, and from the front the pitched-down head showed the fin rather than the mouth
-- [x] `special_strong`: Hydro Pump (also Ice Beam; Surf, Blizzard and Hidden Power by fallback) — plants its feet low with the head up drawing breath, fires from its wide jaws; the jet pushes it back onto its haunches a little further every beat while its head sweeps the stream across the foe; the mouth shuts and it shakes the water off
-  - fixed after the fluidity pass: the jet's hold was a dead hold (0.4 s); now it is pushed back beat by beat with a wider sweep
-- [x] `status_self`: Protect (also Endure, Substitute, Defense Curl; Sleep Talk and Double Team by fallback) — hunkers down low on four planted feet, head tucked, eyes squeezed shut, tail fin wrapped down, and braces behind the barrier for as long as the game shows it, squeezing down in shaky breaths; then it rises
-  - fixed after the fluidity pass: the brace was a dead hold (0.9 s)
-- [x] `status_target`: Growl (Toxic by fallback) — rears back onto its haunches drawing breath, lunges its head at the foe with the mouth wide and growls through both of the game's cries, the head swaying; the noise lines leave the mouth
-  - fixed after review: at game size the growl was too small; the lunge now drops the chest and raises the face so the open mouth faces the foe, and the rear keeps the fin upright
+Head and body (the worst gap at the blow over both sides and the four
+stop-motion phases, in the foe's heights):
 
-## Motif clips
+- [x] `tackle`: coils, wiggles once, pounces in one long bound and bowls into the foe crown first as it lands, bounces off rocking back onto its haunches, shakes its head and hops home (0.02)
+- [x] `take_down`: lowers its head like a bull and scrapes the ground twice with a front paw, charges in two bounding strides and rams the foe, pressing through it; the recoil rocks it back wincing and it shakes its head (0.01)
+  - fixed after review: the paw scrapes snapped into poses the next key undid (hitches); they flow now
+- [x] `double_edge`: wiggles its haunches like a cat about to spring, three bounding strides and a flying dive stretched out, crashes into the foe; the recoil throws it back dazed (0.02)
+- [x] `body_slam`: a deep coil, a huge leap high over the foe with its legs splayed, and it belly-flops down on top of it, pushes off and hops home (0.01)
+  - fixed after review: it came down a quarter of a height short of the foe, and at one stop-motion phase the pose on screen was still falling at the impact (0.19): now it lands right on top and is down before the impact
+- [x] `return`: grinning, bounces on the spot twice, bounds in with two happy hops and bumps its forehead into the foe, head tilted, and bounces home wagging (0.02)
+- [x] `frustration`: stamps its front paws in a huff, pounces and bashes the foe with a spiteful sideways swing of its head, then turns its head away with a huff (0.01)
+  - fixed after review: the huff turned 82° in 0.12 s (a rush); smaller and a beat longer
+- [x] `facade`: hunches wincing, shakes it off with a set jaw, pounces and rams the foe with its crown, holding its ground pressing in (0.01)
+- [x] `secret_power`: a short dip, one low quick pounce, a butt with the crown held into the foe, and one hop home (0.01)
+  - fixed after review: the butt left the foe before the impact at some phases; it is held into it now
+- [x] `endeavor`: scrambles forward low in skittering hops and dives at the foe's legs, front paws wrapped round it and its head pressed in, clinging on; pushes off and hops home panting (0.01)
+- [x] `struggle`: eyes heavy, lurches in a clumsy low hop, stumbles, bumps the foe weakly with the side of its head, winces and wobbles home (0.03)
+- [x] `strength`: pounces in, rears up to plant its front paws on the foe, sinks onto its haunches to load, then heaves with paws, head and shoulders, the hind legs driving (0.01)
+  - fixed after review: the heave ended 0.09 short at one phase; it shoves further in
+- [x] `rock_smash`: pounces up high, draws its head back at the top and brings its crown smashing down onto the foe as it drops, sinking into the blow (0.01)
+- [x] `stomp`: bounds in, rears up tall on its hind legs with its front paws raised high, and stamps them down onto the foe, grinding (0.01)
+  - fixed after review: at two stop-motion phases the paws were still coming down at the impact (0.13, 0.32 short); the impact now comes as they land
+- [x] `waterfall`: bounds in low, drops into a deep crouch right under the foe and launches straight up through it nose first like a fish leaping a fall, comes down and hops home (0.04)
+  - fixed after review: the leap rose in front of the foe (0.4 short); it surges up through it now
+- [x] `iron_tail`: bounds in, springs up spinning so its tail fin swings round and slams down on the foe as its back comes round, holding on it through the blow, lands facing it and hops home (0.02)
+- [x] `rollout` (and Ice Ball, the same action): curls into a ball and rolls at the foe over and over, bowls into it and grinds against it, rolls back home and uncurls with a shake (0.01)
+  - fixed after review: the ball rolled about its feet, bobbing a quarter of its height, and at one phase it was a whole height off the foe at the impact; the ball's middle is at the root now, so it rolls about it
+- [x] `bide_charge`: hunkers down with its eyes shut and its tail fin stiff, trembling harder and harder with the stored energy (charge), then eases
+- [x] `bide`: still quivering, it launches itself at the foe in one explosive flat pounce and rams it with everything it took, pressing through, bounces off and hops home (0.02)
+  - fixed after review: the first version butted three times; the second butt landed while the foe blinked from the first (no body to measure) and three small butts read weaker than one big release
 
-- [x] `bide` (moveClips: Bide) — the game plays Bide's clip on the storing turns and on the unleashing one: it hunkers down trembling with its eyes squeezed shut and its tail fin stiff, then bursts into three quick butts of its head, an impact on each (on the unleashing turn the game's lunge carries them into the foe), and settles
-- [x] `fling` (fling: Mud-Slap, from the mouth) — it scoops mud with its chin, dipping its head to the ground on the game's jerk back, then tosses its head up and forward as the clods fly from its mouth at the foe, and shakes the mud off its face
-  - fixed after review: the toss kept the fin upright (from our side the head read as a stub)
-- [x] `glare` (glare: Foresight, Mimic) — the fin on its head is its radar: it leans in low with its eyes narrowed and tips the fin forward until it points at the foe, then peers from side to side, the fin following, and straightens up. The director's glint shows at its eyes
-  - fixed after the fluidity pass: the peering was a dead hold (0.5 s); it now swings the head slowly with the weight shifting
-- [x] `kick_sand` (kick_sand: Mud Sport) — paws at the mud with its front paws, right then left, raking it up, then shakes itself like a wet pup: the body rolls side to side and the head swings against it, splashing mud about
-  - fixed after review: the first wiggle was invisible at game size
-- [x] `weather` (weather: Rain Dance, Hail) — rocks back onto its haunches and turns its face up to the sky with happy closed eyes and its mouth open, calling the weather (a moving hold, the head swaying), then comes back down
-- [x] `charm` (charm: Attract, Swagger) — cocks its head coyly with happy closed eyes and wags its big tail fin at the foe, bobbing on its front paws with each wag; the hearts float out from its chest, under its chin
-  - fixed after review: bigger, slower wags (the first were lost at game size)
-- [x] `heal` (heal: Rest) — a big yawn, then it lies down on its belly like a pup at the water's edge, head resting tilted and eyes shut, breathing slowly while the sparkles rise, and gets back up drowsy
-- Also mapped (`motifClips`): tackle -> `physical_weak`, tackle_strong -> `physical_strong`, spit -> `special_weak`, jet and beam -> `special_strong`, shield -> `status_self`, roar -> `status_target`. The moves whose motifs have no clip of their own play their category clips (the "by fallback" moves above).
+Burrows:
+
+- [x] `dig_charge`: scrabbles at the ground with its front paws, faster and faster, the dirt flying (dig), noses into the hole and dives in head first, the tail fin going under last
+- [x] `dig`: tunnels over and bursts up out of the ground right under the foe crown first (impact as it breaks the surface), flips down onto its feet, shakes the dirt off and hops home (0.01)
+  - fixed after review: it burst up a third of a height in front of the foe; it breaks the surface right under it now
+- [x] `dive_charge`: coils, springs up in an arc and plunges in head first like a diver (dig: the splash), front paws together ahead of it
+- [x] `dive`: swims over and leaps out in a dolphin's arc right into the foe (impact as it clears the surface), comes down with a splash, shakes the water off and hops home (0.05)
+  - fixed after review: as Dig, it breached in front of the foe; now into it
+
+Water, ice, mud and cries (from home; the effect leaves the mouth unless noted):
+
+- [x] `water_gun`: a dip, a quick gulp with the head up and the mouth shut tight, then the head snaps forward and down and the jaw drops as the jet shoots out, braced on all four feet; a bob as it shuts
+- [x] `hydro_pump`: plants all four feet low and draws a deep breath with its head up (charge), fires; the jet pushes it back onto its haunches a little further every beat while its head sweeps the stream; shakes the water off
+- [x] `water_pulse`: blows a ball of water at its open mouth, bobbing as it swells and pulses twice, draws its head back and flings it with a toss of its head
+- [x] `whirlpool`: spins round on the spot in two quick hops, its tail fin sweeping the water round (charge), lands facing the foe and thrusts its head at it
+- [x] `hidden_power`: settles back on its haunches, eyes shut, still but for its head fin quivering as the orbs gather (charge), then snaps its eyes open and its head forward and sends them
+- [x] `ice_beam`: draws in a cold breath, head raised, frost at the mouth (charge), then lowers its head, braced, and fires a straight beam, rigid with a tremor; shivers the chill off
+- [x] `blizzard`: rears up onto its haunches with its face to the sky and cries the storm up, front paws raised, then drops onto its front paws and roars the blizzard out, the head sweeping it across the foe
+- [x] `icy_wind`: a long breath in (charge), then a wide cold wind, the open mouth sweeping slowly across the foe and back; shivers
+- [x] `mirror_coat`: braces low with its head tucked, its body shining as it takes the blow (charge), trembling, then throws its head up with a cry and turns it back
+- [x] `rock_tomb`: rears up on its hind legs with its front paws raised high and stamps them down with all its weight; the rocks crash down round the foe (release from the paws)
+  - fixed after review: the stamp was a rush (55° in 0.1 s); it comes down over 0.12 s
+- [x] `surf`: crouches, rears up tall as the wave rises, front paws raised as if riding the crest, and dives forward into the ride as the wave crashes over the foe; a shake
+- [x] `mud_slap`: rakes up a pawful of mud with its right front paw, rocks back onto its haunches and flicks it up into the foe's face with a swipe of the paw (release from the paws), shakes its head
+  - fixed after review: the first version scooped with its chin and spat the mud; Mud-Slap is scooped with a hand (here a paw) and slapped at the face (move-actions.md)
+- [x] `snore`: asleep standing, head drooping, it draws a huge breath and snores a blast at the foe, shuddering, then slumps again
+- [x] `uproar`: yaps at the foe three times, bouncing on its front paws between the cries, each thrown harder
+
+Status (at home):
+
+- [x] `growl`: leans in low, head down and jaw half open in a cute little snarl, the head fin tipped forward and the tail fin stiff, growling with small shakes of the head (emit from the mouth)
+  - fixed after review: the first growl reared back and roared; Growl is a cute growl, head low (move-actions.md)
+- [x] `foresight`: the head fin is its radar: leans in with narrowed eyes and tips the fin forward at the foe, peering side to side (emit from the fin)
+- [x] `mud_sport`: paws the mud up, then flops down on its belly and wallows in it, wriggling side to side with its tail fin slapping, coating itself, and gets up with a happy shake (emit from the paws)
+  - fixed after review: the first version pawed and shook itself; Mud Sport rolls and splashes in mud, coating itself (move-actions.md)
+- [x] `protect`: hunkers down low on four planted feet, head tucked, eyes shut, tail fin wrapped down, squeezing down in shaky breaths behind the barrier
+- [x] `toxic`: gulps with the head pulled back, rocks back, then lunges its head forward and spews the poison in two heaves; spits the taste out
+- [x] `hail`: turns its face up to a cold sky and cries for the hail (aura), then hunches down shivering as the first stones come
+- [x] `rain_dance`: a pup's happy dance: bounces on its front paws left, right, its tail fin wagging, then rocks back onto its haunches with its face to the sky and a joyful cry
+- [x] `double_team`: darts side to side in quick low hops, landing low each time with its head held on the foe; the afterimages swing out from the aura
+- [x] `rest`: a big yawn, then lies down on its belly, head resting on its paws, eyes shut, slow breaths while the Z's rise; gets back up
+- [x] `attract`: cocks its head coyly with happy eyes and wags its big tail fin at the foe, bobbing with each wag (emit: the hearts from the tail fin)
+- [x] `swagger`: a cocky prance, head high and chest out, high steps of its front paws, tail fin swishing, and a smug toss of its head
+- [x] `mimic`: watches the foe with its head cocked one way then the other, then copies it with a bob of its head and a flick of its fin
+- [x] `substitute`: scrunches down small, trembling, then pops up with a shake (the doll appears) and hops back a little
+- [x] `endure`: digs all four feet in with its head lowered, teeth gritted, trembling harder as the power builds, then shakes itself
+- [x] `defense_curl`: lies down and curls up tight, head tucked, paws drawn in, tail fin wrapped round, holds, uncurls
+- [x] `refresh`: shakes itself off like a wet pup, head swinging against the body, then stands tall and happy
+  - fixed after review: the shake was a rush (74° in 0.14 s); smaller
+- [x] `curse`: slows and sinks heavily, head hanging and eyes glaring up from under its brow, trembling as the power grows; a lash of the tail fin
+- [x] `sleep_talk`: fast asleep standing, head nodding, mumbling, perks up still asleep with a happy little cry (aura), nods off again
+
+Ice Ball plays `rollout` (the same action: src/battle3d/actions.ts). A
+move outside its movepool plays the clip of its motif (`motifClips` in
+index.ts: every motif is mapped). Each move's body part is in moves.json,
+set by hand from the clips (Jev, tools/gauntlet/classify_moves.mjs, needs a
+TYPESAFE_API_KEY this session did not have).
 
 ## Clear of the healthboxes
 
-Measured with `tools/gauntlet/uiclear.mjs` (every clip, from both sides,
-pixels past a box's 2 px edge): none goes past an edge from our side, and as
-the foe only Take Down touches our box (1 px). Two clips needed it:
+Pass in progress (tools/gauntlet/uiclear.mjs; build/uiclear_rest.mjs
+finishes a stopped pass): from our side every clip from `idle` to `snore`
+is clear but `level_up` (29 px under the foe's box: the bounce is too
+high), still to fix; the rest of our side (from `stat_down`) and the whole
+foe's side still to measure.
 
-- `physical_strong` as the foe: the ram pitched the face down in front of
-  its feet, 21 px under our healthbox; the ram now drives with the hips and
-  spine and the head goes no lower than Tackle's (1 px).
-- `faint` as the foe: lying down with its head laid forward in front of its
-  feet, 8 px under our box; it settles back as it lies down (0 px).
+## Battles
 
-From our side the foe's box sits just above the head fin, so every rear is
-modest (the chest rises and the head tips back rather than the body rising).
+- [x] a full battle with mudkip as ours and as the opponent (autoplay, both
+      runs reach the end): every showcase move plays its clip and effect
+- [x] the compiled game's test battle both ways: contact moves leap to the
+      foe and land as the game's hit effects flash, then come home
 
-## Fluidity
-
-Measured with `tools/gauntlet/motion.mjs --species mudkip,blaziken` on the
-joints as the battle animates them: over 24.0 s of clips, 7 stop-starts
-(0.3 a second; Blaziken 29, 1.0 a second), 3 pops (all at the end of the
-faint's shrink, where Blaziken's faint has 7), no dead holds (Blaziken 2)
-and no clip turning in its first 0.3 s (Blaziken 1). The first pass had
-three dead holds: the jet's recoil (0.4 s), Protect's brace (0.9 s) and
-Foresight's peering (0.5 s); each is now a moving hold (pushed back beat by
-beat, squeezing down in shaky breaths, the head swinging slowly).
-
-## Showcase moves in battle
-
-- [x] a full battle with mudkip as ours and as the opponent: the autoplay
-      battles run to the end in the render gate, and in the compiled game's
-      test battles every showcase move plays its clip on the game's beat from
-      both sides (as ours: Tackle, Growl, Mud-Slap, Water Gun; as the wild
-      one: Mud-Slap, Growl, Water Gun, Tackle, then its hit and faint)
-
-## In the compiled game
-
-Watched frame by frame in the test battles above. The send-out: curled in
-the ball's pink tint, the cry as the tint fades, the fin upright through
-it. The wild one's entrance: its shadowed curl, then the cheerful cry as it
-appears. Tackle: the ram lands with the game's lunge and splat, and it
-shakes the daze off after. Mud-Slap: the chin scoop on the game's jerk
-back, the toss as the clods fly. Water Gun: the spit as the game's water
-leaves the mouth. Growl: the lunge into both of the game's cries.
-
-Two things looked wrong there that were the remake layer's, not the clips'
-(fixed on the branch in d385e08, after this worktree's base): the faint was
-cut short (the body followed the game's sliding sprite and vanished when
-the game freed it), and a move that copies its target into a background
-(`monbg`, e.g. Tackle's) showed the 2D copy around the 3D body.
+The compiled game's test battles (tools/remake/run.mjs with the page's
+hold, a frame every 8), Mudkip as ours against a wild Zigzagoon and as the
+wild one against our Torchic, Tackle both ways: the intro reads both ways
+(the wild one in shadow as the field slides in, then up on its haunches
+crying; ours out of its ball the same, the head fin under the foe's
+healthbox), and the pounce lands on the foe as the game's hit splat
+flashes on it, then it bounces home; the foe's Tackle back lands on it and
+it flinches.
