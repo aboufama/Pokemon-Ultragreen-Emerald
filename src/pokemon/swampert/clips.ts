@@ -5,9 +5,10 @@
 // follows src/pokemon/blaziken/clips.ts.
 //
 // Channels used here:
-//   advance  0..1   how far toward the target a contact move has travelled
-//   root     model-unit offset/rotation of the whole body (hops, slams, sink,
-//                   dives; root.pitch tips it over about its feet)
+//   pelvis   model-unit offset of the hips and spine (crouches, weight
+//            shifts: shift() moves it with the feet kept planted)
+//   root     a small offset or tilt of the whole body (a recoil, a faint
+//            settling back); never travel or leaps
 //   plantFeet / plantLeft / plantRight   foot IK weights (0 = the leg is free)
 //   expression      eye atlas cell (open, angry, half, closed, squint, narrow, hurt)
 // Events: impact (contact lands), release (projectile/stream/wave starts),
@@ -15,14 +16,18 @@
 // the foe from its grab to its throw), dig (a burrow goes under).
 //
 // How Swampert moves (the brief in index.ts):
-//   - it is heavy (82 kg) and low: wind-ups are long, hops are short and
-//     low, landings sink deep into the knees; it never springs like a fighter;
+//   - every clip acts in place: the compiled game moves the sprite (its
+//     lunges, hops and slides) and the body follows it; a blow is its mass
+//     surging from where it stands, the hips driving at the foe with the feet
+//     planted and the arms or shoulder reaching it;
+//   - it is heavy (82 kg) and low: wind-ups are long, weight shifts are slow
+//     and sink deep into the knees; it never springs like a fighter;
 //   - its power is its mass and its arms: tackles lead with the shoulder and
 //     the whole body, Earthquake hammers both fists into the ground, Surf and
 //     Muddy Water are heaved up with both arms and pushed at the foe, Seismic
 //     Toss is a sumo's bear hug, Mud-Slap a two-handed scoop of mud;
-//   - digging and diving are its element: Dig and Dive plunge head first into
-//     the ground as into water and breach under the foe;
+//   - digging and diving are its element: Dig and Dive throw it forward into
+//     a deep crouch, paddling the mud like water, and it breaches up out of it;
 //   - water and mud come from its huge mouth: the head drives forward, the
 //     jaw drops wide, and the body braces in a sumo crouch against the recoil;
 //   - arms that don't act stay braced out at its sides (the stance's crab
@@ -93,18 +98,20 @@ const arms = (armL: Vec3, forearmL: Vec3, handL: Vec3, right?: [Vec3, Vec3, Vec3
 const ARMS_UP = arms([0.5, 0.82, 0.28], [0.18, 0.95, 0.25], [-0.1, 0.97, 0.2]);
 /** Forearms swinging up in front of the chest, elbows low: a raise goes up the front through here. */
 const ARMS_RISING = arms([0.5, -0.2, 0.84], [-0.1, 0.9, 0.42], [-0.2, 0.95, 0.25]);
-/** Arms flung up and out in a V (the leap of a body slam). */
-const ARMS_SPREAD_UP = arms([0.85, 0.45, 0.25], [0.55, 0.8, 0.2], [0.2, 0.95, 0.2]);
+/** Arms swinging round from behind at shoulder height, wide (launching a body slam; low in front, a wild Swampert's hands went under our healthbox). */
+const ARMS_SWING = arms([0.92, -0.1, 0.38], [0.62, -0.05, 0.78], [0.2, -0.2, 0.96]);
+/** Arms flung forward round the foe at chest height (the body slam's crash: down in front, a wild Swampert's hands went under our healthbox). */
+const SLAM_ARMS = arms([0.72, 0.08, 0.69], [0.38, 0.02, 0.92], [0.02, -0.12, 0.99]);
 /** Arms flung up high in a narrow V (battle cry, calling the sky). */
 const ARMS_ROAR = arms([0.55, 0.8, 0.25], [0.3, 0.93, 0.2], [0.1, 0.97, 0.2]);
-/** Fists pulled up by the shoulders, elbows out (bursting up in a hop). */
+/** Fists pulled up by the shoulders, elbows out (bursting up out of a crouch). */
 const FISTS_UP = arms([0.7, 0.45, 0.55], [-0.1, -0.4, 0.91], [-0.2, -0.6, 0.77]);
 /** Both arms heaved up high in front (raising a wave). */
 const ARMS_HEAVE_HIGH = arms([0.42, 0.72, 0.55], [0.15, 0.9, 0.4], [-0.1, 0.93, 0.35]);
 /** Arms thrown wide at shoulder height (roaring at the foe). */
 const ARMS_WIDE = arms([0.95, 0.05, 0.3], [0.75, -0.35, 0.55], [0.3, -0.7, 0.65]);
-/** Both fists hammered down onto the ground in front (onto a foe it holds). */
-const HAMMER_DOWN = arms([0.3, -0.5, 0.81], [0.08, -0.82, 0.57], [-0.1, -0.97, 0.2]);
+/** Both fists hammered down in front, to knee height (onto a foe it holds; down to the ground, a wild Swampert's fists went under our healthbox). */
+const HAMMER_DOWN = arms([0.32, -0.42, 0.85], [0.1, -0.7, 0.71], [-0.08, -0.85, 0.52]);
 /** Both fists hammered down into the ground at its sides. */
 const QUAKE_HAMMER = arms([0.72, -0.67, 0.12], [0.3, -0.94, 0.12], [0.05, -0.99, 0.05]);
 /** Hands coming down in front of the chest, elbows in: raised arms come down the front through here, not round the sides. */
@@ -133,26 +140,29 @@ const ELBOWS_BACK = arms([0.7, -0.2, -0.68], [0.35, -0.35, 0.87], [0.0, -0.6, 0.
 const ARMS_TUCKED = arms([0.4, -0.88, 0.25], [-0.25, 0.2, 0.95], [-0.35, 0.4, 0.85]);
 /** Arms drawn back behind the body (coiling to launch). */
 const ARMS_BACK = arms([0.6, -0.35, -0.72], [0.45, -0.6, -0.66], [0.2, -0.8, -0.56]);
-/** Arms spread forward and wide (about to crash onto the foe). */
-const ARMS_FWD_SPREAD = arms([0.75, -0.15, 0.65], [0.45, -0.35, 0.82], [0.1, -0.55, 0.83]);
 /** Flinch: the hands jerk up in front of the face. */
 const FLINCH = arms([0.62, 0.05, 0.78], [-0.05, 0.8, 0.6], [-0.3, 0.85, 0.43]);
 /** Arms hanging limp at its sides, a little behind the hips (resting). */
 const LIMP_ARMS = arms([0.55, -0.82, -0.12], [0.2, -0.97, 0.1], [-0.2, -0.95, 0.2]);
 /** The crab arms easing out at the elbows, hands hanging (a breakdown into and out of a squat: the hands pass at its sides, not low in front). */
 const ELBOWS_OUT = arms([0.93, -0.22, 0.28], [0.5, -0.85, 0.18], [-0.3, -0.88, 0.37]);
-/** Right fist cocked far back, left arm out front as a guard. */
-const CHAMBER_R = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.55, 0.25, -0.8], [-0.25, 0.1, 0.96], [0.0, -0.1, 0.99]]);
 /** Right fist driven straight at the foe, left fist pulled back to the hip. */
 const PUNCH_R = arms([0.75, -0.35, -0.55], [0.35, -0.2, 0.92], [0.2, -0.3, 0.93], [[-0.12, 0.02, 0.99], [-0.05, 0.02, 1], [-0.02, 0.05, 1]]);
 /** The punch carries through past the foe. */
 const PUNCH_R_THROUGH = arms([0.75, -0.35, -0.55], [0.35, -0.2, 0.92], [0.2, -0.3, 0.93], [[0.12, -0.08, 0.99], [0.2, -0.1, 0.97], [0.25, -0.1, 0.96]]);
-/** Right hand raised high behind the head, edge ready to chop (Brick Break). */
-const CHOP_RAISED = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.55, 0.6, -0.58], [-0.1, 0.95, 0.3], [0.0, 0.95, 0.3]]);
-/** CHOP_RAISED cocked further back as it lands, so the chop starts from a turnaround, not a dead stop. */
-const CHOP_COCKED = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.5, 0.64, -0.58], [-0.06, 0.97, -0.2], [0.02, 0.9, -0.42]]);
-/** The chop drives down and across in front. */
-const CHOP_DOWN = arms([0.7, -0.5, -0.5], [0.3, -0.4, 0.87], [0.1, -0.5, 0.86], [[-0.25, -0.35, 0.9], [0.35, -0.75, 0.56], [0.45, -0.8, 0.4]]);
+/** Right hand raised high behind the head, edge ready to chop (Brick Break): up by the head, not out at its side (from our side, the hand went under our healthbox). */
+const CHOP_RAISED = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.33, 0.78, -0.53], [0.05, 0.97, 0.25], [0.1, 0.95, 0.3]]);
+/** CHOP_RAISED cocked further back as the weight settles, so the chop starts from a turnaround, not a dead stop. */
+const CHOP_COCKED = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.28, 0.8, -0.53], [0.08, 0.97, -0.22], [0.12, 0.88, -0.46]]);
+/**
+ * The chop drives down and across in front to chest height, the left fist
+ * pulled back to the hip (lower, a wild Swampert's hands went under our healthbox).
+ */
+const CHOP_DOWN = arms([0.62, -0.5, -0.6], [0.3, -0.05, 0.95], [0.1, 0.1, 0.99], [[-0.2, -0.05, 0.98], [0.5, -0.2, 0.84], [0.62, -0.2, 0.76]]);
+/** The chop carries on across. */
+const CHOP_THROUGH = arms([0.62, -0.5, -0.6], [0.3, -0.05, 0.95], [0.1, 0.1, 0.99], [[-0.05, -0.12, 0.99], [0.6, -0.28, 0.75], [0.72, -0.28, 0.64]]);
+/** The crab arms held up at the elbows, hands off the ground: recovering from a crouch (in the stance's arms, a wild Swampert's hands went under our healthbox). */
+const ARMS_SET = arms([0.9, -0.2, 0.39], [0.62, -0.58, 0.53], [-0.45, -0.65, 0.61]);
 /** Fingers curled into fists. */
 const FISTS: Pose = {
   bones: {
@@ -172,12 +182,63 @@ const CURL: Pose = {
   },
 };
 
-/** Airborne: knees drawn up, feet trailing (legs rotate, so blends stay smooth). */
-const TUCK: Pose = { plantFeet: 0, bones: { thighL: { x: -30 }, thighR: { x: -30 }, shinL: { x: 40 }, shinR: { x: 40 } } };
-/** Airborne, hopping back: knees drawn up a little. */
-const HOP: Pose = { plantFeet: 0, bones: { thighL: { x: -18 }, thighR: { x: -18 }, shinL: { x: 22 }, shinR: { x: 22 } } };
 /** Landing: the knees take the weight. */
 const LAND: Pose = { plantFeet: 1, pelvis: { y: -0.05 }, bones: { spine: { x: 8 }, head: { x: -6 } } };
+
+// Planted feet ----------------------------------------------------------------
+//
+// The foot IK pins a planted foot's height but keeps its posed x/z, so moving
+// the pelvis would slide the feet with it. shift() re-aims the legs instead
+// (two bones, the knee bending in the stance's plane), so each foot stays
+// where the stance puts it while the hips sink back or surge at the foe. The
+// stance's legs, in heights from the body's origin along the model's axes
+// (measured in the clip review, window.__clip.joints()): each leg's hip, knee
+// and ankle. The stance itself doesn't aim the legs, so a clip that shifts its
+// weight aims them in every key (PLANTED at its ends).
+
+const LEGS: Record<'L' | 'R', { hip: Vec3; knee: Vec3; foot: Vec3 }> = {
+  L: { hip: [0.1728, 0.3073, -0.153], knee: [0.2577, 0.1877, -0.0669], foot: [0.2919, 0.1726, -0.2263] },
+  R: { hip: [-0.1728, 0.3073, -0.153], knee: [-0.2577, 0.1877, -0.0669], foot: [-0.2919, 0.1726, -0.2263] },
+};
+const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const along = (a: Vec3, d: Vec3, s: number): Vec3 => [a[0] + d[0] * s, a[1] + d[1] * s, a[2] + d[2] * s];
+const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unit = (a: Vec3): Vec3 => along([0, 0, 0], a, 1 / (Math.hypot(...a) || 1));
+
+/** Thigh and shin directions from `hip` to the leg's planted foot. */
+function legTo(leg: 'L' | 'R', hip: Vec3): { thigh: Vec3; shin: Vec3 } {
+  const { hip: h0, knee: k0, foot } = LEGS[leg];
+  const a = Math.hypot(...sub(k0, h0));
+  const b = Math.hypot(...sub(foot, k0));
+  const u0 = unit(sub(foot, h0));
+  const u = unit(sub(foot, hip));
+  // The side of the hip-to-foot line the knee bends to, as at the stance.
+  const out0 = along(sub(k0, h0), u0, -dot(sub(k0, h0), u0));
+  const out = unit(along(out0, u, -dot(out0, u)));
+  const d = Math.min(Math.hypot(...sub(foot, hip)), a + b - 1e-4);
+  const cos = (a * a + d * d - b * b) / (2 * a * d);
+  const knee = along(along(hip, u, a * cos), out, a * Math.sqrt(Math.max(0, 1 - cos * cos)));
+  return { thigh: unit(sub(knee, hip)), shin: unit(sub(foot, knee)) };
+}
+
+/**
+ * The weight shifted with the feet planted: the pelvis moved (x, y, z)
+ * heights from the stance's (+x its left, +z at the foe), both legs re-aimed
+ * so the feet stay where they stand. Sinking lifts the left elbow a little,
+ * as sink() does (as the foe, that hand hangs lowest, over our healthbox).
+ */
+function shift(x: number, y: number, z: number): Pose {
+  const pose: Pose = { pelvis: { x, y, z }, aim: {} };
+  if (y < 0) pose.post = { armL: { z: -70 * y } };
+  for (const leg of ['L', 'R'] as const) {
+    const { thigh, shin } = legTo(leg, along(LEGS[leg].hip, [x, y, z], 1));
+    pose.aim![`thigh${leg}`] = { dir: thigh };
+    pose.aim![`shin${leg}`] = { dir: shin };
+  }
+  return pose;
+}
+/** The stance's legs, aimed (the first and last keys of a clip that shifts its weight). */
+const PLANTED: Pose = shift(0, 0, 0);
 
 // Battle moments --------------------------------------------------------------
 
@@ -194,36 +255,37 @@ const idle: Clip = {
 };
 
 /**
- * Sent out: rises from a curled crouch in a heavy hop (the stock front anim
- * is ANIM_V_JUMPS_BIG) with its fists pulled up, lands deep, then roars with
- * its arms flung up high. The hop is low and leans in, and the arms go up and
- * come down the front of the body: from our side a high jump took the head
- * fins under the foe's healthbox, and arms flung wide or swung round the
- * sides took the right hand under ours.
+ * Sent out: bursts up out of a curled crouch onto straight legs with its
+ * fists pulled up by its shoulders, leaning in, then drops heavily back into
+ * the knees with the fists coming down in front, and roars with its arms
+ * flung up high. It stays on its feet: the game hops the sprite (the stock
+ * front anim is ANIM_V_JUMPS_BIG) and the body follows. The arms go up and
+ * come down the front of the body: from our side arms flung wide or swung
+ * round the sides took the right hand under our healthbox.
  */
 const intro: Clip = {
   name: 'intro',
-  duration: 1.95,
+  duration: 1.9,
   keys: [
     key(0, pelvis(0, -0.07), bend(18, 6, 0, 16), CROSSED_LOW, MOUTH_SHUT, SHUT),
     // Coil deeper.
     key(0.22, pelvis(0, -0.1), bend(24, 8, 2, 20), CROSSED_LOW, MOUTH_SHUT, SHUT),
-    // Burst up, leaning into the hop, fists pulled up.
-    snap(0.42, { root: { y: 0.06, pitch: 5 } }, TUCK, bend(-6, -4, -2, -10), FISTS_UP, FISTS, jaw(6), ANGRY),
-    key(0.55, { root: { y: 0.07, pitch: 5 } }, TUCK, bend(-7, -4, -2, -12), FISTS_UP, FISTS, jaw(8), ANGRY),
-    // Heavy landing, deep in the knees, the fists coming down in front.
-    fall(0.72, LAND, pelvis(0, -0.03), bend(8, 2, 0, 4), ARMS_DOWN_FRONT, FISTS, MOUTH_SHUT, ANGRY),
-    key(0.8, LAND, pelvis(0, -0.035), bend(9, 2, 0, 5), ARMS_DOWN_FRONT, FISTS, MOUTH_SHUT, ANGRY),
+    // Burst up onto straight legs, leaning in, fists pulled up.
+    snap(0.42, pelvis(0, 0.022), bend(-2, -4, -2, -10), FISTS_UP, FISTS, jaw(6), ANGRY),
+    key(0.54, pelvis(0, 0.026), bend(-3, -4, -2, -12), FISTS_UP, FISTS, jaw(8), ANGRY),
+    // A heavy drop back into the knees, the fists coming down in front.
+    fall(0.7, LAND, pelvis(0, -0.03), bend(8, 2, 0, 4), ARMS_DOWN_FRONT, FISTS, MOUTH_SHUT, ANGRY),
+    key(0.78, LAND, pelvis(0, -0.035), bend(9, 2, 0, 5), ARMS_DOWN_FRONT, FISTS, MOUTH_SHUT, ANGRY),
     // Roar: rears up, arms flung up high, jaw wide (moving hold).
-    snap(0.96, pelvis(0, 0.012), bend(-12, -8, -6, -20), ARMS_ROAR, jaw(26), ANGRY),
-    key(1.14, pelvis(0, 0.014), bend(-13, -8, -6, -22, 5, 3), ARMS_ROAR, jaw(28), ANGRY),
-    key(1.32, pelvis(0, 0.012), bend(-12, -8, -6, -21, -5, -3), ARMS_ROAR, jaw(26), ANGRY),
+    snap(0.94, pelvis(0, 0.012), bend(-12, -8, -6, -20), ARMS_ROAR, jaw(26), ANGRY),
+    key(1.12, pelvis(0, 0.014), bend(-13, -8, -6, -22, 5, 3), ARMS_ROAR, jaw(28), ANGRY),
+    key(1.3, pelvis(0, 0.012), bend(-12, -8, -6, -21, -5, -3), ARMS_ROAR, jaw(26), ANGRY),
     // The arms come down in front, and it settles into its crab-armed stance.
-    key(1.5, pelvis(0, -0.01), bend(4, 2, 0, -4), ARMS_DOWN_FRONT, jaw(8), ANGRY),
-    key(1.66, pelvis(0, -0.012), bend(4, 2, 0, -2), jaw(4), ANGRY),
-    key(1.95, OPEN_EYES),
+    key(1.48, pelvis(0, -0.01), bend(4, 2, 0, -4), ARMS_DOWN_FRONT, jaw(8), ANGRY),
+    key(1.64, pelvis(0, -0.012), bend(4, 2, 0, -2), jaw(4), ANGRY),
+    key(1.9, OPEN_EYES),
   ],
-  events: [{ t: 1.02, name: 'cry' }],
+  events: [{ t: 1.0, name: 'cry' }],
 };
 
 /** Taking a hit: the head snaps back, arms fly out, then it digs back in. */
@@ -264,61 +326,66 @@ const faint: Clip = {
 // Attack categories -------------------------------------------------------------
 
 /**
- * Weak contact (Tackle, Facade, Secret Power...): a shoulder charge. It sinks
- * and turns its right shoulder forward, hops in low with the head down,
- * crashes into the foe, bounces off and hops home.
+ * Weak contact (Tackle, Facade, Secret Power...): a shoulder charge from
+ * where it stands. It sinks with the weight back and the right shoulder
+ * drawing back, the head lowering, then its hips surge at the foe and the
+ * right shoulder drives into it, head down, the body compressing into the
+ * blow; it rocks back off the hit, shaking its head, the arms coming back
+ * out at its sides.
  */
 const physicalWeak: Clip = {
   name: 'physical_weak',
-  duration: 1.4,
+  duration: 1.25,
   keys: [
-    key(0),
-    // Wind-up: sinks, the right shoulder draws back (the spine twists; the feet stay put), head lowering.
-    key(0.2, pelvis(0, -0.055, -0.02), twist(-12), bend(12, 4, 2, 12), ARMS_TUCKED, MOUTH_SHUT, ANGRY),
-    // Launch: the right shoulder drives forward as it hops in low, head down.
-    key(0.36, { advance: 0.6, root: { y: 0.05 } }, TUCK, twist(14), bend(22, 6, 2, 16), ARMS_TUCKED, MOUTH_SHUT, ANGRY),
-    // Body blow: lands shoulder-first on the foe and compresses into it.
-    snap(0.46, { advance: 1, root: { pitch: 6 } }, LAND, pelvis(0, -0.035, 0.02), twist(18), bend(26, 8, 2, 16), ARMS_TUCKED, MOUTH_SHUT, SQUINT),
-    key(0.54, { advance: 1, root: { pitch: 5 } }, LAND, pelvis(0, -0.045, 0.02), twist(16), bend(24, 8, 2, 14), ARMS_TUCKED, MOUTH_SHUT, SQUINT),
-    // Rebounds off the foe in a low hop, shaking its head, and carries on home in one flow.
-    key(0.7, { advance: 0.72, root: { y: 0.05 } }, HOP, twist(4), bend(8, 2, 0, 0, 7), ANGRY),
-    key(0.84, { advance: 0.38, root: { y: 0.055 } }, HOP, bend(6, 0, 0, 0, -5), ANGRY),
-    key(0.98, { advance: 0 }, LAND, ANGRY),
-    key(1.14, pelvis(0, -0.02), bend(3, 1, 0, 1), ANGRY),
-    key(1.4, OPEN_EYES),
+    key(0, PLANTED),
+    // Wind-up: it sinks, the weight back, the forearms coming up before the chest, the right shoulder drawing back, head lowering.
+    key(0.14, shift(0, -0.02, -0.01), twist(-3), bend(5, 2, 1, 5), GUARD_RISING, MOUTH_SHUT, ANGRY),
+    key(0.26, shift(0, -0.056, -0.03), twist(-7), bend(13, 4, 2, 13), ARMS_TUCKED, MOUTH_SHUT, ANGRY),
+    // Body blow: the hips surge at the foe, the right shoulder leading, head down; it compresses into the hit.
+    // (Bowed further, the head fins dropped out of sight from our side.)
+    key(0.34, shift(0, -0.05, 0.005), twist(0), bend(16, 4, 0, 8), ARMS_TUCKED, MOUTH_SHUT, ANGRY),
+    snap(0.42, shift(0, -0.04, 0.055), twist(18), bend(22, 6, 0, 4), ARMS_TUCKED, MOUTH_SHUT, SQUINT),
+    key(0.52, shift(0, -0.046, 0.058), twist(16), bend(21, 6, 0, 4), ARMS_TUCKED, MOUTH_SHUT, SQUINT),
+    // It rocks back off the foe, shaking its head, the arms coming back out at its sides.
+    key(0.7, shift(0, -0.038, 0.005), twist(4), bend(8, 2, 0, 0, 7), ARMS_SET, ANGRY),
+    key(0.84, shift(0, -0.03, 0), bend(6, 0, 0, 0, -5), ARMS_SET, ANGRY),
+    key(0.98, shift(0, -0.02, 0), bend(3, 1, 0, 1), ANGRY),
+    key(1.25, PLANTED, OPEN_EYES),
   ],
-  events: [{ t: 0.47, name: 'impact' }],
+  events: [{ t: 0.43, name: 'impact' }],
 };
 
 /**
  * Strong contact (Take Down, Double-Edge, Body Slam, Strength...): the whole
- * mass as a weapon. A long coil with the arms drawn back, a heavy leap, and it
- * comes down belly-first on the foe, shoves off and hops home.
+ * mass as a weapon, from where it stands. A long coil, sinking deep and
+ * rearing back with the arms drawn back, then its legs drive the whole body
+ * at the foe, the arms swinging round wide, and it throws its weight onto it
+ * chest-first with the arms flung round it at chest height; it shoves off
+ * and stands its ground again, the arms coming back out at its sides (low in
+ * front, a wild Swampert's hands went under our healthbox).
  */
 const physicalStrong: Clip = {
   name: 'physical_strong',
-  duration: 2.25,
+  duration: 1.9,
   keys: [
-    key(0),
+    key(0, PLANTED),
     // Coil: sinks deep, rears back, arms drawn back.
-    key(0.34, pelvis(0, -0.1, -0.02), bend(-8, -6, -2, -8), ARMS_BACK, MOUTH_SHUT, ANGRY),
-    key(0.46, pelvis(0, -0.11, -0.025), bend(-9, -6, -2, -10), ARMS_BACK, MOUTH_SHUT, ANGRY),
-    // Launch: the arms swing forward and up, the body tips toward the foe.
-    snap(0.62, { advance: 0.45, root: { y: 0.16, pitch: 10 } }, TUCK, bend(6, 2, 0, -6), ARMS_SPREAD_UP, jaw(10), ANGRY),
-    key(0.76, { advance: 0.8, root: { y: 0.15, pitch: 24 } }, TUCK, bend(12, 4, 0, -4), ARMS_FWD_SPREAD, jaw(12), ANGRY),
-    // Crash: belly-first onto the foe.
-    fall(0.88, { advance: 1, root: { y: 0.02, pitch: 38 } }, TUCK, bend(16, 6, 2, 0), ARMS_FWD_SPREAD, MOUTH_SHUT, SQUINT),
-    key(0.95, { advance: 1, root: { y: 0, pitch: 40 } }, TUCK, pelvis(0, -0.04), bend(18, 7, 2, 2), ARMS_FWD_SPREAD, MOUTH_SHUT, SQUINT),
-    key(1.06, { advance: 1, root: { y: 0.01, pitch: 33 } }, TUCK, pelvis(0, -0.03), bend(15, 6, 2, 2), ARMS_FWD_SPREAD, MOUTH_SHUT, SQUINT),
-    // Shoves off and plants its feet again.
-    key(1.24, { advance: 1, root: { pitch: 6 } }, LAND, pelvis(0, -0.04), bend(10, 2, 0, 0), ANGRY),
-    key(1.38, { advance: 1 }, LAND, pelvis(0, -0.03), bend(8, 2, 0, 0), ANGRY),
-    // Hops home.
-    key(1.56, { advance: 0.45, root: { y: 0.06 } }, HOP, ANGRY),
-    key(1.72, { advance: 0 }, LAND, pelvis(0, -0.02), ANGRY),
-    key(2.25, OPEN_EYES),
+    key(0.34, shift(0, -0.1, -0.03), bend(-8, -6, -2, -8), ARMS_BACK, MOUTH_SHUT, ANGRY),
+    key(0.48, shift(0, -0.11, -0.035), bend(-9, -6, -2, -10), ARMS_BACK, MOUTH_SHUT, ANGRY),
+    // Launch: the legs drive the whole mass at the foe, the arms swinging round wide...
+    key(0.6, shift(0, -0.07, 0.03), bend(6, 2, 0, -6), ARMS_SWING, jaw(10), ANGRY),
+    // ...and it throws its weight onto the foe chest-first, the arms flung round it at chest height,
+    // the face kept up at it (bowed and sunk deeper, from our side the head fins went down
+    // behind the text box on the hit).
+    snap(0.72, shift(0, -0.035, 0.075), bend(14, 6, 0, -8), SLAM_ARMS, MOUTH_SHUT, SQUINT),
+    key(0.84, shift(0, -0.045, 0.078), bend(15, 6, 0, -7), SLAM_ARMS, MOUTH_SHUT, SQUINT),
+    key(0.98, shift(0, -0.042, 0.068), bend(13, 5, 0, -7), SLAM_ARMS, MOUTH_SHUT, SQUINT),
+    // Shoves off and stands its ground again, the arms coming back out at its sides.
+    key(1.18, shift(0, -0.04, 0.01), bend(8, 2, 0, 0), ARMS_SET, ANGRY),
+    key(1.38, shift(0, -0.025, 0), bend(5, 1, 0, 0), ARMS_SET, ANGRY),
+    key(1.9, PLANTED, OPEN_EYES),
   ],
-  events: [{ t: 0.89, name: 'impact' }],
+  events: [{ t: 0.73, name: 'impact' }],
 };
 
 /**
@@ -496,50 +563,62 @@ const shield: Clip = {
 };
 
 /**
+ * The right fist drawn back and up by the ear as the weight sinks, the elbow
+ * high, the left arm out front as a guard (cocked straight back and out, from
+ * our side the fist and elbow went under our healthbox).
+ */
+const CHAMBER_R = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.3, 0.7, -0.65], [-0.05, 0.8, 0.6], [0.0, 0.7, 0.71]]);
+/** ... cocked a little further up and back as the weight settles, so the punch starts from a turnaround. */
+const CHAMBER_R_UP = arms([0.6, -0.4, 0.7], [-0.2, 0.2, 0.96], [-0.3, 0.1, 0.95], [[-0.26, 0.8, -0.54], [-0.02, 0.95, 0.3], [0.02, 0.85, 0.52]]);
+
+/**
  * Mega Punch, Focus Punch, DynamicPunch, Ice Punch, Counter (punch): a heavy
- * haymaker. Cocks the right fist far back with the torso turned away, hops in,
- * unwinds hips and shoulders and drives the fist through the foe.
+ * haymaker from where it stands. It cocks the right fist up and back by its
+ * ear with the torso turned away and the weight sinking back, then its hips
+ * surge at the foe, hips and shoulders unwind and the fist drives through
+ * it; the fist carries on, the body leaning into it, and it squares up
+ * again, the arms coming back out at its sides.
  */
 const punch: Clip = {
   name: 'punch',
-  duration: 1.6,
+  duration: 1.4,
   keys: [
-    key(0),
-    key(0.22, pelvis(0, -0.05), bend(10, 2, 0, 4), twist(-18), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
-    key(0.4, { advance: 0.6, root: { y: 0.05 } }, TUCK, bend(8, 2, 0, 2), twist(-20), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
-    key(0.52, { advance: 1 }, LAND, bend(12, 2, 0, 4), twist(-20), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
-    // The punch: hips and shoulders unwind, the fist drives straight at the foe.
-    snap(0.6, { advance: 1 }, pelvis(0, -0.035, 0.02), bend(14, 4, 0, 4), twist(18), PUNCH_R, FISTS, jaw(6), ANGRY),
-    // Follow-through: the fist carries on, the body leans into it.
-    key(0.78, { advance: 1 }, pelvis(0, -0.035, 0.025), bend(16, 4, 0, 4), twist(23), PUNCH_R_THROUGH, FISTS, jaw(4), ANGRY),
-    key(0.94, { advance: 1 }, pelvis(0, -0.035), bend(8, 2, 0, 0), ANGRY),
-    key(1.1, { advance: 0.45, root: { y: 0.05 } }, HOP, ANGRY),
-    key(1.24, { advance: 0 }, LAND, ANGRY),
-    key(1.6, OPEN_EYES),
+    key(0, PLANTED),
+    key(0.24, shift(0, -0.05, -0.025), bend(10, 2, 0, 4), twist(-9), CHAMBER_R, FISTS, MOUTH_SHUT, ANGRY),
+    key(0.34, shift(0, -0.058, -0.03), bend(10, 2, 0, 4), twist(-12), CHAMBER_R_UP, FISTS, MOUTH_SHUT, ANGRY),
+    // The punch: the hips surge at the foe, hips and shoulders unwind, the fist drives straight at it.
+    snap(0.44, shift(0, -0.04, 0.05), bend(14, 4, 0, 4), twist(18), PUNCH_R, FISTS, jaw(6), ANGRY),
+    // Follow-through: the fist carries on, the body leaning into it.
+    key(0.6, shift(0, -0.042, 0.055), bend(16, 4, 0, 4), twist(23), PUNCH_R_THROUGH, FISTS, jaw(4), ANGRY),
+    key(0.74, shift(0, -0.04, 0.048), bend(15, 4, 0, 4), twist(21), PUNCH_R_THROUGH, FISTS, jaw(4), ANGRY),
+    key(0.92, shift(0, -0.03, 0.005), bend(8, 2, 0, 0), ARMS_SET, ANGRY),
+    key(1.4, PLANTED, OPEN_EYES),
   ],
-  events: [{ t: 0.66, name: 'impact' }],
+  events: [{ t: 0.5, name: 'impact' }],
 };
 
 /**
- * Brick Break, Rock Smash (strike): after Blaziken's slash, heavier. Raises the
- * right hand high behind its head, hops in, and chops down and across.
+ * Brick Break, Rock Smash (strike): after Blaziken's slash, heavier. It
+ * raises the right hand high behind its head as the weight sinks back, then
+ * its hips surge at the foe and the hand chops down and across to the foe's
+ * chest, the left fist pulled back to the hip; it follows through across and
+ * squares up again.
  */
 const strike: Clip = {
   name: 'strike',
-  duration: 1.5,
+  duration: 1.35,
   keys: [
-    key(0),
-    key(0.2, pelvis(0, -0.04), bend(10, 2, 0, 2), twist(-15), CHOP_RAISED, MOUTH_SHUT, ANGRY),
-    key(0.36, { advance: 0.55, root: { y: 0.05 } }, TUCK, bend(8, 2, 0, 0), twist(-16), CHOP_RAISED, MOUTH_SHUT, ANGRY),
-    key(0.47, { advance: 1 }, LAND, bend(12, 2, 0, 2), twist(-20), CHOP_COCKED, MOUTH_SHUT, ANGRY),
-    snap(0.57, { advance: 1 }, pelvis(0.01, -0.045, 0.01), bend(22, 6, 0, 6), twist(16), CHOP_DOWN, jaw(6), ANGRY),
-    key(0.74, { advance: 1 }, pelvis(0.012, -0.045, 0.012), bend(23, 6, 0, 6), twist(20), CHOP_DOWN, jaw(4), ANGRY),
-    key(0.9, { advance: 1 }, pelvis(0, -0.035), bend(10, 2, 0, 0), ANGRY),
-    key(1.04, { advance: 0.45, root: { y: 0.05 } }, HOP, ANGRY),
-    key(1.18, { advance: 0 }, LAND, ANGRY),
-    key(1.5, OPEN_EYES),
+    key(0, PLANTED),
+    key(0.22, shift(0, -0.045, -0.025), bend(10, 2, 0, 2), twist(-12), CHOP_RAISED, MOUTH_SHUT, ANGRY),
+    key(0.34, shift(0, -0.05, -0.03), bend(11, 2, 0, 2), twist(-16), CHOP_COCKED, MOUTH_SHUT, ANGRY),
+    // The chop: the hips surge at the foe, the hand chops down and across.
+    snap(0.44, shift(0.01, -0.05, 0.05), bend(17, 5, 0, 4), twist(16), CHOP_DOWN, jaw(6), ANGRY),
+    key(0.6, shift(0.012, -0.052, 0.052), bend(18, 5, 0, 4), twist(20), CHOP_THROUGH, jaw(4), ANGRY),
+    // Squares up again, the arms coming back out at its sides.
+    key(0.8, shift(0, -0.03, 0.01), bend(8, 2, 0, 0), ARMS_SET, ANGRY),
+    key(1.35, PLANTED, OPEN_EYES),
   ],
-  events: [{ t: 0.63, name: 'impact' }],
+  events: [{ t: 0.5, name: 'impact' }],
 };
 
 /**
@@ -614,110 +693,98 @@ const HUG_OPEN = arms([0.85, 0.05, 0.52], [0.5, 0.05, 0.86], [0.05, 0.0, 1.0]);
 const HUG_MID = arms([0.7, -0.03, 0.72], [0.0, 0.05, 1.0], [-0.45, 0.05, 0.89]);
 /** Arms locked round the foe's waist, the hands meeting in front of the chest. */
 const HUG = arms([0.45, -0.1, 0.89], [-0.55, 0.05, 0.83], [-0.8, 0.1, 0.6]);
-/** Landing from a hop home: the knees take the weight and the torso carries on back a little. */
-const LAND_HOME: Pose = { plantFeet: 1, pelvis: { y: -0.05 }, bones: { spine: { x: -3 }, head: { x: 1 } } };
 /** Hoisting it up against the chest (overhead would carry the foe off the screen). */
 const HOIST = arms([0.42, 0.14, 0.9], [-0.4, 0.3, 0.87], [-0.62, 0.3, 0.72]);
 
+/** The hug tightened round the foe as it loads, the forearms pulled in against the belly. */
+const HUG_LOW = arms([0.48, -0.25, 0.84], [-0.6, -0.05, 0.8], [-0.82, 0.05, 0.57]);
+
 /**
- * Seismic Toss (toss): a sumo's bear hug. Squares up with the arms flung
- * wide, a low heavy hop in, and the arms close round the foe as it lands
- * (grab: from here it rides in the grip, src/battle3d/director.ts). Sinks
- * deep with it, straining, then heaves it up against its chest (not overhead:
- * the foe would leave the screen) and springs back toward mid-field in a low
- * leap, spinning round with it; from the top of the leap it hurls it back down
- * into its own place with both arms (throw) and drops like a stone. The foe
- * crashes there (impact), where both camera views see it, while Swampert
- * crouches deep at advance 0.4, then hops home. Hands trail the hips by
+ * Seismic Toss (toss): a sumo's bear hug, where it stands. It squares up
+ * with the crab arms flung wide, surges at the foe and the arms close round
+ * it (grab: in the playtest the foe rides in the grip from here,
+ * src/battle3d/director.ts); it sinks deep with it, straining, then heaves
+ * it up against its chest (not overhead: the foe would leave the screen), the
+ * head thrown back, and from there the whole body folds forward and both arms
+ * drive it down at its place (throw); the foe crashes there (impact) while
+ * Swampert watches from deep in the knees. The chest keeps its tilt from the
+ * hug to the throw (the foe rides in the grip turned with the chest: from
+ * where it stands a tilt swung the foe round it). Hands trail the hips by
  * ~0.07 s.
  */
 const toss: Clip = {
   name: 'toss',
-  duration: 2.76,
+  duration: 2.3,
   keys: [
-    key(0),
+    key(0, PLANTED),
     // Squares up: sinks, the crab arms swinging open wide.
-    key(0.22, pelvis(0, -0.075, -0.01), bend(6, 2, 0, 2), HUG_OPEN, MOUTH_SHUT, ANGRY),
-    // A low, heavy hop in, arms spread for the hug.
-    key(0.4, { advance: 0.6, root: { y: 0.06 } }, TUCK, bend(6, 2, 0, 0), HUG_OPEN, MOUTH_SHUT, ANGRY),
-    // Lands chest to chest with the foe, the arms already closing...
-    key(0.52, { advance: 1, root: { z: 0.12 } }, LAND, bend(0, 1, 0, 2), HUG_MID, MOUTH_SHUT, ANGRY),
-    // ...and locking round it (grab as the hands meet).
-    key(0.64, { advance: 1, root: { z: 0.15 } }, pelvis(0, -0.09), bend(2, 2, 0, -2), HUG, MOUTH_SHUT, ANGRY),
-    // Load: sinks deep into an upright sumo squat with it, straining.
-    key(0.8, { advance: 1, root: { z: 0.14 } }, pelvis(0, -0.12), bend(4, 2, 0, 0), HUG, MOUTH_SHUT, SQUINT),
-    key(0.94, { advance: 1, root: { z: 0.12 } }, pelvis(0, -0.135), bend(1, 1, 0, 2), HUG, MOUTH_SHUT, SQUINT),
-    // Heaves it up against its chest and springs up and back toward mid-field, the back arching.
-    key(1.1, { advance: 0.86, root: { y: 0.1, yaw: 35 } }, HOP, pelvis(0, 0.01), bend(-10, -6, -2, -10), HOIST, jaw(10), ANGRY),
-    // Spinning round with it in the air.
-    key(1.26, { advance: 0.66, root: { y: 0.15, yaw: 200 } }, HOP, pelvis(0, 0.01), bend(-12, -6, -2, -12), HOIST, jaw(12), ANGRY),
-    // At the top, facing its place again, leaning back to hurl.
-    key(1.38, { advance: 0.48, root: { y: 0.16, yaw: 360 } }, HOP, pelvis(0, 0.01), bend(-16, -8, -3, -14), HOIST, jaw(14), ANGRY),
-    // The hurl, still at the top: the whole body folds forward, both arms driving it down at its place.
-    snap(1.47, { advance: 0.4, root: { y: 0.15, yaw: 360 } }, HOP, pelvis(0, -0.02), bend(26, 8, 2, 6), HAMMER_DOWN, jaw(20), ANGRY),
-    // Drops like a stone and lands heavily, deep in the knees, arms still down: watches it crash.
-    fall(1.64, { advance: 0.4, root: { yaw: 360 } }, LAND, pelvis(0, -0.11), bend(28, 9, 2, 6), HAMMER_DOWN, jaw(16), ANGRY),
-    key(1.74, { advance: 0.4, root: { yaw: 360 } }, LAND, pelvis(0, -0.125), bend(29, 9, 2, 7), HAMMER_DOWN, jaw(18), ANGRY),
-    key(1.98, { advance: 0.4, root: { yaw: 360 } }, pelvis(0, -0.08), bend(18, 6, 0, 2), HAMMER_DOWN, jaw(22), ANGRY),
-    // Straightens, then a heavy hop home.
-    key(2.16, { advance: 0.4, root: { yaw: 360 } }, pelvis(0, -0.04), bend(8, 2, 0, 0), jaw(6), ANGRY),
-    key(2.32, { advance: 0.2, root: { y: 0.05, yaw: 360 } }, HOP, ANGRY),
-    key(2.46, { advance: 0, root: { yaw: 360 } }, LAND_HOME, ANGRY),
-    key(2.76, { root: { yaw: 360 } }, OPEN_EYES),
+    key(0.24, shift(0, -0.07, -0.01), bend(6, 2, 0, 2), HUG_OPEN, MOUTH_SHUT, ANGRY),
+    // Surges at the foe, the arms closing round it...
+    key(0.42, shift(0, -0.06, 0.05), bend(3, 1, 0, 2), HUG_MID, MOUTH_SHUT, ANGRY),
+    // ...and locking round it (grab as the hands meet), the weight sinking back with it.
+    key(0.58, shift(0, -0.09, 0.02), bend(2, 1, 0, 0), HUG, MOUTH_SHUT, ANGRY),
+    key(0.76, shift(0, -0.125, 0), bend(2, 1, 0, 2), HUG_LOW, MOUTH_SHUT, SQUINT),
+    key(0.9, shift(0, -0.135, -0.004), bend(2, 1, 0, 3), HUG_LOW, MOUTH_SHUT, SQUINT),
+    // Heaves it up against its chest, rising out of the squat, the head thrown back.
+    key(1.1, shift(0, -0.06, -0.02), bend(2, 1, -4, -12), HOIST, jaw(10), ANGRY),
+    key(1.24, shift(0, -0.056, -0.024), bend(2, 1, -5, -14), HOIST, jaw(12), ANGRY),
+    // The hurl: the whole body folds forward, both arms driving it down at its place.
+    snap(1.36, shift(0, -0.09, 0.05), bend(26, 8, 2, 6), HAMMER_DOWN, jaw(20), ANGRY),
+    // Deep in the knees, arms still down: it watches it crash.
+    key(1.5, shift(0, -0.11, 0.05), bend(28, 9, 2, 6), HAMMER_DOWN, jaw(16), ANGRY),
+    key(1.72, shift(0, -0.08, 0.03), bend(18, 6, 0, 2), HAMMER_DOWN, jaw(22), ANGRY),
+    // Straightens.
+    key(1.92, shift(0, -0.04, 0.005), bend(8, 2, 0, 0), jaw(6), ANGRY),
+    key(2.3, PLANTED, OPEN_EYES),
   ],
-  events: [{ t: 0.7, name: 'grab' }, { t: 1.5, name: 'throw' }, { t: 1.76, name: 'impact' }],
+  // The throw lets go as the fold starts (the hands trail the hips); it lands on the impact.
+  events: [{ t: 0.64, name: 'grab' }, { t: 1.31, name: 'throw' }, { t: 1.58, name: 'impact' }],
 };
 
 /** Arms swung back behind the body (a diver about to spring). */
 const DIVE_BACK = arms([0.55, -0.45, -0.7], [0.4, -0.6, -0.7], [0.2, -0.75, -0.62]);
-/** Arms swept forward together past the head (a diver's reach). */
-const DIVE_REACH = arms([0.25, 0.6, 0.76], [0.05, 0.7, 0.71], [-0.05, 0.7, 0.71]);
 /** Fists drawn in low before the belly (underground, coiled to burst up). */
 const FISTS_LOW = arms([0.6, -0.7, 0.38], [-0.2, -0.3, 0.93], [-0.35, -0.2, 0.92]);
 
+/** Both hands dug into the mud beside the feet, a little behind them (scooping). */
+const SCOOP_DOWN = arms([0.72, -0.68, 0.12], [0.35, -0.92, 0.15], [-0.2, -0.85, 0.48]);
 /**
- * Dig, Dive (burrow): digging and diving are its element. It rears back with
- * the arms swung back, hops and plunges head first into the ground as into
- * water (dig: dirt, or a splash for Dive, bursts up as it goes in), the tail
- * fan going under last; swims over to the foe underground (the director heaves
- * mounds, or bubbles, along the way), then breaches up in front of it with
- * both fists driving up (impact as it clears the surface), comes down heavily
- * with the arms braced wide, holds the crouch glaring up at it and hops home.
+ * Dig, Dive (burrow): digging and diving are its element; here it digs where
+ * it stands. It rears back with the arms swung back, throws itself forward
+ * into a deep crouch with both hands plunging into the mud at its sides
+ * (dig: the ground bursts up, or a water column for Dive), paddles the mud
+ * back past its hips in one great stroke as if swimming, gathers low and
+ * breaches up out of the crouch with both fists heaving up in front and the
+ * jaw wide (impact), then comes down heavily with the arms braced wide,
+ * glaring up at the foe. (The game sinks the sprite into the ground and
+ * raises it under the foe; the body follows.)
  */
 const burrow: Clip = {
   name: 'burrow',
-  duration: 2.58,
+  duration: 2.0,
   keys: [
-    key(0),
+    key(0, PLANTED),
     // Rears back and sinks, arms swung back (the wind-up before throwing itself forward).
-    key(0.24, pelvis(0, -0.04, -0.05), bend(-9, -4, 0, -4), DIVE_BACK, MOUTH_SHUT, ANGRY),
-    // The dive: a low hop, tipping forward, the arms sweeping forward past the head.
-    key(0.42, { advance: 0.06, root: { y: 0.12, pitch: 40 } }, TUCK, pelvis(0, -0.02), bend(-4, -3, 0, -4), DIVE_REACH, MOUTH_SHUT, ANGRY),
-    // Plunges in head first (dig: the ground splashes up round it)...
-    key(0.56, { advance: 0.1, plantFeet: 0, root: { y: 0.08, pitch: 98 } }, pelvis(0, -0.02), bend(-6, -3, 0, -6), DIVE_REACH, MOUTH_SHUT, SHUT),
-    // ...and slides under, the tail fan last, gathering speed.
-    key(0.74, { advance: 0.16, plantFeet: 0, root: { y: -0.95, pitch: 108 } }, pelvis(0, -0.02), bend(-6, -3, 0, -6), DIVE_REACH, MOUTH_SHUT, SHUT),
-    // Underground (nothing to stand on): swims over to the foe, turning upright to come up.
-    key(0.88, { advance: 0.45, plantFeet: 0, root: { y: -1.3, pitch: 60 } }, pelvis(0, -0.05), bend(6, 2, 0, 0), FISTS_LOW, FISTS, MOUTH_SHUT, ANGRY),
-    key(1.06, { advance: 1, plantFeet: 0, root: { y: -1.3 } }, pelvis(0, -0.08), bend(16, 4, 0, 6), FISTS_LOW, FISTS, MOUTH_SHUT, ANGRY),
-    // Breaches up in front of the foe, both fists driving up.
-    snap(1.22, { advance: 1, plantFeet: 0, root: { y: 0.2 } }, pelvis(0, 0.02), bend(-10, -6, -2, -14), ARMS_UP, FISTS, jaw(20), ANGRY),
-    key(1.32, { advance: 0.97, plantFeet: 0, root: { y: 0.23 } }, TUCK, pelvis(0, 0.02), bend(-12, -6, -2, -16), ARMS_UP, FISTS, jaw(22), ANGRY),
-    // Comes down heavily in front of it, deep in the knees, arms braced wide, and holds the
-    // crouch glaring up at the foe.
-    fall(1.5, { advance: 0.9 }, LAND, pelvis(0, -0.085), bend(-2, -1, 0, -8), ARMS_WIDE, MOUTH_SHUT, ANGRY),
-    key(1.6, { advance: 0.9 }, LAND, pelvis(0, -0.1), bend(0, 0, 0, -8), ARMS_WIDE, MOUTH_SHUT, ANGRY),
-    key(1.88, { advance: 0.9 }, pelvis(0, -0.05), bend(2, 1, 0, -6), ARMS_WIDE, MOUTH_SHUT, ANGRY),
-    // Hops home.
-    key(2.04, { advance: 0.45, root: { y: 0.06 } }, HOP, ANGRY),
-    key(2.2, { advance: 0 }, LAND_HOME, ANGRY),
-    key(2.58, OPEN_EYES),
+    key(0.24, shift(0, -0.04, -0.04), bend(-9, -4, 0, -4), DIVE_BACK, MOUTH_SHUT, ANGRY),
+    // It throws itself forward into a deep crouch, both hands plunging into the mud at its sides.
+    key(0.42, shift(0, -0.09, 0.02), bend(16, 6, 2, 8), SCOOP_DOWN, CURL, MOUTH_SHUT, ANGRY),
+    // One great stroke: it paddles the mud back past its hips as if swimming.
+    key(0.64, shift(0, -0.1, 0.01), bend(18, 6, 2, 9), ARMS_SCOOP, CURL, MOUTH_SHUT, SHUT),
+    // Gathered low, fists at its belly...
+    key(0.86, shift(0, -0.1, 0), bend(14, 4, 0, 6), FISTS_LOW, FISTS, MOUTH_SHUT, ANGRY),
+    // ...it breaches up out of the crouch, both fists heaving up in front, jaw wide.
+    snap(1.0, shift(0, 0.012, 0.03), bend(-10, -6, -2, -14), ARMS_HEAVE_HIGH, FISTS, jaw(20), ANGRY),
+    key(1.12, shift(0, 0.015, 0.03), bend(-12, -6, -2, -16), ARMS_HEAVE_HIGH, FISTS, jaw(22), ANGRY),
+    // Comes down heavily, deep in the knees, arms braced wide, glaring up at the foe.
+    fall(1.3, shift(0, -0.085, 0.01), bend(-2, -1, 0, -8), ARMS_WIDE, MOUTH_SHUT, ANGRY),
+    key(1.42, shift(0, -0.1, 0.005), bend(0, 0, 0, -8), ARMS_WIDE, MOUTH_SHUT, ANGRY),
+    key(1.66, shift(0, -0.05, 0), bend(2, 1, 0, -6), ARMS_WIDE, MOUTH_SHUT, ANGRY),
+    key(2.0, PLANTED, OPEN_EYES),
   ],
-  events: [{ t: 0.5, name: 'dig' }, { t: 1.16, name: 'impact' }],
+  // The hands trail the hips (overlap): they plunge in just after their key.
+  events: [{ t: 0.48, name: 'dig' }, { t: 1.05, name: 'impact' }],
 };
 
-/** Both hands dug into the mud beside the feet, a little behind them (scooping). */
-const SCOOP_DOWN = arms([0.72, -0.68, 0.12], [0.35, -0.92, 0.15], [-0.2, -0.85, 0.48]);
 /** Both arms swinging through low in front of the thighs, the hands together (the scoop comes forward here). */
 const SWING_LOW = arms([0.3, -0.9, 0.3], [0.0, -0.95, 0.3], [-0.2, -0.9, 0.38]);
 /** The heave: both arms swung forward and up at the foe, the hands together (an underhand hurl). */
@@ -760,39 +827,39 @@ const fling: Clip = {
 const SUMO_GUARD = arms([0.88, -0.3, 0.38], [0.45, 0.0, 0.89], [0.0, 0.1, 1.0]);
 /** The guard coming down into the crab arms. */
 const GUARD_LOWERING = arms([0.88, -0.35, 0.33], [0.5, -0.4, 0.77], [-0.3, -0.35, 0.89]);
-/** A heavy side-hop's landing: deep in the knees (the body leans with it: root.roll). */
-const SQUASH: Pose = { plantFeet: 1, pelvis: { y: -0.07 }, bones: { spine: { x: 10 }, head: { x: -6 } } };
 /** The head held level against the body's lean (+ tips its top to its right). */
 const level = (z: number): Pose => ({ bones: { head: { z } } });
 
 /**
- * Double Team (afterimage): short, heavy side-hops, a sumo's shuffle, not a
- * sprinter's dart: each a low hop to one side and a landing deep in the
- * knees, the body leaning with it and the head held level, the arms spread in
- * a grappler's guard. The hops are narrow (0.15 heights) and lean a little:
- * wider, or leaning further, our Swampert's right head fin went under our
- * healthbox. The afterimages start at the aura and run 1.4 s
+ * Double Team (afterimage): heavy feints from the waist, a sumo's sway, not
+ * a sprinter's dart: the weight rolls onto one leg with the upper body
+ * swaying out over it and the head held level, dipping as it passes through
+ * the middle and swaying out over the other, the arms spread in a grappler's
+ * guard that lowers as it settles; the feet stay planted. The sways toward
+ * its right are narrower: leaning further that way, our Swampert's right head
+ * fin went under our healthbox. The game moves the sprite (Double Team's
+ * copies); the afterimages start at the aura and run 1.4 s
  * (src/battle3d/director.ts).
  */
 const afterimage: Clip = {
   name: 'afterimage',
-  duration: 2.1,
+  duration: 1.9,
   keys: [
-    key(0),
-    key(0.14, pelvis(0, -0.065), bend(10, 3, 0, 2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(0.26, { root: { x: 0.075, y: 0.04, roll: -2 } }, HOP, bend(6, 2, 0, 0, 0, 2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(0.38, { root: { x: 0.15, roll: -3 } }, SQUASH, level(4), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(0.52, { root: { x: 0.0, y: 0.045, roll: 2 } }, HOP, bend(6, 2, 0, 0, 0, -2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(0.64, { root: { x: -0.1, roll: 2 } }, SQUASH, level(-6), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(0.78, { root: { x: 0.0, y: 0.045, roll: -2 } }, HOP, bend(6, 2, 0, 0, 0, 2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(0.9, { root: { x: 0.15, roll: -3 } }, SQUASH, level(4), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(1.04, { root: { x: 0.0, y: 0.045, roll: 2 } }, HOP, bend(6, 2, 0, 0, 0, -2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(1.16, { root: { x: -0.1, roll: 2 } }, SQUASH, level(-6), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    key(1.3, { root: { x: -0.05, y: 0.035, roll: -2 } }, HOP, bend(6, 2, 0, 0, 0, 2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
-    // Lands home, the guard already lowering.
-    key(1.42, { root: { x: 0 } }, SQUASH, pelvis(0, -0.01), GUARD_LOWERING, MOUTH_SHUT, ANGRY),
-    key(1.66, pelvis(0, -0.04), bend(6, 2, 0, 0), ANGRY),
-    key(2.1, OPEN_EYES),
+    key(0, PLANTED),
+    // Sways out over its left leg...
+    key(0.2, shift(0.04, -0.06, 0), { bones: { spine: { y: 8, z: -12 } } }, level(8), SUMO_GUARD, MOUTH_SHUT, ANGRY),
+    // ...dips through the middle...
+    key(0.36, shift(0, -0.075, 0.004), bend(12, 3, 0, 2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
+    // ...and out over its right; and back, and again.
+    key(0.52, shift(-0.03, -0.06, 0), { bones: { spine: { y: -6, z: 9 } } }, level(-6), SUMO_GUARD, MOUTH_SHUT, ANGRY),
+    key(0.68, shift(0, -0.075, 0.004), bend(12, 3, 0, 2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
+    key(0.84, shift(0.04, -0.06, 0), { bones: { spine: { y: 8, z: -12 } } }, level(8), SUMO_GUARD, MOUTH_SHUT, ANGRY),
+    key(1.0, shift(0, -0.075, 0.004), bend(12, 3, 0, 2), SUMO_GUARD, MOUTH_SHUT, ANGRY),
+    key(1.16, shift(-0.026, -0.06, 0), { bones: { spine: { y: -5, z: 8 } } }, level(-5), SUMO_GUARD, MOUTH_SHUT, ANGRY),
+    // Settles centred, the guard lowering.
+    key(1.34, shift(0, -0.05, 0), bend(6, 2, 0, 0), GUARD_LOWERING, MOUTH_SHUT, ANGRY),
+    key(1.52, shift(0, -0.04, 0), bend(6, 2, 0, 0), ARMS_SET, ANGRY),
+    key(1.9, PLANTED, OPEN_EYES),
   ],
   events: [{ t: 0.2, name: 'aura' }],
 };
