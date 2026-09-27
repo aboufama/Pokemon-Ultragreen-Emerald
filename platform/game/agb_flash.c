@@ -4,9 +4,11 @@
 // from RAM; here the chip is the platform's 128 KB (PlatformFlash, kept by
 // the browser), with the chip's behavior: erasing sets a 4 KB sector to 0xFF,
 // programming can only clear bits. Identifying the chip takes as long as the
-// GBA driver's two delay loops (measured with platform/tools/timing.py).
+// GBA driver's two delay loops: 930295 cycles on the ROM, less what the
+// platform runs as it comes: the interrupts taken meanwhile (8820) and the
+// sound DMA's 92 transfers to the FIFOs (10 cycles each).
 
-#define CYCLES_IDENTIFY 930293
+#define CYCLES_IDENTIFY 920555
 // Reading: the GBA driver's loop from RAM, about 22 cycles a byte (a 4 KB
 // sector in 90821).
 #define CYCLES_READ_BASE 709

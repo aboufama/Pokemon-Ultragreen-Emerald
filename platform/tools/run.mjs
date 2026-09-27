@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// Run the compiled game headlessly: an input script, frames saved as PNG.
+// Run the compiled game headlessly: an input script, frames saved as PNG,
+// and its sound as a WAV file if asked.
 //
 //   node platform/tools/run.mjs --script platform/tests/boot.json --out build/run/boot
+//   node platform/tools/run.mjs --script platform/tests/title.json --wav build/run/title.wav
 //
 // The script (JSON): { "frames": N, "inputs": [[frame, "A+START"], ...],
 // "shots": [frame, ...], "every": K, "time": [2026, 1, 1, 4, 10, 0, 0],
@@ -17,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { loadGame, keysFrom, GameHalt, WIDTH, HEIGHT } from '../host/game.mjs';
 import { startTestBattle, testBattleArgs } from '../host/test_battle.mjs';
 import { encodePng } from './png.mjs';
+import { encodeWav, AudioRecorder } from './wav.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -26,6 +29,7 @@ const opt = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
 const script = JSON.parse(fs.readFileSync(opt('--script'), 'utf8'));
 const out = opt('--out', path.join(ROOT, 'build/run', path.basename(opt('--script'), '.json')));
 const wasm = opt('--wasm', path.join(ROOT, 'build/wasm/pokeemerald.wasm'));
+const wav = opt('--wav');
 fs.mkdirSync(out, { recursive: true });
 
 const inputs = new Map((script.inputs ?? []).map(([f, k]) => [f, keysFrom(k)]));
@@ -35,6 +39,7 @@ let battle = script.battle
   : null;
 const shots = new Set(script.shots ?? []);
 const logs = [];
+const audio = wav ? new AudioRecorder() : null;
 let keys = inputs.get(1) ?? 0;
 let game;
 const game_ = await loadGame(fs.readFileSync(wasm), {
@@ -46,6 +51,7 @@ const game_ = await loadGame(fs.readFileSync(wasm), {
     }
     if (inputs.has(n + 1)) keys = inputs.get(n + 1);
     game.setKeys(keys);
+    audio?.add(game.readAudio());
   },
 });
 game = game_;
@@ -67,6 +73,10 @@ try {
 }
 const ms = performance.now() - t0;
 fs.writeFileSync(path.join(out, 'log.txt'), logs.join('\n') + '\n');
+if (audio) {
+  fs.mkdirSync(path.dirname(path.resolve(wav)), { recursive: true });
+  fs.writeFileSync(wav, encodeWav(audio.samples(), game.audioRate()));
+}
 const frames = game.vblanks();
 console.log(`${halted ?? `${frames} frames`} in ${(ms / 1000).toFixed(2)} s (${(ms / Math.max(1, frames)).toFixed(2)} ms/frame); ${logs.length} log lines; ${out}`);
 if (halted) process.exit(1);
