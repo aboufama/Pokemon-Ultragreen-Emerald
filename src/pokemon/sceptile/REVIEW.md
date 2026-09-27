@@ -20,34 +20,29 @@ and ends on the stance. GIFs are exported by the orchestrator.
 
 ## Attack categories
 
-- [x] `physical_weak`: Leaf Blade (also Pound, Fury Cutter, False Swipe, Aerial Ace, Cut, Rock Smash) — from where it stands: the weight sinks back with the right blade cocked high behind the head like a sword, then the hips drive at the foe and the torso unwinds into a cut down and across led by the forearm (impact at full reach: the Cut effect on the foe), the blade carries through past the left hip and hangs, and it is back in guard
+- [x] `physical_weak`: Leaf Blade (also Pound, Fury Cutter, False Swipe, Aerial Ace, Cut, Rock Smash) — crouch with the right blade raised high behind the head like a sword, leap in along an arc, land, the torso unwinds and the forearm cuts down and across (the Cut effect on the foe), the blade carries through past the left hip and hangs, guard, hop home
   - after review: pushed the wind-up higher and the sweep wider (it read as a small chop from the opponent's side)
-  - in place: the leap in and the hop home are gone (the game lunges the sprite)
-- [x] `physical_strong`: Slam (also Body Slam, Iron Tail; Mega Kick by fallback) — from where it stands: a crouch wound the other way, guard up, the tail lifting, then the hips turn to its right over the planted feet and the heavy tail rears up high round its left side; the body bows at the foe and the tail comes down in an arc across in front of it, stopping hip high (impact); the hips turn back and the tail swings round behind
+- [x] `physical_strong`: Slam (also Body Slam, Iron Tail; Mega Kick by fallback) — coils with the tail lifting, springs in and turns its back to the foe, hangs at the top of the arc with the tail reared up, whips it down onto the foe, lands deep, spins back round on the hop home
   - after review: the first version turned so fast that the springs dragged the tail and it only pointed at the foe; the turn now finishes before the tail rears up and slams, and the tail spring is a little stiffer
-  - in place: no spring in, no turn in the air, no hop home. The turn is the hips' (turned by the leg solve: Sceptile's origin is behind its feet, so a `root.yaw` turn swung the body round the spot), and the tail lashes round its left side at shoulder height (round its right side, or down to the ground, it went under our healthbox from one side or the other); the coil keeps its guard up (claws braced low in front, a wild Sceptile's went under our healthbox)
 - [x] `special_weak`: Bullet Seed (Snore by fallback) — a quick breath with the head back, three pecks of the head with the jaw wide, a seed leaving the mouth on each, arms braced at the sides
   - after review: the pecks and the recoil between them are bigger (they were lost at game size)
   - healthbox pass: the pecks lean in with the spine instead of shifting the hips forward (the foot IK keeps the posed feet's x/z, so the hips carried the planted feet toward our healthbox, 8 px under it from the foe's side)
 - [x] `special_strong`: Solar Beam (also Hyper Beam; Hidden Power by fallback) — turns its face up to the sun with the arms spread and eyes shut while the sunlight gathers at the mouth, then braces low and drives the head at the foe; the beam leaves the mouth and follows the head through a trembling hold against the recoil; jaw shuts, head comes up
   - healthbox pass: the blast leans in with the spine, not the hips (the feet slid toward our healthbox, 7 px under it from the foe's side), so the beam's recoil now pushes the whole body back a little
-- [x] `status_self`: Swords Dance (also Sleep Talk; Agility and Double Team moved to `afterimage`) — a quick flourish where it stands: the torso turns one way with the blades crossed before the face and the other way as they are flung out, the tail swinging round as a counterweight; it gathers low and snaps its blades up with the aura, a moving hold with a tremor, and relaxes (the game sweeps the sprite round in a small ellipse)
-  - in place: the three hops side to side are gone (the game moves the sprite); the flourish is the torso's and the blades'
+- [x] `status_self`: Swords Dance (also Sleep Talk; Agility and Double Team moved to `afterimage`) — three quick hops side to side, leaning into each (airborne between landings), lands centred and snaps its arms up with the aura, relaxes
+  - after review: wider hops with more lean
+  - healthbox pass: lower, narrower hops (0.14 to 0.15 heights across, 0.06 up) that zig-zag back a little, the feet drawn up level by the foot IK (`DART`) instead of freed legs. From our side the hop took the crest under the foe's healthbox (11 px); from the foe's side the freed feet swung forward and down onto ours (57 px)
 - [x] `status_target`: Screech (also Roar; Toxic by fallback, spat from the mouth) — rears up with the claws raised by its head, lunges the head forward, jaw wide and claws out, the head shaking while the sound waves leave the mouth
   - after review: added the raised claws (nails-on-slate) and pushed the rear and lunge
   - healthbox pass: the lunge leans in with the spine instead of the hips (8 px under our healthbox from the foe's side)
 
 ## Motif clips
 
-- [x] `physical_weak_tackle` (tackle): Quick Attack, Pursuit, Facade, Secret Power, Double-Edge, Return, Frustration, Strength — a quick crouch, then the hips and the right shoulder drive at the foe, low and fast, the tail streaming out (impact), and it bounces back off the hit into its guard
-  - in place: the dash, the tucked legs and the hop home are gone (the game makes the dash)
-- [x] `physical_strong_punch` (punch): Focus Punch, Mega Punch, DynamicPunch, ThunderPunch, Counter — the weight sinks back with the right fist chambered at the hip and the left forearm guarding, then the hips drive at the foe and the hips and shoulders turn into a straight punch (impact at full reach: the punch effect on the foe), the arm stays out a moment, and back to the guard
-  - in place: no leap in, no hop home
-- [x] `physical_strong_strike` (strike_strong): Dragon Claw, Brick Break — both blades raised high behind the head as it sinks, a breath held with them cocked, then it drops its weight forward into a deep crouch as both forearms cut down across each other (impact), hangs low a moment and rises into its guard
-  - in place: the big leap and the hop home are gone; the drop forward into the crouch carries the cut
-- [x] `physical_strong_quake` (quake): Earthquake — a sumo's stomp where it stands: it settles its weight over the left foot and rears up on it, the right foot coming up off its spot and the knee going high and out to its side with the arms flung out wide and the tail up, then stamps the foot down into a deep squat, knees pushed out, the arms swung down and out low and the tail flicking up (impact: the ground shakes and dirt bursts at the foe), and rises with the arms flowing back to its guard
+- [x] `physical_weak_tackle` (tackle): Quick Attack, Pursuit, Facade, Secret Power, Double-Edge, Return, Frustration, Strength — a blur-fast low dash with the shoulder leading (legs tucked, body pitched in), impact, bounce off the foe, land, hop home
+- [x] `physical_strong_punch` (punch): Focus Punch, Mega Punch, DynamicPunch, ThunderPunch, Counter — right fist chambered at the hip with the left forearm guarding, leap in, hips and shoulders turn into a straight punch (the punch effect on the foe), holds, hop home
+- [x] `physical_strong_strike` (strike_strong): Dragon Claw, Brick Break — both blades raised high, a big leap, both forearms cut down across each other on the way down, lands deep and hangs, hop home
+- [x] `physical_strong_quake` (quake): Earthquake — crouches, springs into a tucked hop with the arms flung out wide (the feet drawn up high under a low body), then stomps down into a deep sumo squat, knees pushed out, the arms swung out low and the tail flicking up, then rises with the arms flowing back to its guard; the ground shakes and dirt bursts at the foe; it stays home
   - healthbox pass: the leap straight up took our Sceptile's head and claws under the foe's healthbox (897 px, the worst of the set). From the foe's side the stomp sank the root, and so the feet, into the ground, and in the deep crouch the braced claws and the folded left knee reached under ours (28 px): the knees now fold out to the sides (`SQUAT`, the feet kept where they stand), the arms swing out low and the tail lifts
-  - in place: the tucked hop is now a stomp (the game shakes the screen); the knee goes out to the side, not forward (a wild Sceptile's foot would come down on our healthbox)
 - [x] `special_weak_throw` (throw): Swift, Rock Tomb — forearms crossed low, then whipped out and forward; the volley flies off both forearm blades (the `blades` emitter)
 - [x] `special_weak_drain` (drain): Absorb, Giga Drain — reaches both claws wide at the foe, closes them, then draws them to its chest with the head back and the eyes shut as the energy flows in to its body
   - after review: the reach opens sideways (straight at the foe it was foreshortened from both views)
@@ -56,14 +51,14 @@ and ends on the stance. GIFs are exported by the orchestrator.
 - [x] `status_self_heal` (heal, weather): Sunny Day, Rest — basks: turns its face up to the light, arms open, eyes shut, swaying calmly (sunlight rises for Sunny Day, sparkles for Rest), happy eyes as it comes down
 - [x] `status_target_glare` (glare, charm): Leer, Mimic, Swagger, Attract — leans in with the head low and forward and stares the foe down with narrowed eyes (the glint at its eyes; hearts for Attract), a cocky head tilt, eases back
   - healthbox pass: the lean-in comes from the spine instead of the hips (13 px under our healthbox from the foe's side)
-- [x] `toss` (toss): Seismic Toss — an in-place heave: the hips drive at the foe with the claws flung open, the forearms clamp on it (grab: the foe rides in the grip) and it sinks with the load, the tail pressed down; the legs drive it up to the chest, the head thrown back and the tail streaming up, and from the top the whole body whips forward and down to hurl it into the ground at its place (throw); the foe crashes there on its side (impact: rocks and dust) while Sceptile watches from the crouch, the tail swishing, and straightens into its guard
-  - in place: no dash in, no leap and no spin. The chest keeps its tilt from the clamp to the throw (in the playtest the foe rides in the grip turned with the chest: from where it stands a tilt swung the foe round it) and the throw comes at the start of the whip; the foe is held at the chest, never overhead, so it stays on screen from both sides
-- [x] `burrow` (burrow): Dig — a crouch-and-dig where it stands: it crouches with its eyes on the ground and drives its claws in beside its feet (dig: the dirt bursts up), rakes the ground claw over claw with the tail swishing, gathers low with the right blade cocked and bursts up out of the crouch with a rising cut of the right blade, knee up and the tail trailing (impact), and comes down into a crouch; the game sinks the sprite into the ground and raises it under the foe
-  - in place: it no longer dives or travels to the foe; the claws dig beside its feet, level with them (a wild Sceptile's toes rest on the top edge of our healthbox, and further forward is under it)
+- [x] `toss` (toss): Seismic Toss — a springy dash in with the claws flung open, lands at the foe and clamps on low (grab), presses its tail down and springs up and back toward mid-field with the foe hugged low in front (never overhead), spinning round with it while the tail streams out, then whips its whole body forward and down to hurl it back into its own place (throw); the foe crashes there on its side (impact: rocks and dust) while Sceptile lands at advance 0.4 and watches from the crouch, the tail swishing, then hops home. Both views see the crash. At the height of the spin the top edge cuts off much of the foe (most in the opponent's view, around 0.8 s) but it never leaves the screen, where the reference loses it for 0.25 s
+  - after review: the foe is carried low (it was held up in front and went off the top) and Sceptile lands straight down where it throws
+- [x] `burrow` (burrow): Dig — crouches, springs and dives head first into the ground with the arms overhead and the blades together (dig: dirt bursts, the tail goes in last), a trail of heaving dirt runs to the foe, it bursts up in front of it with a rising cut of the right blade, knee up and the tail trailing out of the ground (impact as it breaks the surface), drops straight down, holds the crouch and hops home
+  - after review: the burst was lowered (it left the top of the screen), the tail hangs down as it comes out of the ground (it fanned across the body from our side) and the blade angles out so it clears the head in both views
 - [x] `fling` (fling): Mud-Slap — stoops and rakes the ground beside its right foot with the right claws, drags a handful of mud back past the hip, swings it through low and slings it underhand; the clods leave the right hand (the `hands` emitter) and the claws open high and out to the side in the follow-through while the left forearm keeps its guard
   - healthbox pass: the rake reached the ground out in front of the feet, under our healthbox from the foe's side (32 px), and the sling slid the feet forward: it now rakes beside the right foot from a shallower stoop and leans into the sling with the spine
-- [x] `afterimage` (afterimage): Double Team, Agility — feints from the waist with the feet planted: the upper body slips to one side, dips under and slips out to the other (a boxer's bob and weave), again and again, the head held level and the tail swinging out as a counterweight, in its fighting stance (right claw raised, left forearm guarding); the game moves the sprite, Double Team's two darkened copies swing out from the aura and Agility's trail follows the sprite
-  - in place: the darts are gone (the game makes them); the feint is the upper body's
+- [x] `afterimage` (afterimage): Double Team, Agility — five low, springy darts side to side in its fighting stance (right claw raised, left forearm guarding), leaning into each with the tail swinging out as a counterweight, and back to the centre; Double Team's two darkened copies swing out from the aura, Agility's trail follows the darts
+  - healthbox pass: from our side a 0.3-height dart to its right took the raised claw under our healthbox (194 px); from the foe's side the freed hop legs swung its feet forward onto ours (65 px). The darts are now 0.15 to 0.17 heights (Blaziken's are 0.18) and zig-zag back a little (the slot's side axis tilts toward the camera: a dart to a wild Sceptile's left drops its feet a pixel), and the feet are drawn up level by the foot IK (`DART`)
 - [x] `flash` (flash): Flash — curls in over its crossed forearms with the eyes shut, gathering the light, then flares up tall with the chest open and the arms and blades flung wide at the foe, the tail fanned high (emit: the screen turns white and both Pokémon black, so the flare reads as a silhouette: a wide V from the front, both claws clear of the head from behind), holds and relaxes
   - after review: the flare opened wider (from our side the left arm hid behind the head)
 - Also mapped: strike → `physical_weak`, slam and tail → `physical_strong`, spit → `special_weak`, beam → `special_strong`, buff → `status_self`, roar → `status_target`. Kick, orb, sound and powder (one TM/tutor move each) play their category clips.
@@ -128,58 +123,6 @@ before → after; Blaziken in brackets): `physical_strong_quake` 2 / 0 → 0 / 0
 [0 / 1]; `faint` 14 / 0 → 13 / 0 [15 / 0]; `afterimage`, `hit`, `fling`, `special_strong`,
 `special_weak_drain`, `status_target` and `status_target_glare` 0 / 0 before and after.
 No dead holds and no turn in the first 0.3 s anywhere.
-
-## In place (the game moves the sprite)
-
-The battles are the compiled game's (docs/ARCHITECTURE.md, "Remake layer"):
-its move animations move the sprite (a lunge toward the foe, a hop, a
-slide) and the 3D body follows it, so the clips act on top of that, in
-place. Ten clips travelled or leapt (`cliplint` `travel`: `physical_weak`,
-`physical_strong`, `status_self`, `physical_weak_tackle`,
-`physical_strong_punch`, `physical_strong_strike`, `physical_strong_quake`,
-`toss`, `burrow`, `afterimage`) and were reworked from home, each keeping
-its move, character and weight (the notes above say what each became); the
-earlier passes' notes on hops and darts describe the versions they replace.
-
-- `advance` 0 and the root on its spot: no dashes, hops, leaps or spins in
-  the air.
-- A strike reaches from home: a coil (the weight back, the blade, fist or
-  tail cocked), then the hips and spine drive at the foe with the weight
-  onto the front foot, the blade, fist, shoulder or tail at full reach on
-  the `impact` key, follow-through, recovery. Light and quick: the snaps
-  are 5-6 frames from a turnaround, the tail swinging out as a
-  counterweight.
-- The feet stay planted. The foot IK pins a planted foot's height but keeps
-  its posed x/z, so a pelvis shift slid both feet with it: `shift()` moves
-  the pelvis (and turns the hips) and re-aims both legs (a two-bone solve,
-  the knee bending in the stance's plane) so each foot stays where the
-  stance puts it; the quake's stomping foot comes up straight off its spot
-  (`footUp()`) and goes out to the side. Sceptile's origin sits behind its
-  feet, so a `root.yaw` turn swung the whole body round that point: Slam's
-  turn is the hips'.
-- Seismic Toss clamps on and keeps the chest's tilt from the clamp to the
-  throw: in the playtest the foe rides in the grip turned with the chest
-  (src/battle3d/director.ts), and from where it stands a tilt swung the foe
-  round it.
-
-Checked: `cliplint` clean (no `travel`); every reworked clip that stays at
-home played from both sides at eight phases of the life layer (the result
-moves by a few pixels with the breathing), at most 2 px past a healthbox's
-edge (3 px in the render gate's run: the X-slash's deep crouch as the
-foe). Slam's coil turned the hips so far that a wild Sceptile's left toe
-claws went 3 px under our box: the turn is smaller and a breakdown key
-holds the feet on their spots through it. Watched on contact sheets from
-both sides and in the compiled game's test battle (Slam as ours against a
-wild Blaziken, and as the wild one against our Swampert). Fluidity
-(`tools/gauntlet/motion.mjs`, stop-starts / pops, before → after):
-`physical_weak` 3 / 2 → 0 / 0, `physical_strong` 4 / 1 (and a 17° turn in
-its first 0.3 s) → 2 / 1, `physical_weak_tackle` 1 / 0 → 0 / 0,
-`physical_strong_punch` 0 / 1 → 0 / 0; `status_self`,
-`physical_strong_strike`, `physical_strong_quake`, `toss`, `burrow` and
-`afterimage` 0 / 0 before and after; the whole set 9 stop-starts, 13 pops
-and a clip turning in its first 0.3 s before, 3, 10 and none after, no
-dead holds (the other pops are the faint's shrink and Bullet Seed's first
-peck, clips this pass left alone).
 
 ## Showcase moves in battle
 

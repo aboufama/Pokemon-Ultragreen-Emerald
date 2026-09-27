@@ -57,12 +57,6 @@ export class Battler3D {
   appearPivot = new THREE.Vector3(0, 0.5, 0);
   /** A scale the sprite it stands for is drawn at (the compiled game's affine sprites, src/remake), on top of `appear`, about the same pivot. */
   spriteScale = 1;
-  /**
-   * Act in place: the clips' travel (advance, the root's moves along the
-   * ground) and leaps (the root above the ground) are left out, because
-   * something else moves the body (the compiled game's sprite, src/remake).
-   */
-  inPlace = false;
   visible = true;
   /**
    * Sprite-style offset in GBA pixels (x right, y down), like OAM x2/y2:
@@ -523,10 +517,6 @@ export class Battler3D {
   update(dt: number): void {
     this.time += dt;
     const pose = this.animator.update(dt);
-    if (this.inPlace) {
-      pose.advance = 0;
-      if (pose.root) pose.root = { ...pose.root, x: 0, z: 0, y: Math.min(0, pose.root.y ?? 0) };
-    }
     this.pose = pose;
     // Fainting, as the 3D games show it: from the faint clip's 'shrink' the
     // body shrinks away into its middle (as the GBA shrinks a Pokémon into

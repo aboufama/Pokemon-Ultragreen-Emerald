@@ -17,9 +17,10 @@
 //     is scaled, turned and stretched as the sprite's affine transform draws
 //     it, shows when the sprite shows, and its pixels are the sprite's
 //     palette indices, so the game's own fades, tints and flashes color it.
-//     It acts in place on the game's events (acting.ts). A fainting body is
-//     drawn where it is, free of its sprite, which slides away and is freed
-//     while the body curls over and shrinks away;
+//     It acts on the game's events (acting.ts): a move's clip carries the
+//     body to the foe and back, drawn where the clip puts it, free of its
+//     sprite, as is a fainting body, which curls over and shrinks away where
+//     it is while its sprite slides away and is freed;
 //   - a battler a move animation copies into BG1 or BG2 (the game draws its
 //     sprite there and scrolls the background with it: Tackle's target) in
 //     place of the copy, so no 2D Pokémon shows around the body.
@@ -195,8 +196,12 @@ interface BodyPicture {
    * faint: the sprite slides away and is freed, `tileNum` REMAKE_NO_TILE).
    */
   sprite: { tileNum: number; free: { priority: number; palette: number } | null } | null;
-  /** Its copy in BG1 or BG2: the picture shows there, in the copy's palette, moved to the copy (`pan`). */
-  copy: { bg: number; palette: number; pan: [number, number] } | null;
+  /**
+   * Its copy in BG1 or BG2: the picture shows there, in the copy's palette,
+   * moved to the copy (`pan`); `hide`: nothing shows there (the body is a
+   * move's, drawn where it is).
+   */
+  copy: { bg: number; palette: number; pan: [number, number]; hide?: boolean } | null;
 }
 
 function pageMode(): 'off' | 'on' {
@@ -304,7 +309,7 @@ export class RemakeLayer {
     const scroll = this.backgroundScroll(this.view());
     const pictures = this.placeBodies(state, scroll);
     const showing = new Set(pictures.map((p) => p.body.battlerId));
-    this.acting.update(state, (i) => this.bodies.get(i)?.battler ?? null, (i) => showing.has(i));
+    this.acting.update(state, (i) => this.bodies.get(i)?.battler ?? null, (i) => showing.has(i), () => (this.game.exports().RemakeReleaseAnimation as () => void)());
     if (!this.ready()) {
       // The page holds the game on this frame until everything is loaded:
       // meanwhile the sprites of the bodies still loading are hidden.
@@ -416,6 +421,27 @@ export class RemakeLayer {
         }
         return;
       }
+      // A move's clip moves the body (it leaps to the foe and back, carries
+      // it...): drawn where it is, free of its sprite, and not the sprite's
+      // own lunges, turns and blinks meanwhile. Its sprite's entries, and a
+      // copy the move's animation makes of it in a background, show nothing.
+      if (this.acting.drives(i)) {
+        const row = Math.max(0, Math.min(HEIGHT - 1, Math.round(b.homeY)));
+        body.battler.visible = true;
+        body.battler.screenOffset = [scroll.x[row] - scroll.pan[0], scroll.y[row] - scroll.pan[1]];
+        body.battler.spriteScale = 1;
+        body.sprite.userData.map = [1, 0, 0, 1];
+        body.center = [b.homeX, b.homeY];
+        const copy = this.copyOf(i, state);
+        if (body.seen) {
+          pictures.push({
+            body,
+            sprite: { tileNum: b.showsPokemon ? b.tileNum : this.NO_TILE, free: body.seen },
+            copy: copy ? { bg: copy.bg, palette: copy.palette, pan: [0, 0], hide: true } : null,
+          });
+        }
+        return;
+      }
       // A trainer's picture (the intro) keeps the game's sprite.
       if (!b.showsPokemon) return;
       // The body shows where the sprite does, or where a move animation's
@@ -479,9 +505,8 @@ export class RemakeLayer {
           b3d.dispose();
           return;
         }
-        // The body goes under the sprite's transform, in its slot, and acts in place.
+        // The body goes under the sprite's transform, in its slot.
         sprite.add(b3d.inst.root);
-        b3d.inPlace = true;
         body.battler = b3d;
       },
       (e) => {
@@ -655,7 +680,7 @@ export class RemakeLayer {
         const pic = layers.struct('backgrounds', 'RemakeBackground', copy.bg);
         const out = new Uint16Array(view.buffer, pic.address + this.field('RemakeBackground', 'pixels'), this.BG_WIDTH * this.BG_HEIGHT);
         out.fill(0);
-        for (let y = 0; y < HEIGHT; y++) {
+        for (let y = 0; y < HEIGHT && !copy.hide; y++) {
           const src = (HEIGHT - 1 - y) * WIDTH * 4;
           for (let x = 0; x < WIDTH; x++) {
             const i = src + x * 4;

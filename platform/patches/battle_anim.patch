@@ -5,6 +5,10 @@ background.
 LaunchBattleAnimation starts every battle animation (a move's, a status
 condition's, the general and special ones); the remake layer's hook records
 the table and the index (the game keeps them in a static it never reads).
+Once the script is set to run, a move's animation may wait at its start
+(RemakeHoldAnimation): while the page's remake draws the battle in 3D, the
+game's effects begin when its 3D attacker gets there (its strike landing on
+the foe, its breath leaving its mouth), not before.
 LoadMoveBg puts a move's background in the battle background's place (BG3's
 map and tiles); the hook records which one, so the remake shows its arena
 only while the main background is up. MoveBattlerSpriteToBG draws a
@@ -34,7 +38,18 @@ battler and palette, so the remake draws the battler there too.
      if (!IsContest())
      {
          InitPrioritiesForVisibleBattlers();
-@@ -718,6 +726,10 @@
+@@ -241,6 +249,10 @@
+     gAnimScriptActive = TRUE;
+     sAnimFramesToWait = 0;
+     gAnimScriptCallback = RunAnimScriptCommand;
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: a move's animation may wait at its start for the remake's 3D attacker.
++    RemakeHoldAnimation(isMoveAnim);
++#endif
+ 
+     for (i = 0; i < ANIM_SPRITE_INDEX_COUNT; i++)
+         sAnimSpriteIndexArray[i] = 0xFFFF;
+@@ -718,6 +730,10 @@
  
          if (IsContest())
              FlipBattlerBgTiles();
@@ -45,7 +60,7 @@ battler and palette, so the remake draws the battler there too.
      }
      else
      {
-@@ -745,6 +757,10 @@
+@@ -745,6 +761,10 @@
          CpuCopy32(&gPlttBufferUnfaded[OBJ_PLTT_ID(battler)], (void *)(BG_PLTT + PLTT_OFFSET_4BPP(9)), PLTT_SIZE_4BPP);
  
          DrawBattlerOnBg(2, 0, 0, GetBattlerPosition(battler), animBg.paletteId, animBg.bgTiles + 0x1000, animBg.bgTilemap + 0x400, animBg.tilesOffset);
@@ -56,7 +71,7 @@ battler and palette, so the remake draws the battler there too.
      }
  }
  
-@@ -1200,6 +1216,10 @@
+@@ -1200,6 +1220,10 @@
      }
      else
      {

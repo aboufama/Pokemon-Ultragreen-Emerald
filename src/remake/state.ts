@@ -101,6 +101,23 @@ export interface BattleState {
   animId: number;
   animAttacker: number;
   animTarget: number;
+  /** The hits left as it launched, this one included (0: a single hit). */
+  animHits: number;
+  /** A two-turn move's charging turn is 0, its strike 1. */
+  animTurn: number;
+  /** The game holds the move's animation at its start until the remake lets it go. */
+  animHeld: boolean;
+  /** A stat change's STAT_ANIM_* kind (rises and falls). */
+  animStatArg: number;
+  /** gMoveResultFlags (MOVE_RESULT_*) and whether the hit is critical: how the foe takes it. */
+  moveResult: number;
+  critical: boolean;
+  /** Counts the moves that failed at their foe (missed, protected against, no effect); the last one's. */
+  failSerial: number;
+  failAttacker: number;
+  failTarget: number;
+  failMove: number;
+  failResult: number;
   /** REMAKE_BG_MAIN (the place's), or the move background (BG_*) BG3 shows. */
   background: number;
   /**
@@ -163,6 +180,17 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
     animId: s.get('animId'),
     animAttacker: s.get('animAttacker'),
     animTarget: s.get('animTarget'),
+    animHits: s.get('animHits'),
+    animTurn: s.get('animTurn'),
+    animHeld: !!s.get('animHeld'),
+    animStatArg: s.get('animStatArg'),
+    moveResult: s.get('moveResult'),
+    critical: !!s.get('critical'),
+    failSerial: s.get('failSerial'),
+    failAttacker: s.get('failAttacker'),
+    failTarget: s.get('failTarget'),
+    failMove: s.get('failMove'),
+    failResult: s.get('failResult'),
     copies: [0, 1].map((i) => ({ battler: s.get('copyBattler', i) === noBattler ? null : s.get('copyBattler', i), palette: s.get('copyPalette', i) })),
     background: s.get('background'),
     plttUnfaded: s.get('plttUnfaded'),

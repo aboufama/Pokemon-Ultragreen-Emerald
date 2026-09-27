@@ -14,6 +14,11 @@
 #include "remake_state.h"
 
 static struct RemakeState sState = { .background = REMAKE_BG_MAIN };
+static bool8 sHoldAnimations;
+static void (*sHeldCallback)(void);
+static u16 sHeldFrames;
+// A held animation lets itself go after this long, whatever the page does.
+#define HOLD_FRAMES_MAX 240
 static u8 sCommand[REMAKE_BATTLERS];
 static u16 sCommandSerial[REMAKE_BATTLERS];
 static u8 sCopyBattler[2] = { REMAKE_NO_BATTLER, REMAKE_NO_BATTLER };
@@ -39,6 +44,53 @@ void RemakeBattleAnimation(const u8 *const animsTable[], u16 tableId, u8 isMoveA
     sState.animSerial++;
     sState.animTable = table;
     sState.animId = tableId;
+    sState.animHits = gMultiHitCounter;
+    sState.animTurn = gAnimMoveTurn;
+    sState.animStatArg = gBattleSpritesDataPtr != NULL && gBattleSpritesDataPtr->animationData != NULL
+        ? gBattleSpritesDataPtr->animationData->animArg : 0;
+}
+
+// The held script's callback: nothing runs until the remake lets it go.
+static void HeldAnimation(void)
+{
+    if (sState.animHeld && ++sHeldFrames <= HOLD_FRAMES_MAX)
+        return;
+    sState.animHeld = FALSE;
+    gAnimScriptCallback = sHeldCallback;
+    gAnimScriptCallback();
+}
+
+void RemakeHoldAnimation(u8 isMoveAnim)
+{
+    if (!sHoldAnimations || !isMoveAnim || !gMain.inBattle)
+        return;
+    sState.animHeld = TRUE;
+    sHeldFrames = 0;
+    sHeldCallback = gAnimScriptCallback;
+    gAnimScriptCallback = HeldAnimation;
+}
+
+// The page's remake draws the battles in 3D: moves' animations wait for its
+// attackers (off for the tools, which play the game as the ROM does).
+__attribute__((export_name("RemakeHoldAnimations"))) void RemakeHoldAnimations(u8 enabled)
+{
+    sHoldAnimations = enabled;
+    if (!enabled)
+        sState.animHeld = FALSE;
+}
+
+__attribute__((export_name("RemakeReleaseAnimation"))) void RemakeReleaseAnimation(void)
+{
+    sState.animHeld = FALSE;
+}
+
+void RemakeMoveFailed(u8 attacker, u8 target, u16 move, u8 result)
+{
+    sState.failSerial++;
+    sState.failAttacker = attacker;
+    sState.failTarget = target;
+    sState.failMove = move;
+    sState.failResult = result;
 }
 
 void RemakeBattleBackground(u16 background)
@@ -74,6 +126,8 @@ __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void
     sState.animActive = gAnimScriptActive;
     sState.animAttacker = gBattleAnimAttacker;
     sState.animTarget = gBattleAnimTarget;
+    sState.moveResult = gMoveResultFlags;
+    sState.critical = gCritMultiplier > 1;
     sState.plttUnfaded = (u32)gPlttBufferUnfaded;
     sState.plttFaded = (u32)gPlttBufferFaded;
     // A battle's copies end with it.

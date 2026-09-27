@@ -63,6 +63,17 @@ struct RemakeState {
     uint16_t animTable;     // REMAKE_ANIM_* of the last one launched
     uint16_t animId;        // its index in that table
     uint8_t animAttacker, animTarget;
+    uint8_t animHits;       // gMultiHitCounter as it launched: the hits left, this one included (0: one hit)
+    uint8_t animTurn;       // gAnimMoveTurn: a two-turn move's charging turn is 0, its strike 1
+    uint8_t animHeld;       // the game holds the move's animation at its start until the remake lets it go
+    uint8_t animStatArg;    // a stat change's animation: gBattleSpritesDataPtr->animationData->animArg (its
+                            // STAT_ANIM_* kind: rises and falls, by how much)
+    uint8_t moveResult;     // gMoveResultFlags (MOVE_RESULT_*: super effective, missed...) and a critical hit
+    uint8_t critical;       // (gCritMultiplier over 1), for how the foe takes the hit
+    uint16_t failSerial;    // counts the moves that failed at the foe (missed, protected against, no effect: they
+                            // show no animation); the last one's attacker, foe, move and gMoveResultFlags
+    uint16_t failMove;
+    uint8_t failAttacker, failTarget, failResult, pad1;
     uint16_t background;    // REMAKE_BG_MAIN, or the move background shown
     uint8_t copyBattler[2]; // the battler whose sprite a move animation drew into BG1, BG2 (MoveBattlerSpriteToBG:
                             // the copy moves as the background scrolls), or REMAKE_NO_BATTLER
@@ -138,5 +149,14 @@ void RemakeBattlerCommand(uint8_t battler, uint8_t command);
 // (platform/patches/battle_anim.patch, battle_anim_mons.patch) a move animation draws a battler's
 // sprite into BG1 or BG2 in `palette`; the background is cleared or given other pictures (REMAKE_NO_BATTLER).
 void RemakeBattlerCopy(uint8_t bg, uint8_t battler, uint8_t palette);
+// LaunchBattleAnimation, once the script is set to run: a move's animation
+// waits at its start while the page holds animations (RemakeHoldAnimations)
+// until the remake's 3D attacker is where the game's own effects begin (its
+// strike landing, its breath leaving): RemakeReleaseAnimation.
+void RemakeHoldAnimation(uint8_t isMoveAnim);
+// JumpIfMoveFailed, when a move fails at its foe (it missed, the foe
+// protected itself, or it has no effect on it): no animation shows it, so the
+// remake acts it out (the attacker strikes, the foe dodges or shrugs it off).
+void RemakeMoveFailed(uint8_t attacker, uint8_t target, uint16_t move, uint8_t result);
 
 #endif // GUARD_REMAKE_STATE_H

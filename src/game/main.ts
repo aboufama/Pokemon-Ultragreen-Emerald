@@ -23,6 +23,8 @@
 // ?manual=1 is for tools (tools/remake/run.mjs): the game runs only when
 // told, frame by frame (window.__game), from a blank save, and with
 // ?time=2026,1,1,4,10,0,0 on a fixed clock, so a run is the same every time.
+// It plays the game as the ROM does unless ?hold=1: then moves' animations
+// wait for the 3D attackers, as on the page.
 // An input script's keys change at the VBlanks it names, as in the headless
 // runner (platform/tools/run.mjs), so a script plays the same in both.
 
@@ -241,8 +243,14 @@ async function loadTheGame(manual: boolean, clock: number[] | undefined, hacks: 
     // each frame it prepares the frame's pictures.
     onFrameStart: () => layer?.onFrameStart(),
     onVBlank: (count) => onVBlank?.(count),
-    // The hacks, at every power-on and soft reset.
-    onInstance: (exports) => hacks && applyHacks(exports, info.constants, hacks),
+    // At every power-on and soft reset: the hacks, and (the page's remake
+    // drawing the battles in 3D) moves' animations waiting for the 3D
+    // attackers to get to the foe. The tools play the game as the ROM does.
+    onInstance: (exports) => {
+      if (hacks) applyHacks(exports, info.constants, hacks);
+      const page = new URLSearchParams(location.search);
+      if ((!manual || page.get('hold') === '1') && page.get('remake') !== '0') (exports.RemakeHoldAnimations as (on: number) => void)(1);
+    },
   });
   await game.init();
   layer = new RemakeLayer(game, info);

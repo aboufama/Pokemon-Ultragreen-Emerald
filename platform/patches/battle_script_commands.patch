@@ -6,17 +6,33 @@ certain (Cmd_handleballthrow); a hit's damage becomes enough to knock the
 foe out (the adjust*damage commands, after Endure and the Focus Band, before
 the HP bar moves). With the hacks off each call gives back what it is given.
 
+And the remake layer learns when a move fails at its foe (JumpIfMoveFailed:
+it missed, the foe protected itself, or it has no effect), which no animation
+shows: it acts it out.
+
 --- a/src/battle_script_commands.c
 +++ b/src/battle_script_commands.c
-@@ -1,4 +1,7 @@
+@@ -1,4 +1,8 @@
  #include "global.h"
 +#ifdef PLATFORM_WASM
 +#include "hacks.h"
++#include "remake_state.h"
 +#endif
  #include "battle.h"
  #include "battle_message.h"
  #include "battle_anim.h"
-@@ -1694,6 +1697,10 @@
+@@ -1011,6 +1015,10 @@
+     const u8 *BS_ptr = gBattlescriptCurrInstr + adder;
+     if (gMoveResultFlags & MOVE_RESULT_NO_EFFECT)
+     {
++#ifdef PLATFORM_WASM
++        // PLATFORM_WASM: no animation shows the move; the remake acts it out.
++        RemakeMoveFailed(gBattlerAttacker, gBattlerTarget, move, gMoveResultFlags);
++#endif
+         gLastLandedMoves[gBattlerTarget] = 0;
+         gLastHitByType[gBattlerTarget] = 0;
+         BS_ptr = T1_READ_PTR(gBattlescriptCurrInstr + 1);
+@@ -1694,6 +1702,10 @@
              gLastUsedItem = gBattleMons[gBattlerTarget].item;
          }
      }
@@ -27,7 +43,7 @@ the HP bar moves). With the hacks off each call gives back what it is given.
      gBattlescriptCurrInstr++;
  }
  
-@@ -1737,6 +1744,10 @@
+@@ -1737,6 +1749,10 @@
              gLastUsedItem = gBattleMons[gBattlerTarget].item;
          }
      }
@@ -38,7 +54,7 @@ the HP bar moves). With the hacks off each call gives back what it is given.
      gBattlescriptCurrInstr++;
  }
  
-@@ -3395,6 +3406,10 @@
+@@ -3395,6 +3411,10 @@
                      {
                          i = STRINGID_EMPTYSTRING4;
                      }
@@ -49,7 +65,7 @@ the HP bar moves). With the hacks off each call gives back what it is given.
  
                      // get exp getter battler
                      if (gBattleTypeFlags & BATTLE_TYPE_DOUBLE)
-@@ -5895,6 +5910,10 @@
+@@ -5895,6 +5915,10 @@
              gLastUsedItem = gBattleMons[gBattlerTarget].item;
          }
      }
@@ -60,7 +76,7 @@ the HP bar moves). With the hacks off each call gives back what it is given.
      gBattlescriptCurrInstr++;
  }
  
-@@ -10006,6 +10025,10 @@
+@@ -10006,6 +10030,10 @@
              }
          }
  

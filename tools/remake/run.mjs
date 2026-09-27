@@ -9,7 +9,8 @@
 // The script is platform/tools/run.mjs's ({ "frames", "inputs": [[frame,
 // "A+START"], ...], "shots", "every", "time" }) with "battle": a test battle
 // to start as soon as the game can ("BLAZIKEN:50,SWAMPERT:50,GRASS", see
-// src/game/main.ts). Frames are the GBA's (the Nth ends at the Nth VBlank);
+// src/game/main.ts), and "hold": true (or --hold) to have moves' animations
+// wait for the 3D attackers as the page does. Frames are the GBA's (the Nth ends at the Nth VBlank);
 // keys named at a frame are held from that frame on, set at the VBlank before
 // it as the headless runner does, so a script plays the same in both. The run
 // starts from a blank save on the script's clock, so it is the same every
@@ -33,6 +34,8 @@ fs.mkdirSync(out, { recursive: true });
 const query = new URLSearchParams({ manual: '1' });
 if (script.time) query.set('time', script.time.join(','));
 if (script.battle) query.set('battle', script.battle);
+// "hold": moves' animations wait for the 3D attackers, as on the page (off: as the ROM plays).
+if (script.hold || args.includes('--hold')) query.set('hold', '1');
 
 // The page presses the keys at their VBlanks; the run stops at each shot.
 const inputs = (script.inputs ?? []).map(([f, k]) => [f, keysFrom(k)]);
