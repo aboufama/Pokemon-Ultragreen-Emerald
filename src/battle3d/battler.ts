@@ -32,6 +32,9 @@ import type { RGB } from '../gba/bitmap';
 import { SLOT_PIXEL_ID, instantiatePokemon, type PokemonInstance } from '../pokemon/instantiate';
 import { GroundShadow } from '../render3d/shadow';
 
+/** How far short of the foe a contact move's travel stops (the attacker's front from the foe's, in its heights): the blow closes it. */
+export const STRIKE_GAP = 0.15;
+
 const DEG = Math.PI / 180;
 /** Lying on its side (a thrown body lands so): rolled about its forward axis. */
 const ON_SIDE = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 80 * DEG);
@@ -454,11 +457,10 @@ export class Battler3D {
    * (each calibration places its model off the slot's centre, as its sprite
    * sits: from the slots' centres alone a model placed back in its slot
    * stopped far short and one placed forward overshot past the foe's side),
-   * at striking distance: its own reach (what its clips are made for: 0.84 of
-   * its height from its middle, less its front) from the target's front.
-   * Between two of a kind that is 0.84 of their height apart; a small
-   * attacker comes closer to a big foe, a big one stays further from a small
-   * foe, so the blow lands on the foe's front either way.
+   * STRIKE_GAP of its height short of the foe: its front (the furthest point
+   * of its body toward the foe, in its stance) that far from the foe's
+   * front, whatever their shapes, so every blow drives in to close the gap
+   * (a limb extending, a lunge, the body slamming in).
    */
   approachVector(): THREE.Vector3 {
     const v = new THREE.Vector3();
@@ -470,8 +472,7 @@ export class Battler3D {
     const foe = this.target.profile.calibration.slots[this.target.slot];
     v.set(foe.dx, 0, foe.dz).applyMatrix4(foeSlot.matrixWorld).applyMatrix4(slot.matrixWorld.clone().invert());
     v.sub(new THREE.Vector3(own.dx, 0, own.dz)).setY(0);
-    const reach = (0.84 - this.frontDepth()) * this.height;
-    const contact = reach + this.target.frontDepth() * this.target.height;
+    const contact = (this.frontDepth() + STRIKE_GAP) * this.height + this.target.frontDepth() * this.target.height;
     const d = v.length();
     return d > contact ? v.multiplyScalar((d - contact) / d) : v.set(0, 0, 0);
   }
@@ -578,7 +579,7 @@ export class Battler3D {
         count++;
       }
     });
-    return count ? Math.min(0.5, Math.max(0.05, most)) : 0.21;
+    return count ? Math.min(1.5, Math.max(0.05, most)) : 0.21;
   }
 
   play(clip: string, opts: { fade?: number; speed?: number } = {}): Promise<void> {

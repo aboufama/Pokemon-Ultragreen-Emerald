@@ -34,10 +34,13 @@ again. The rules, all gated (`tools/gauntlet/fundamentals.mjs`, and
   stance);
 - **it reaches the foe's body**: at every impact the attacker's body touches
   the foe's (the gap between their surfaces at most 0.1 of the foe's height,
-  measured against itself as the foe, both sides). `advance` 1 stops at
-  striking distance, not touching: the blow itself closes it, the limb at
-  full extension into the foe, the hips and spine driving in, a tackle
-  lunging its whole body in (`root.z` forward) and bouncing off;
+  measured against itself as the foe, both sides). `advance` 1 stops the
+  attacker's front (the furthest point of its body toward the foe in its
+  stance) 0.15 of its height short of the foe's front (`STRIKE_GAP`,
+  src/battle3d/battler.ts), whatever their shapes: the blow itself closes
+  it, the limb at full extension into the foe, the hips and spine driving
+  in, a bite's head lunging, a tackle lunging its whole body in (`root.z`
+  forward) and bouncing off. Standing at the foe is not a blow;
 - the travel is a leap or steps, never a slide: whenever `advance` changes
   between two keys, the feet are off the ground in one of them (`plantFeet:
   0` with the legs tucked and a `root.y` arc, or one foot lifted mid-step);
@@ -108,8 +111,8 @@ Intimidate). The brief lists them with what each looks like.
   blinks run on top of every clip; the battler gets knocked back on a spring
   when hit (you animate the flinch pose, not the knock-back).
 - **Foes of other sizes.** Author every blow against a foe of the species'
-  own size (the gates measure that match): `advance` 1 puts the attacker at
-  its own reach from the foe's front whatever the foe's size, and around
+  own size (the gates measure that match): `advance` 1 puts the attacker's
+  front the same gap short of the foe's front whatever the foe's size, and around
   each impact the engine brings the blow to the same height on a smaller
   foe's body (the striking hand or foot reaches lower with IK, the body
   sinks and bows into it) or springs the body up at a bigger one
@@ -287,7 +290,7 @@ foe, the body touching it.
 | stiff / robotic | extremes not pushed; every key eased; add anticipation and a breakdown key |
 | floaty | holds too long, settles too soft: shorten the holds, add a pelvis dip |
 | strikes the air from home (`travel`: impact with advance 0) | a contact move goes to the foe: wind up, leap in (`advance` to 1 along a `root.y` arc, legs tucked), land, strike, hop home |
-| a blow that doesn't land (`lands on the foe` gap over 0.1) | at `advance` 1 the bodies are at striking distance, not touching: extend the limb fully into the foe, drive the hips and spine in, lunge the body (`root.z` 0.1-0.3) for a tackle or a bite |
+| a blow that doesn't land (`lands on the foe` gap over 0.1) | at `advance` 1 the fronts are 0.15 of its height apart: extend the limb fully into the foe, drive the hips and spine in, lunge the body (`root.z` 0.1-0.3) for a tackle or a bite |
 | slides to the foe (`travel`: advance changes with both feet planted) | leap (`plantFeet: 0`, `TUCK`, `root.y` arc) or step (one foot lifted at a time) |
 | the same animation as another move (`distinct`) | each move is its own action: see reference/move-actions.md |
 | flailing arms | arms not acting: brace them (`CHAMBER`/`BRACED`), let the acting part lead |
