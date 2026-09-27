@@ -29,12 +29,14 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
         'The Pokédex: it rubs its nose against the ground as it wanders, leaving zigzag footprints.',
     },
     // Built-in emitters cover most of it (the mouth for spit and beams, the
-    // front paws for what it scoops); the tail is its own.
+    // front paws for what it scoops); the tail and the spiky fur are its own.
     emitters: {
       tail: { bones: ['tailTop'], about: 'its bushy zigzag tail, raised behind it' },
+      fur: { bones: ['mane', 'furBack'], about: 'the spiky fur on its shoulders and back, bristling' },
     },
     emitterFor: {
-      // Tail Whip, Attract, Swagger: the hearts come off the wagging tail.
+      // Tail Whip and the charms: the hearts come off the wagging tail
+      // (moves.json points Attract and Charm at its winking eyes).
       charm: 'tail',
       // Sand-Attack, Mud Sport and Mud-Slap are scooped with the front paws.
       kick_sand: 'hands',
@@ -53,34 +55,51 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     // The tail ripples out from the rump: each segment reads the clip a
     // little later than the one before (the springs add the bounce).
     overlap: { ...DEFAULT_OVERLAP, tail: 0.05, tail2: 0.09, tail3: 0.12, tailTop: 0.12 },
-    moveClips: {
-      // The game bows the sprite back, then drives it forward: its own clip.
-      MOVE_HEADBUTT: 'headbutt',
-      // Three volleys of needles, as the game fires them.
-      MOVE_PIN_MISSILE: 'pin_missile',
-    },
-    // Clips by move motif (src/battle3d/motifs.ts). strike, tail, charm,
-    // shield, kick_sand, glare, heal, bolt and afterimage have clips of their
-    // own name; these motifs are performed by other clips.
+    moveClips: {},
+    // Clips by move motif (src/battle3d/motifs.ts), for moves outside its
+    // movepool that Mimic calls: each motif plays its closest move clip
+    // (tackle and charm have clips of their own name).
     motifClips: {
-      // Tackle is its everyday attack; Double-Edge, Flail, Return and
-      // Frustration are the big pounce, and so is Body Slam.
-      tackle: 'physical_weak',
-      tackle_strong: 'physical_strong',
-      slam: 'physical_strong',
-      // Water Pulse is spat from the mouth. Ice Beam, Shadow Ball, Hidden
-      // Power, Blizzard and Icy Wind are gathered with a deep breath and
-      // fired from the mouth, braced on all fours.
-      spit: 'special_weak',
-      beam: 'special_strong',
-      orb: 'special_strong',
-      storm: 'special_strong',
-      breath: 'special_strong',
-      // Thunder crackles off its bristling fur like Thunderbolt.
-      erupt: 'bolt',
-      // Belly Drum is its buff; Growl is its roar.
-      buff: 'status_self',
-      roar: 'status_target',
+      strike: 'cut',
+      punch: 'rock_smash',
+      kick: 'return',
+      bite: 'pursuit',
+      slam: 'body_slam',
+      tail: 'iron_tail',
+      wing: 'fury_cutter',
+      peck: 'secret_power',
+      horn: 'headbutt',
+      spin: 'rollout',
+      grapple: 'thief',
+      vine: 'flail',
+      toss: 'body_slam',
+      burrow: 'dig',
+      breath: 'icy_wind',
+      spit: 'water_pulse',
+      beam: 'ice_beam',
+      jet: 'ice_beam',
+      throw: 'swift',
+      wave: 'surf',
+      quake: 'rock_smash',
+      burst: 'thunderbolt',
+      erupt: 'thunder',
+      storm: 'blizzard',
+      bolt: 'thunderbolt',
+      mind: 'hidden_power',
+      orb: 'shadow_ball',
+      drain: 'hidden_power',
+      sound: 'blizzard',
+      fling: 'mud_slap',
+      roar: 'growl',
+      glare: 'odor_sleuth',
+      kick_sand: 'sand_attack',
+      powder: 'toxic',
+      buff: 'belly_drum',
+      shield: 'protect',
+      heal: 'rest',
+      weather: 'sunny_day',
+      afterimage: 'double_team',
+      flash: 'swagger',
     },
     hiddenParts: [],
     showcaseMoves: ['TACKLE', 'PIN_MISSILE', 'GROWL', 'TAIL_WHIP'],

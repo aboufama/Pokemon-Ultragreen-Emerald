@@ -22,6 +22,7 @@ const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
   poochyena: async () => (await import('./poochyena')).createProfile,
   mightyena: async () => (await import('./mightyena')).createProfile,
   zigzagoon: async () => (await import('./zigzagoon')).createProfile,
+  linoone: async () => (await import('./linoone')).createProfile,
   wurmple: async () => (await import('./wurmple')).createProfile,
   silcoon: async () => (await import('./silcoon')).createProfile,
   beautifly: async () => (await import('./beautifly')).createProfile,
