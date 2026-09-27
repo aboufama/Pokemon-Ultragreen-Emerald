@@ -96,6 +96,8 @@ hand. The remake adds two things around it:
 - `layouts.py`: every struct's layout against the GBA build's.
 - `tools/remake/run.mjs`: `run.mjs`'s scripts in the browser, with the remake
   layer (the 3D battles), frames saved as PNG.
+- `tools/remake/soak.mjs`: battle after battle with the remake layer; fails
+  on a page error or memory that keeps growing.
 
 ## Remake layer (`src/remake/`)
 
