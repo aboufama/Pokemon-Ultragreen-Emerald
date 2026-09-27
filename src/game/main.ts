@@ -4,6 +4,8 @@
 // save kept in the browser.
 
 import { loadGame, KEYS, GameHalt, WIDTH, HEIGHT, type Game } from '../../platform/host/game.mjs';
+import { RemakeLayer } from '../remake/layer';
+import { loadStructLayouts } from '../remake/state';
 
 /** The GBA's refresh: 16.78 MHz / 280896 cycles a frame. */
 const FRAME_MS = 1000 / 59.7275;
@@ -123,13 +125,18 @@ function storeSave(game: Game) {
 
 async function main() {
   const url = new URL('game/pokeemerald.wasm', document.baseURI);
-  const module = await WebAssembly.compileStreaming(fetch(url));
+  const [module, layouts] = await Promise.all([WebAssembly.compileStreaming(fetch(url)), loadStructLayouts()]);
+  // The remake layer draws the battles in 3D (src/remake): at each VBlank
+  // it prepares the next frame's pictures.
+  let remake: RemakeLayer | null = null;
   const game = await loadGame(module, {
     flash: loadSave(),
     rtcOffset: Number(localStorage.getItem(RTC_KEY) ?? 0) || 0,
     log: (t) => console.log(`[game] ${t}`),
+    onVBlank: () => remake?.onVBlank(),
   });
   await game.init();
+  remake = new RemakeLayer(game, layouts);
   status.textContent = '';
   let last = performance.now();
   let owed = 0;

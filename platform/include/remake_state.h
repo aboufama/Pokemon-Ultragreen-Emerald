@@ -57,6 +57,31 @@ struct RemakeState {
     struct RemakeBattler battlers[REMAKE_BATTLERS];
 };
 
+// The remake layer's pictures, which the platform's PPU composes as its own
+// layers (docs/ARCHITECTURE.md, "How the pictures combine"): the browser
+// fills them at each VBlank for the next frame. Pixels are the GBA's colors
+// with REMAKE_OPAQUE set where the picture has something.
+#define REMAKE_OPAQUE 0x8000u
+#define REMAKE_LAYER_SPRITES 4
+#define REMAKE_PIXELS (240 * 160)
+
+struct RemakeBackground {
+    uint32_t active;        // the picture replaces the background's pixels
+    uint32_t bg;            // which background (3: the battle's)
+    uint16_t pixels[REMAKE_PIXELS];
+};
+
+struct RemakeSprite {
+    uint32_t active;        // the picture replaces the sprite's OAM entries
+    uint32_t tileNum;       // the entries with this first tile are the sprite's
+    uint16_t pixels[REMAKE_PIXELS];
+};
+
+struct RemakeLayers {
+    struct RemakeBackground background;
+    struct RemakeSprite sprites[REMAKE_LAYER_SPRITES];
+};
+
 // The game's hook (platform/patches/battle_anim.patch): an animation starts.
 void RemakeBattleAnimation(const uint8_t *const animsTable[], uint16_t tableId, uint8_t isMoveAnim);
 

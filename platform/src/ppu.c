@@ -8,6 +8,7 @@
 // brighten, darken) and mosaic.
 
 #include "gba.h"
+#include "remake_state.h"
 
 u32 gPlatformFrame[SCREEN_W * SCREEN_H];
 
@@ -23,28 +24,10 @@ static u8 sObjPrio[SCREEN_W];
 static u8 sObjSemi[SCREEN_W];
 static u8 sObjWin[SCREEN_W];
 
-// The remake layer's pictures (docs/ARCHITECTURE.md, "How the pictures
-// combine"), filled by the browser at each VBlank for the next frame. Pixels
-// are the GBA's colors with bit 15 set where the picture has something.
-#define LAYER_OPAQUE 0x8000u
-#define REMAKE_SPRITES 4
-
-struct RemakeBackground {
-    u32 active;                        // the picture replaces the background's pixels
-    u32 bg;                            // which background (3: the battle's)
-    u16 pixels[SCREEN_W * SCREEN_H];
-};
-
-struct RemakeSprite {
-    u32 active;                        // the picture replaces the sprite's OAM entries
-    u32 tileNum;                       // the entries with this first tile are the sprite's
-    u16 pixels[SCREEN_W * SCREEN_H];
-};
-
-struct RemakeLayers {
-    struct RemakeBackground background;
-    struct RemakeSprite sprites[REMAKE_SPRITES];
-};
+// The remake layer's pictures (platform/include/remake_state.h), filled by
+// the browser at each VBlank for the next frame.
+#define LAYER_OPAQUE REMAKE_OPAQUE
+#define REMAKE_SPRITES REMAKE_LAYER_SPRITES
 
 static struct RemakeLayers sRemake;
 
