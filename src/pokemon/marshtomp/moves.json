@@ -1,0 +1,263 @@
+{
+  "classifier": "set by hand from its clips (Jev, tools/gauntlet/classify_moves.mjs, needs TYPESAFE_API_KEY)",
+  "parts": {
+    "mouth": "Its mouth or jaws: bites, breathes, spits, roars or fires from the mouth",
+    "head": "Its head, horn or crest: headbutts and rams",
+    "eyes": "Its eyes: stares, glares, hypnotizes",
+    "hands": "Its arms, hands or claws: punches, chops, slashes, grabs, throws",
+    "feet": "Its legs or feet: kicks, stomps, scoops the ground",
+    "body": "The whole body at once: tackles, spins, glows, shields, dances, calls the weather",
+    "fin": "Its fin on top of its head, which senses the foe",
+    "tail": "Its two broad tail lobes: it swats and slaps with them"
+  },
+  "moves": {
+    "MOVE_TACKLE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_GROWL": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_MUD_SLAP": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_WATER_GUN": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_BIDE": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_MUD_SHOT": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_FORESIGHT": {
+      "part": "fin",
+      "by": "hand"
+    },
+    "MOVE_MUD_SPORT": {
+      "part": "feet",
+      "by": "hand"
+    },
+    "MOVE_TAKE_DOWN": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_MUDDY_WATER": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_PROTECT": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_EARTHQUAKE": {
+      "part": "feet",
+      "by": "hand"
+    },
+    "MOVE_ENDEAVOR": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_WHIRLPOOL": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_HYDRO_PUMP": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_WATER_PULSE": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_TOXIC": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_HAIL": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_HIDDEN_POWER": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_ICE_BEAM": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_BLIZZARD": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_RAIN_DANCE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_FRUSTRATION": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_IRON_TAIL": {
+      "part": "tail",
+      "by": "hand"
+    },
+    "MOVE_RETURN": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_DIG": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_DOUBLE_TEAM": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_ROCK_TOMB": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_FACADE": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_SECRET_POWER": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_REST": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_ATTRACT": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_SURF": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_STRENGTH": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_ROCK_SMASH": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_WATERFALL": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_DIVE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_MEGA_PUNCH": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_MEGA_KICK": {
+      "part": "feet",
+      "by": "hand"
+    },
+    "MOVE_BODY_SLAM": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_DOUBLE_EDGE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_COUNTER": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_SEISMIC_TOSS": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_MIMIC": {
+      "part": "eyes",
+      "by": "hand"
+    },
+    "MOVE_ROCK_SLIDE": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_SUBSTITUTE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_DYNAMIC_PUNCH": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_ROLLOUT": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_SNORE": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_ICY_WIND": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_ENDURE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_ICE_PUNCH": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_SWAGGER": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_SLEEP_TALK": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_DEFENSE_CURL": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_REFRESH": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_UPROAR": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_CURSE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_STOMP": {
+      "part": "feet",
+      "by": "hand"
+    },
+    "MOVE_ICE_BALL": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_MIRROR_COAT": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_STRUGGLE": {
+      "part": "body",
+      "by": "hand"
+    }
+  }
+}

@@ -15,6 +15,7 @@ const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
   torchic: async () => (await import('./torchic')).createProfile,
   blaziken: async () => (await import('./blaziken')).createProfile,
   mudkip: async () => (await import('./mudkip')).createProfile,
+  marshtomp: async () => (await import('./marshtomp')).createProfile,
   swampert: async () => (await import('./swampert')).createProfile,
   poochyena: async () => (await import('./poochyena')).createProfile,
   zigzagoon: async () => (await import('./zigzagoon')).createProfile,
