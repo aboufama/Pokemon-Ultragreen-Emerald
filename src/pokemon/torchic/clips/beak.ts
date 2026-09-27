@@ -18,7 +18,7 @@ import {
  */
 export const peck: Clip = {
   name: 'peck',
-  duration: 1.35,
+  duration: 1.38,
   keys: [
     key(0),
     key(0.1, pelvis(0, 0.004, -0.012), lean(-8, -18), wings(10, -8), crest(-9), tail(-6), ANGRY),
@@ -33,7 +33,7 @@ export const peck: Clip = {
     key(0.92, atFoe(BEAK), LAND, pelvis(0, 0.014), lean(0, -2, 6, 3), ANGRY),
     key(1.0, atFoe(BEAK), LAND, pelvis(0, 0.018), lean(0, -1, -4, -2), ANGRY),
     ...hopHome(1.05, ANGRY),
-    key(1.35, OPEN_EYES),
+    key(1.38, OPEN_EYES),
   ],
   events: [{ t: 0.69, name: 'impact' }],
 };
@@ -102,7 +102,7 @@ export const rock_smash: Clip = {
  */
 export const smelling_salt: Clip = {
   name: 'smelling_salt',
-  duration: 1.3,
+  duration: 1.33,
   keys: [
     key(0),
     key(0.1, pelvis(0, -0.004), lean(-2, -4, -10), twist(14), wingR(34, -30), crest(-2), ANGRY),
@@ -116,7 +116,7 @@ export const smelling_salt: Clip = {
     key(0.87, atFoe(BEAK), LAND, pelvis(0, 0.014), lean(0, -4, 4), twist(-4), wingR(34, -6), HAPPY),
     key(0.94, atFoe(BEAK), LAND, pelvis(0, 0.014), lean(0, -3, 2), wingR(18, 8), HAPPY),
     ...hopHome(1.0, ANGRY),
-    key(1.3, OPEN_EYES),
+    key(1.33, OPEN_EYES),
   ],
   events: [{ t: 0.69, name: 'impact' }],
 };
