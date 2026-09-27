@@ -50,8 +50,10 @@ hand. The remake adds two things around it:
    - **timed** (`tools/cpu_time.mjs`): each basic block adds its instructions'
      ARM7 cost to the platform's CPU clock, corrected function by function
      where it was measured against the ROM (`tools/cpu_time.json`, from
-     `tools/calibrate.py`); copies and fills cost by their size, as newlib's
-     memcpy and memset do on the GBA; each loop turn polls the hardware, so
+     `tools/calibrate.py`), up to each call and register access before it
+     (the code after a call runs after it); copies and fills cost by their
+     size, as newlib's memcpy and memset do on the GBA, and divisions by
+     their operands, as libgcc's do; each loop turn polls the hardware, so
      interrupts arrive inside loops that touch no register; the functions
      lose the memory effects the first compile inferred for them (one said
      to write only through its arguments now writes the clock, and a caller
@@ -112,7 +114,7 @@ hand. The remake adds two things around it:
 - `profile.mjs`: where the compiled game's time goes, function by function
   (a profile build), and a trace of calls with their frame, line and cycle.
 - `calibrate.py`: each function's own time on the compiled game and on the
-  ROM (mGBA's breakpoints) over an input script, and the corrections of the
+  ROM (mGBA's breakpoints) over input scripts, and the corrections of the
   time model where they differ (`tools/cpu_time.json`).
 - `layouts.py`: every struct's layout against the GBA build's.
 - `platform/tests/opening.json`: the opening played key for key, power-on

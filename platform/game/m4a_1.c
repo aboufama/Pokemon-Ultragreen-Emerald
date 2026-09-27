@@ -70,8 +70,12 @@ static s8 sDecodingBuffer[0x40];
 // screen). The mixer runs from IWRAM in ARM code; the rest is Thumb code in
 // ROM, slower per instruction.
 
-// SoundMain's own code: the lock, the calls, where in the buffer.
-#define SOUNDMAIN 179
+// SoundMain's own code, where it runs: the lock up to the music players'
+// call (and the call), from their return to CgbSound's call, from its
+// return to the jump to the mixer (where in the buffer).
+#define SOUNDMAIN_PLAYERS 94
+#define SOUNDMAIN_CGB 22
+#define SOUNDMAIN_MIX 59
 // The mixer: entry, the channels' setup and exit; the buffer cleared (16
 // samples at a time) or the reverb (a sample at a time).
 #define MIX_BASE 57
@@ -101,7 +105,8 @@ static s8 sDecodingBuffer[0x40];
 // track's notes (its gate time); a track's first tick; each command read,
 // by kind (the song commands' own costs are theirs); the LFO; then the
 // volume and pitch pass, per track and per channel of a track that changed.
-#define MPLAY_CALL 117
+#define MPLAY_CALL 55              // up to the next player's call (and the call)
+#define MPLAY_BACK 62              // the rest of it, once the players after have run
 #define MPLAY_ACTIVE 42
 #define MPLAY_TICK 30
 #define MPLAY_TRACK 34
@@ -707,7 +712,7 @@ void SoundMain(void)
     if (soundInfo->ident != ID_NUMBER)
         return;
     soundInfo->ident++;
-    SoundTime(SOUNDMAIN);
+    SoundTime(SOUNDMAIN_PLAYERS);
 
     // maxLines: the mixer stops when the scanline is that many lines past
     // this one (lines after the VBlank count on from 228). 0: no limit.
@@ -722,10 +727,14 @@ void SoundMain(void)
 
     // The music players (MPlayMain, chained through each player), then the
     // GB channels (CgbSound, m4a.c).
-    if (soundInfo->MPlayMainHead != NULL)
+    if (soundInfo->MPlayMainHead != NULL) {
+        SoundTimeFlush();
         soundInfo->MPlayMainHead(soundInfo->musicPlayerHead);
+    }
+    SoundTime(SOUNDMAIN_CGB);
     SoundTimeFlush();
     soundInfo->CgbSound();
+    SoundTime(SOUNDMAIN_MIX);
 
     // The part of the PCM buffer the DMA plays next: pcmDmaCounter counts
     // the frames down to the DMA's restart at the buffer's start
@@ -1259,6 +1268,7 @@ void MPlayMain(struct MusicPlayerInfo *mplayInfo)
         SoundTimeFlush();
         mplayInfo->MPlayMainNext(mplayInfo->musicPlayerNext);
     }
+    SoundTime(MPLAY_BACK);
 
     if ((s32)mplayInfo->status < 0)
         goto done;

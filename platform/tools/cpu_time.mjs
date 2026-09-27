@@ -6,9 +6,10 @@
 // next frame (a lag frame), and the game's register manager applies a write
 // at once or at the next VBlank depending on where the scanline is. So every
 // basic block of the game's LLVM IR adds its cost to the platform's clock
-// (gPlatformCycles) when it runs: each instruction's ARM7TDMI cost, roughly,
-// by kind. The hardware catches up at the next register access, BIOS call or
-// DMA (platform/src/clock.c). CYCLE_SCALE is calibrated against the GBA ROM:
+// (gPlatformCycles) as it runs: each instruction's ARM7TDMI cost, roughly,
+// by kind, added before each call and register access for the instructions
+// up to it. The hardware catches up at the next register access, BIOS call
+// or DMA (platform/src/clock.c). CYCLE_SCALE is calibrated against the GBA ROM:
 // platform/tools/profile.mjs (a profile build) against platform/tools/
 // timing.py over the same frames. The game's Thumb code runs from ROM with
 // wait states and needs more instructions than the IR has (two-operand
@@ -22,9 +23,98 @@ function cost(line) {
   if (/^(%\S+ = )?(load|store) /.test(t)) return 3;          // a memory access with its wait states
   if (/^(%\S+ = )?(tail )?call /.test(t)) return 5;          // bl + push/pop
   if (/^br i1 /.test(t) || /^switch /.test(t)) return 3;     // a taken branch refills the pipeline
-  if (/^(%\S+ = )?(s|u)?(div|rem) /.test(t)) return 40;      // a BIOS or libgcc division
+  if (division(t)) return division(t).shifts ?? 1;          // shifts, or the call to libgcc (its time: DIVISION)
   if (/^(%\S+ = )?mul /.test(t)) return 3;
   return 1;
+}
+
+// Thumb has no divide instruction, and no long multiply to divide by a
+// constant with: the game's divisions and remainders call libgcc's
+// __divsi3, __udivsi3, __modsi3 and __umodsi3 (but for a power of two, which
+// is shifts). Their time depends on the operands, as measured on the ROM
+// call by call over the opening (40000 calls): a dividend no larger than the
+// divisor returns at once (`le`); __divsi3 and __udivsi3 shift for a power of
+// two (`pow2`); the rest is `base` and `nibble` more for every 4 bits the
+// quotient has past the first 4 (the loops take 4 bits a turn). The time is
+// the library's, as the copies' is: added as the division runs, from its
+// operands.
+const DIVISION = {
+  sdiv: { le: 98, pow2: 159, base: 216, nibble: 104 },
+  udiv: { le: 74, pow2: 135, base: 192, nibble: 104 },
+  srem: { le: 60, base: 310, nibble: 100 },
+  urem: { le: 18, base: 293, nibble: 86 },
+};
+
+/**
+ * A division or remainder on this line: {kind, bits, a, b}, with {shifts}
+ * (their IR cost) if it is by a power of two; or null.
+ */
+function division(t) {
+  const m = /^(?:%\S+ = )?([su](?:div|rem)) (?:exact )?i(\d+) (.+?), (-?\d+|%[-\w.$"]+)(?:,|$)/.exec(t);
+  if (!m) return null;
+  const n = /^-?\d+$/.test(m[4]) ? Math.abs(Number(m[4])) : 0;
+  if (n > 0 && (n & (n - 1)) === 0) return { kind: m[1], shifts: m[1][0] === 's' ? 4 : 1 };
+  return { kind: m[1], bits: Number(m[2]), a: m[3], b: m[4] };
+}
+
+/**
+ * The IR that adds a library division's time to the clock, from its
+ * operands (DIVISION), before it runs; `id` names its values.
+ */
+function divisionTime({ kind, bits, a, b }, id) {
+  const c = DIVISION[kind];
+  const signed = kind[0] === 's';
+  const out = [];
+  const operand = (v, tag) => {
+    let x = v;
+    if (bits < 32) {
+      out.push(`  %__d${tag}x${id} = ${signed ? 'sext' : 'zext'} i${bits} ${v} to i32`);
+      x = `%__d${tag}x${id}`;
+    }
+    if (signed) {
+      out.push(`  %__d${tag}a${id} = call i32 @llvm.abs.i32(i32 ${x}, i1 false)`);
+      x = `%__d${tag}a${id}`;
+    }
+    return x;
+  };
+  const x = operand(a, 'a'), y = operand(b, 'b');
+  out.push(`  %__dza${id} = call i32 @llvm.ctlz.i32(i32 ${x}, i1 false)`,
+    `  %__dzb${id} = call i32 @llvm.ctlz.i32(i32 ${y}, i1 false)`,
+    `  %__dd${id} = sub i32 %__dzb${id}, %__dza${id}`,
+    `  %__dn${id} = lshr i32 %__dd${id}, 2`,
+    `  %__dm${id} = mul i32 %__dn${id}, ${c.nibble}`,
+    `  %__db${id} = add i32 %__dm${id}, ${c.base}`);
+  let body = `%__db${id}`;
+  if (c.pow2) {
+    out.push(`  %__dp${id} = add i32 ${y}, -1`,
+      `  %__dq${id} = and i32 ${y}, %__dp${id}`,
+      `  %__dr${id} = icmp eq i32 %__dq${id}, 0`,
+      `  %__ds${id} = select i1 %__dr${id}, i32 ${c.pow2}, i32 %__db${id}`);
+    body = `%__ds${id}`;
+  }
+  out.push(`  %__dl${id} = icmp ule i32 ${x}, ${y}`,
+    `  %__dt${id} = select i1 %__dl${id}, i32 ${c.le}, i32 ${body}`,
+    `  %__dw${id} = zext i32 %__dt${id} to i64`,
+    `  %__dc${id} = load i64, ptr @gPlatformCycles, align 8`,
+    `  %__de${id} = add i64 %__dc${id}, %__dw${id}`,
+    `  store i64 %__de${id}, ptr @gPlatformCycles, align 8`);
+  return out;
+}
+
+/**
+ * A call or a hardware access (a volatile load or store): what it does
+ * happens once the code before it has run, and the code after it runs after
+ * it (a call's own time, a busy wait's end, an interrupt taken there). Not
+ * the compiler's intrinsics and the copies, which take no time of their own
+ * on the platform's clock (the copies' cost is the time pass's: copyOf).
+ */
+function syncs(line) {
+  const t = line.trim();
+  if (/^(%\S+ = )?(load|store) volatile /.test(t)) return true;
+  // (a musttail call must be followed by the ret: nothing goes after it)
+  if (!/^(%\S+ = )?(tail |notail )?call /.test(t)) return false;
+  const callee = /@("[^"]+"|[-\w.$]+)\(/.exec(t)?.[1]?.replace(/^"|"$/g, '');
+  return !callee || !(callee.startsWith('llvm.') || /^(memcpy|memmove|memset)$/.test(callee));
 }
 
 /** Instructions that cost nothing on the GBA: SSA bookkeeping and debug records. */
@@ -117,10 +207,14 @@ function forgetMemoryEffects(lines) {
 }
 
 /**
- * Add a cycle count to the start of every basic block of every function
- * defined in the module. With `profile`, every function also reports its
- * entry and exits (PlatformProfileEnter/Exit, platform/src/profile.c; the id
- * is the function's own address). `factors` corrects the model function by
+ * Add the cycles of every basic block of every function defined in the
+ * module to the clock: at its start for its instructions up to its first
+ * call or hardware access, then after each for those up to the next (a call
+ * that waits for the hardware, as SoundInit waits for a scanline, is
+ * followed by the code after it, not preceded), and each library division's
+ * as it runs. With `profile`, every function also reports its entry and
+ * exits (PlatformProfileEnter/Exit, platform/src/profile.c; the id is the
+ * function's own address). `factors` corrects the model function by
  * function: {name: factor}, the file's entry of platform/tools/cpu_time.json,
  * measured against the ROM (platform/tools/calibrate.py). Code that sets its
  * own time (`timed` false: the platform's drivers) only gets the profile's
@@ -134,21 +228,43 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
   const out = [];
   let blocks = 0;
   let inFunction = false;
-  let block = null; // { at: index in out after phis, cycles (IR units), fixed (cycles: copies) }
+  // A block's time is added in parts: from its start (after its phis) up to
+  // and including its first call or hardware access, from there up to the
+  // next, and the rest; each part where it starts, so a call or access comes
+  // after the code before it and before the code after it.
+  let block = null; // { parts: [{ at: index in out, cycles (IR units), fixed (cycles: copies) }], phis }
+  const newBlock = () => ({ parts: [{ at: out.length, cycles: 0, fixed: 0 }], phis: true });
   let counter = 0;
   let factor = 1;
   const flush = () => {
-    if (timed && block && (block.cycles > 0 || block.fixed > 0)) {
-      const code = block.cycles > 0 ? Math.max(1, Math.round(block.cycles * scale * factor)) : 0;
-      const id = counter++;
-      const add = (counterName, tag, n) => [
+    const parts = block?.parts ?? [];
+    const cycles = parts.reduce((n, p) => n + p.cycles, 0);
+    if (timed && (cycles > 0 || parts.some((p) => p.fixed > 0))) {
+      // The block's code time is rounded once and shared among the parts as
+      // their instructions add up.
+      const code = cycles > 0 ? Math.max(1, Math.round(cycles * scale * factor)) : 0;
+      let sum = 0, charged = 0;
+      const shares = parts.map((p) => {
+        sum += p.cycles;
+        const upTo = cycles > 0 ? Math.round(code * sum / cycles) : 0;
+        const share = upTo - charged;
+        charged = upTo;
+        return share;
+      });
+      const add = (counterName, tag, id, n) => [
         `  %__${tag}${id} = load i64, ptr @${counterName}, align 8`,
         `  %__${tag}${id}n = add i64 %__${tag}${id}, ${n}`,
         `  store i64 %__${tag}${id}n, ptr @${counterName}, align 8`];
-      // (a profile build also counts the game's own code apart; the copies
-      // are the library's)
-      out.splice(block.at, 0, ...add('gPlatformCycles', 'cyc', code + block.fixed),
-        ...(profile && code ? add('gPlatformGameCycles', 'gcyc', code) : []));
+      // (the later parts first, so the earlier ones' places hold; a profile
+      // build also counts the game's own code apart, the copies being the
+      // library's)
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const n = shares[i] + parts[i].fixed;
+        if (!n) continue;
+        const id = counter++;
+        out.splice(parts[i].at, 0, ...add('gPlatformCycles', 'cyc', id, n),
+          ...(profile && shares[i] ? add('gPlatformGameCycles', 'gcyc', id, shares[i]) : []));
+      }
       blocks++;
     }
     block = null;
@@ -156,6 +272,7 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
   let fnName = null;
   let labels = new Set();   // the blocks seen so far in the function
   let polls = 0;
+  let divisions = 0;
   let pollAt = -1;          // where a switch is in out while its cases are read
   const backEdge = (text) => [...text.matchAll(/label %([-\w.$"]+)/g)].some((m) => labels.has(m[1]));
   for (const line of lines) {
@@ -169,7 +286,7 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
         fnName = profile ? name : null;
         // (the profile's entry first, so the entry block's time is the function's)
         if (fnName) out.push(`  call void @PlatformProfileEnter(i32 ptrtoint (ptr @${fnName} to i32))`);
-        block = { at: out.length, cycles: 0, fixed: 0, phis: true };
+        block = newBlock();
       }
       continue;
     }
@@ -185,7 +302,7 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
       flush();
       out.push(line);
       labels.add(line.slice(0, line.indexOf(':')));
-      block = { at: out.length, cycles: 0, fixed: 0, phis: true };
+      block = newBlock();
       continue;
     }
     // A branch back to a block above (a loop's) polls the hardware first; a
@@ -217,24 +334,35 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
         `  store i64 %__mb${id}, ptr @gPlatformCycles, align 8`);
       blocks++;
     }
+    // A library division adds its time as it runs, from its operands.
+    const divide = timed && block ? division(line.trim()) : null;
+    if (divide && !divide.shifts && divide.bits <= 32) {
+      out.push(...divisionTime(divide, counter++));
+      divisions++;
+    }
     out.push(line);
     if (!block) continue;
     const t = line.trim();
     if (block.phis && (/^%\S+ = phi /.test(t) || /^%\S+ = landingpad /.test(t) || /@llvm\.dbg/.test(t) || !t || t.startsWith(';'))) {
       // Instructions go after the block's phis.
-      if (/^%\S+ = phi /.test(t)) block.at = out.length;
+      if (/^%\S+ = phi /.test(t)) block.parts[0].at = out.length;
       continue;
     }
     block.phis = false;
+    const part = block.parts[block.parts.length - 1];
     if (copy) {
-      if (typeof copy.size === 'number') block.fixed += copy.costs[0] + ((copy.size * copy.costs[1]) >> 4);
+      if (typeof copy.size === 'number') part.fixed += copy.costs[0] + ((copy.size * copy.costs[1]) >> 4);
     } else if (!free(line)) {
-      block.cycles += cost(line);
+      part.cycles += cost(line);
     }
+    if (timed && syncs(line)) block.parts.push({ at: out.length, cycles: 0, fixed: 0 });
   }
   let result = out.join('\n');
   if (blocks && !/^@gPlatformCycles = /m.test(result)) result += '\n@gPlatformCycles = external global i64, align 8\n';
   if (polls) result += '\ndeclare void @PlatformPoll()\n';
+  // (the intrinsics the divisions' time uses, unless the module has them)
+  for (const d of divisions ? ['declare i32 @llvm.abs.i32(i32, i1)', 'declare i32 @llvm.ctlz.i32(i32, i1)'] : [])
+    if (!result.includes(d.slice(0, d.indexOf('(') + 1))) result += `\n${d}\n`;
   if (profile) result += '\ndeclare void @PlatformProfileEnter(i32)\ndeclare void @PlatformProfileExit(i32)\n@gPlatformGameCycles = external global i64, align 8\n';
   return { ir: result, blocks };
 }

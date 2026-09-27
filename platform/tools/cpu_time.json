@@ -3,58 +3,70 @@
   "rfu_LMAN_syncVBlank": 1.077
  },
  "src/battle_anim_throw.c": {
-  "PokeBallOpenParticleAnimation": 1.308,
+  "PokeBallOpenParticleAnimation": 1.305,
   "PokeBallOpenParticleAnimation_Step2": 0.679,
-  "Task_FadeMon_ToNormal_Step": 0.884
+  "Task_FadeMon_ToNormal_Step": 0.889
  },
  "src/battle_controllers.c": {
-  "TryReceiveLinkBattleData": 2.719
+  "TryReceiveLinkBattleData": 2.717
  },
  "src/bg.c": {
+  "CopyBgTilemapBufferToVram": 2.174,
+  "FillBgTilemapBufferRect_Palette0": 1.92,
+  "GetBgAttribute": 1.658,
+  "InitBgsFromTemplates": 0.457,
   "LoadBgTiles": 1.306,
-  "WriteSequenceToBgTilemapBuffer": 1.303
+  "ShowBg": 1.363,
+  "WriteSequenceToBgTilemapBuffer": 1.305
  },
  "src/blit.c": {
-  "BlitBitmapRect4Bit": 1.022,
-  "FillBitmapRect4Bit": 0.731
+  "BlitBitmapRect4Bit": 1.02,
+  "FillBitmapRect4Bit": 0.726
  },
  "src/dma3_manager.c": {
-  "ClearDma3Requests": 0.679,
-  "ProcessDma3Requests": 1.862,
-  "RequestDma3Copy": 1.536
+  "ClearDma3Requests": 0.673,
+  "ProcessDma3Requests": 1.715,
+  "RequestDma3Copy": 1.586
+ },
+ "src/field_effect.c": {
+  "MultiplyInvertedPaletteRGBComponents": 1.039
  },
  "src/gpu_regs.c": {
-  "CopyBufferedValuesToGpuRegs": 1.635,
+  "CopyBufferedValuesToGpuRegs": 1.376,
+  "DisableInterrupts": 0.962,
+  "GetGpuReg": 1.032,
   "InitGpuRegManager": 0.491,
-  "SetGpuReg": 1.121
+  "SetGpuReg": 0.964,
+  "SetGpuRegBits": 0.644
  },
  "src/intro.c": {
   "MainCB2_Intro": 0.925,
   "PanFadeAndZoomScreen": 0.965,
+  "SetUpCopyrightScreen": 1.193,
   "SpriteCB_Flygon": 0.817,
-  "SpriteCB_FlygonSilhouette": 0.862,
-  "SpriteCB_GameFreakLogo": 1.102,
+  "SpriteCB_FlygonSilhouette": 0.774,
+  "SpriteCB_GameFreakLogo": 1.089,
   "SpriteCB_GroudonRocks": 0.831,
   "SpriteCB_KyogreBubbles": 0.843,
   "SpriteCB_Lightning": 0.885,
-  "SpriteCB_LogoLetter": 1.233,
+  "SpriteCB_LogoLetter": 1.249,
   "SpriteCB_Manectric": 0.73,
   "SpriteCB_PlayerOnBicycle": 1.009,
-  "SpriteCB_RayquazaOrb": 0.57,
+  "SpriteCB_RayquazaOrb": 0.979,
   "SpriteCB_Torchic": 1.187,
   "SpriteCB_Volbeat": 0.828,
-  "SpriteCB_WaterDropHalf": 0.716,
+  "SpriteCB_WaterDrop": 1.046,
+  "SpriteCB_WaterDropHalf": 0.715,
   "SpriteCB_WaterDropShort": 0.878,
-  "SpriteCB_WaterDrop_DangleFromLeaf": 0.292,
-  "SpriteCB_WaterDrop_ReachLeafEnd": 0.516,
-  "SpriteCB_WaterDrop_Ripple": 1.489,
-  "SpriteCB_WaterDrop_Slide": 0.386,
-  "Task_BlendLogoIn": 0.63,
-  "Task_BlendLogoOut": 0.661,
+  "SpriteCB_WaterDrop_DangleFromLeaf": 0.906,
+  "SpriteCB_WaterDrop_Ripple": 0.824,
+  "Task_BlendLogoIn": 1.22,
+  "Task_BlendLogoOut": 1.195,
   "Task_CreateSparkles": 0.873,
   "Task_RayquazaAttack": 1.299,
+  "Task_Scene1_Load": 0.802,
   "Task_Scene1_PanUp": 1.049,
-  "Task_Scene1_WaterDrops": 1.502,
+  "Task_Scene1_WaterDrops": 1.503,
   "Task_Scene2_BikeRide": 1.877,
   "Task_Scene2_End": 2.189,
   "Task_Scene3_Clouds": 1.103,
@@ -62,11 +74,11 @@
   "Task_Scene3_Kyogre": 0.953,
   "Task_Scene3_Lightning": 1.196,
   "Task_Scene3_Rayquaza": 0.917,
-  "Task_Scene3_SpinPokeball": 2.355,
+  "Task_Scene3_SpinPokeball": 1.257,
   "VBlankCB_Intro": 0.945
  },
  "src/intro_credits_graphics.c": {
-  "CreateMovingScenerySprites": 0.823,
+  "CreateMovingScenerySprites": 0.816,
   "CycleSceneryPalette": 1.074,
   "SpriteCB_Bicycle": 0.761,
   "SpriteCB_FlygonRightHalf": 0.847,
@@ -74,154 +86,200 @@
   "Task_BicycleBgAnimation": 0.899
  },
  "src/librfu_rfu.c": {
-  "rfu_initializeAPI": 1.28,
+  "rfu_clearAllSlot": 1.26,
+  "rfu_initializeAPI": 1.288,
   "rfu_syncVBlank": 2.07
  },
  "src/librfu_sio32id.c": {
-  "AgbRFU_checkID": 0.995,
-  "Sio32IDIntr": 0.947
- },
- "src/librfu_stwi.c": {
-  "AgbRFU_SoftReset": 0.971
+  "Sio32IDIntr": 0.948
  },
  "src/link.c": {
   "GetLinkRecvQueueLength": 1.561,
-  "HandleLinkConnection": 1.472,
+  "HandleLinkConnection": 1.471,
   "LinkMain1": 0.785,
-  "LinkMain2": 2.338,
+  "LinkMain2": 2.337,
   "LinkVSync": 1.311
+ },
+ "src/link_rfu_2.c": {
+  "ResetLinkRfuGFLayer": 0.682,
+  "RfuVSync": 1.375
  },
  "src/link_rfu_3.c": {
   "RfuRecvQueue_Reset": 0.107,
-  "RfuSendQueue_Reset": 0.179,
+  "RfuSendQueue_Reset": 0.178,
   "UpdateWirelessStatusIndicatorSprite": 1.836
  },
  "src/m4a.c": {
-  "CgbSound": 1.069,
-  "ClearChain": 1.957,
-  "FadeOutBody": 1.264,
-  "MidiKeyToCgbFreq": 1.204,
+  "CgbSound": 1.075,
+  "Clear64byte": 1.957,
+  "ClearChain": 1.958,
+  "FadeOutBody": 1.258,
+  "MidiKeyToCgbFreq": 1.202,
   "MidiKeyToFreq": 1.238,
-  "SoundInit": 1.066,
-  "TrkVolPitSet": 0.591,
-  "m4aSongNumStart": 0.944,
+  "SetPokemonCryTone": 0.739,
+  "SoundInit": 1.044,
+  "TrkVolPitSet": 0.597,
+  "m4aMPlayVolumeControl": 0.564,
+  "m4aSongNumStart": 0.825,
   "m4aSoundInit": 1.237,
-  "m4aSoundMain": 1.376,
-  "ply_xcmd": 1.273,
+  "m4aSoundMain": 1.375,
+  "ply_xcmd": 1.275,
   "ply_xwait": 0.536
  },
  "src/main.c": {
-  "VBlankIntr": 0.934,
+  "VBlankIntr": 0.933,
   "VCountIntr": 1.029
  },
  "src/main_menu.c": {
   "CB2_MainMenu": 0.946,
-  "NewGameBirchSpeech_WaitForThisIsPokemonText": 0.745,
-  "SpriteCB_Null": 2.667,
-  "Task_HandleMainMenuInput": 1.943,
-  "Task_NewGameBirchSpeechSub_WaitForLotad": 1.805,
-  "Task_NewGameBirchSpeech_AndYouAre": 1.231,
+  "DrawMainMenuWindowBorder": 1.396,
+  "NewGameBirchSpeech_WaitForThisIsPokemonText": 0.782,
+  "SpriteCB_Null": 2.668,
+  "Task_HandleMainMenuInput": 1.944,
+  "Task_NewGameBirchSpeechSub_WaitForLotad": 1.686,
+  "Task_NewGameBirchSpeech_AndYouAre": 1.232,
+  "Task_NewGameBirchSpeech_ChooseGender": 1.269,
   "Task_NewGameBirchSpeech_FadeInTarget1OutTarget2": 1.036,
-  "Task_NewGameBirchSpeech_FadePlatformOut": 1.068,
+  "Task_NewGameBirchSpeech_FadeOutTarget1InTarget2": 1.035,
+  "Task_NewGameBirchSpeech_FadePlatformOut": 1.073,
   "Task_NewGameBirchSpeech_MainSpeech": 1.235,
+  "Task_NewGameBirchSpeech_StartPlayerFadeIn": 1.291,
   "Task_NewGameBirchSpeech_ThisIsAPokemon": 1.301,
-  "Task_NewGameBirchSpeech_WaitForSpriteFadeInWelcome": 1.46,
-  "Task_NewGameBirchSpeech_WaitToShowBirch": 1.359
+  "Task_NewGameBirchSpeech_WaitForSpriteFadeInWelcome": 1.461,
+  "Task_NewGameBirchSpeech_WaitForWhatsYourNameToPrint": 1.469,
+  "Task_NewGameBirchSpeech_WaitToShowBirch": 1.359,
+  "Task_NewGameBirchSpeech_WaitToShowGenderMenu": 1.252
  },
  "src/malloc.c": {
-  "Free": 0.754
+  "AllocZeroed": 0.875,
+  "Free": 0.746
  },
  "src/menu.c": {
+  "AddTextPrinterParameterized3": 1.075,
+  "Menu_ProcessInputNoWrap": 0.908,
   "RunTextPrintersAndIsPrinter0Active": 1.173
+ },
+ "src/naming_screen.c": {
+  "CB2_LoadNamingScreen": 1.102,
+  "CB2_NamingScreen": 0.947,
+  "Input_Enabled": 1.585,
+  "SpriteCB_InputArrow": 0.935,
+  "SpriteCB_PageSwap": 1.418,
+  "SpriteCB_Underscore": 1.047,
+  "Task_NamingScreen": 1.497,
+  "Task_UpdateButtonFlash": 1.67,
+  "TryStartButtonFlash": 1.704,
+  "VBlankCB_NamingScreen": 1.056
  },
  "src/overworld.c": {
   "Overworld_RecvKeysFromLinkIsRunning": 0.873,
   "Overworld_SendKeysToLinkIsRunning": 1.465
  },
  "src/palette.c": {
-  "ResetPaletteFade": 1.097,
-  "UpdatePaletteFade": 1.033
+  "BeginNormalPaletteFade": 1.286,
+  "LoadPalette": 2.125,
+  "ResetPaletteFade": 1.101,
+  "TransferPlttBuffer": 1.441,
+  "UpdatePaletteFade": 1.054
  },
  "src/play_time.c": {
-  "PlayTimeCounter_Update": 1.478
+  "PlayTimeCounter_Update": 1.477
  },
  "src/pokeball.c": {
-  "SpriteCB_ReleasedMonFlyOut": 0.445
+  "SpriteCB_PokeballReleaseMon": 1.57,
+  "SpriteCB_ReleasedMonFlyOut": 0.913
  },
  "src/pokemon.c": {
   "ZeroEnemyPartyMons": 0.255,
   "ZeroPlayerPartyMons": 0.285
  },
  "src/pokemon_animation.c": {
-  "Task_HandleMonAnimation": 1.073,
-  "VerticalSquishBounce": 1.148
+  "Task_HandleMonAnimation": 1.074,
+  "VerticalSquishBounce": 1.019,
+  "WaitAnimEnd": 0.915
  },
  "src/random.c": {
-  "Random": 1.349
+  "Random": 1.348
+ },
+ "src/save.c": {
+  "GetSaveBlocksPointersBaseOffset": 1.006,
+  "LoadGameSave": 1.177
  },
  "src/scanline_effect.c": {
   "CopyValue16Bit": 1.278,
-  "ScanlineEffect_InitHBlankDmaTransfer": 0.98,
-  "ScanlineEffect_InitWave": 0.336,
-  "TaskFunc_UpdateWavePerFrame": 0.858
+  "ScanlineEffect_InitHBlankDmaTransfer": 0.963,
+  "ScanlineEffect_InitWave": 0.751,
+  "TaskFunc_UpdateWavePerFrame": 0.859
  },
  "src/sound.c": {
-  "MapMusicMain": 1.471
+  "MapMusicMain": 1.47
  },
  "src/sprite.c": {
-  "AffineAnimCmd_end": 1.508,
-  "AffineAnimCmd_frame": 2.533,
+  "AddSubspritesToOamBuffer": 0.955,
+  "AffineAnimCmd_end": 1.457,
+  "AffineAnimCmd_frame": 2.586,
   "AffineAnimCmd_jump": 0.774,
-  "AllocSpriteTiles": 0.741,
+  "AllocSpriteTiles": 0.597,
   "AnimCmd_end": 0.667,
-  "AnimCmd_frame": 0.792,
-  "AnimCmd_jump": 0.764,
-  "AnimateSprites": 1.097,
-  "ApplyAffineAnimFrame": 0.338,
-  "BeginAffineAnim": 1.212,
-  "BeginAnim": 0.961,
-  "BuildOamBuffer": 0.948,
-  "ContinueAffineAnim": 1.491,
-  "ContinueAnim": 1.054,
-  "CreateSprite": 1.31,
-  "CreateSpriteAt": 1.349,
-  "LoadSpritePalette": 0.868,
-  "LoadSpritePalettes": 1.041,
-  "ProcessSpriteCopyRequests": 1.25,
+  "AnimCmd_frame": 0.796,
+  "AnimCmd_jump": 0.765,
+  "AnimateSprites": 1.102,
+  "BeginAffineAnim": 1.215,
+  "BeginAnim": 0.975,
+  "BuildOamBuffer": 0.949,
+  "ContinueAffineAnim": 1.149,
+  "ContinueAnim": 1.068,
+  "CreateSprite": 1.301,
+  "CreateSpriteAt": 1.332,
+  "DestroySprite": 1.263,
+  "DestroySpriteAndFreeResources": 0.866,
+  "GetSpriteTileStartByTag": 1.057,
+  "IndexOfSpritePaletteTag": 0.867,
+  "LoadOam": 2.05,
+  "LoadSpritePalette": 0.861,
+  "LoadSpriteSheet": 1.248,
+  "LoadSpriteSheets": 2.831,
+  "ProcessSpriteCopyRequests": 1.246,
   "ResetSpriteData": 0.78,
   "SetOamMatrix": 1.14,
-  "StartSpriteAffineAnim": 0.891,
+  "SpriteCallbackDummy": 2.669,
+  "StartSpriteAffineAnim": 0.893,
   "StartSpriteAnim": 0.839,
   "StartSpriteAnimIfDifferent": 1.24
  },
  "src/string_util.c": {
-  "StringExpandPlaceholders": 0.846
+  "StringExpandPlaceholders": 0.848
  },
  "src/task.c": {
-  "CreateTask": 1.103,
+  "CreateTask": 1.075,
+  "DestroyTask": 0.836,
+  "FindTaskIdByFunc": 1.336,
   "ResetTasks": 0.438,
-  "RunTasks": 0.912
+  "RunTasks": 0.931
  },
  "src/text.c": {
-  "AddTextPrinter": 1.093,
+  "AddTextPrinter": 1.059,
+  "AddTextPrinterParameterized": 1.688,
+  "ClearTextSpan": 0.949,
   "CopyGlyphToWindow": 1.021,
   "DecompressGlyphTile": 0.731,
-  "DecompressGlyph_Normal": 1.606,
-  "GenerateFontHalfRowLookupTable": 0.757,
-  "IsTextPrinterActive": 2.062,
-  "RenderText": 1.091,
-  "RunTextPrinters": 0.667,
-  "TextPrinterDrawDownArrow": 0.779
+  "DecompressGlyph_Normal": 1.609,
+  "GenerateFontHalfRowLookupTable": 0.758,
+  "IsTextPrinterActive": 2.063,
+  "RenderText": 1.026,
+  "RunTextPrinters": 0.665,
+  "TextPrinterDrawDownArrow": 0.78
  },
  "src/title_screen.c": {
-  "SpriteCB_PokemonLogoShine": 0.91,
-  "SpriteCB_PokemonLogoShine_Fast": 0.843,
-  "SpriteCB_PressStartCopyrightBanner": 0.888,
-  "SpriteCB_VersionBannerLeft": 0.971,
-  "SpriteCB_VersionBannerRight": 0.883,
+  "CB2_InitTitleScreen": 1.297,
+  "SpriteCB_PokemonLogoShine": 0.911,
+  "SpriteCB_PokemonLogoShine_Fast": 0.846,
+  "SpriteCB_PressStartCopyrightBanner": 0.887,
+  "SpriteCB_VersionBannerLeft": 1.006,
+  "SpriteCB_VersionBannerRight": 0.913,
   "Task_TitleScreenPhase1": 1.109,
   "Task_TitleScreenPhase2": 1.223,
-  "Task_TitleScreenPhase3": 0.715
+  "Task_TitleScreenPhase3": 1.022
  },
  "src/trig.c": {
   "Cos": 1.413,
@@ -231,9 +289,13 @@
   "BlendPalette": 0.772
  },
  "src/window.c": {
+  "AddWindow": 0.158,
   "BlitBitmapRectToWindow": 1.586,
-  "CopyWindowToVram": 0.929,
+  "CopyWindowToVram": 0.927,
+  "FillWindowPixelBuffer": 1.114,
   "FillWindowPixelRect": 1.356,
-  "InitWindows": 0.212
+  "FreeAllWindowBuffers": 0.77,
+  "InitWindows": 0.205,
+  "ScrollWindow": 0.547
  }
 }
