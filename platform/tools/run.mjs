@@ -45,9 +45,14 @@ game = game_;
 const t0 = performance.now();
 let halted = null;
 try {
-  game.init();
+  await game.init();
   game.setKeys(keys);
-  while (game.vblanks() < script.frames) game.frame();
+  while (game.vblanks() < script.frames) {
+    if (!game.frame()) {
+      logs.push(`soft reset at frame ${game.vblanks()}`);
+      await game.init();
+    }
+  }
 } catch (e) {
   halted = `frame ${game.vblanks()}: ${e instanceof GameHalt ? 'halted: ' : ''}${e.message}`;
   console.log(e.stack);

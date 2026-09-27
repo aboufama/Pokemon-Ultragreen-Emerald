@@ -269,7 +269,7 @@ void RegisterRamReset(u32 flags)
 
 void SoftReset(u32 flags)
 {
-    (void)flags;
+    PlatformLogf("SoftReset(%x)", flags);
     PlatformHostSoftReset();
 }
 
