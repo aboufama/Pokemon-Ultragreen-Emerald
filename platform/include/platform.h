@@ -9,7 +9,7 @@
 void PlatformHalt(const char *reason) __attribute__((noreturn));
 
 // The CPU spends `cycles` cycles (a delay loop): the platform's clock moves on
-// and the hardware catches up (interrupts included).
+// and the hardware keeps up, interrupts arriving in the middle when due.
 void PlatformWaitCycles(uint32_t cycles);
 
 // The main loop waits here until `*flag & mask` (WaitForVBlank's loop): the

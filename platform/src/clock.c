@@ -151,8 +151,20 @@ void PlatformAdvanceToNextEvent(void)
     PlatformCatchUp();
 }
 
+// Time passes while the CPU works with interrupts enabled (a BIOS call's
+// loops, a driver's delay loop): the hardware keeps up event by event, so an
+// interrupt arrives when it is due, in the middle, and its handler's time
+// adds to the wait, as on the GBA. (Inside an interrupt handler the events
+// wait for it to return, as in PlatformCatchUp.)
 void PlatformWaitCycles(uint32_t cycles)
 {
-    gPlatformCycles += cycles;
+    u64 left = cycles;
+    while (!sBusy && gPlatformNextEvent < gPlatformCycles + left) {
+        u64 step = gPlatformNextEvent > gPlatformCycles ? gPlatformNextEvent - gPlatformCycles : 0;
+        gPlatformCycles += step;
+        left -= step;
+        PlatformCatchUp();
+    }
+    gPlatformCycles += left;
     PlatformCatchUp();
 }
