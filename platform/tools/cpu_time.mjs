@@ -36,6 +36,50 @@ function free(line) {
 
 export const CYCLE_SCALE = 2.6;
 
+// Copies and fills take time by their size. The game's memcpy, memmove and
+// memset (the platform's C library: platform/libc) are newlib's loops on the
+// GBA, measured on the ROM call by call: base cycles and 1/16 cycles a byte.
+// A struct copy or fill the compiler made (llvm.memcpy, llvm.memset) is
+// inline loads and stores on the GBA up to 64 bytes, and a call past that.
+const LIBRARY = { memcpy: [92, 53], memmove: [92, 53], memset: [121, 26] };
+const INLINE = { memcpy: [4, 12], memmove: [4, 12], memset: [2, 8] };
+const INLINE_BYTES = 64;
+
+/** Split an argument list at its top-level commas. */
+function args(text) {
+  const out = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '(' || c === '[' || c === '{' || c === '<') depth++;
+    else if (c === ')' || c === ']' || c === '}' || c === '>') depth--;
+    else if (c === ',' && depth === 0) {
+      out.push(text.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  out.push(text.slice(start).trim());
+  return out;
+}
+
+/**
+ * A copy or fill on this line: {kind, size} with the size a number or an SSA
+ * value, and the costs [base, 1/16 a byte] to use; or null.
+ */
+function copyOf(line) {
+  const m = /\bcall [^@]*@(llvm\.(memcpy|memmove|memset)\.[\w.]+|memcpy|memmove|memset)\((.*)\)/.exec(line);
+  if (!m) return null;
+  const intrinsic = m[1].startsWith('llvm.');
+  const kind = intrinsic ? m[2] : m[1];
+  const a = args(m[3]);
+  if (a.length < 3) return null;
+  const size = /^i(32|64)\s+(?:\w+\s+)*(-?\d+|%[-\w.$"]+)$/.exec(a[2]);
+  if (!size) return null;
+  const n = /^-?\d+$/.test(size[2]) ? Number(size[2]) : null;
+  const costs = intrinsic && n !== null && n <= INLINE_BYTES ? INLINE[kind] : LIBRARY[kind];
+  return { kind, bits: size[1], size: n ?? size[2], costs };
+}
+
 // What memory a function touches, as the first compile inferred it: memory(read,
 // argmem: readwrite) says it writes nothing but what its arguments point to.
 const MEMORY_EFFECTS = /\s*\b(memory\([^)]*\)|readnone|readonly|writeonly|argmemonly|inaccessiblememonly|inaccessiblemem_or_argmemonly)(?=[\s}]|$)/g;
@@ -90,19 +134,21 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
   const out = [];
   let blocks = 0;
   let inFunction = false;
-  let block = null; // { at: index in out after phis, cycles }
+  let block = null; // { at: index in out after phis, cycles (IR units), fixed (cycles: copies) }
   let counter = 0;
   let factor = 1;
   const flush = () => {
-    if (timed && block && block.cycles > 0) {
-      const n = Math.max(1, Math.round(block.cycles * scale * factor));
+    if (timed && block && (block.cycles > 0 || block.fixed > 0)) {
+      const code = block.cycles > 0 ? Math.max(1, Math.round(block.cycles * scale * factor)) : 0;
       const id = counter++;
-      const add = (counterName, tag) => [
+      const add = (counterName, tag, n) => [
         `  %__${tag}${id} = load i64, ptr @${counterName}, align 8`,
         `  %__${tag}${id}n = add i64 %__${tag}${id}, ${n}`,
         `  store i64 %__${tag}${id}n, ptr @${counterName}, align 8`];
-      // (a profile build also counts the game's own code apart)
-      out.splice(block.at, 0, ...add('gPlatformCycles', 'cyc'), ...(profile ? add('gPlatformGameCycles', 'gcyc') : []));
+      // (a profile build also counts the game's own code apart; the copies
+      // are the library's)
+      out.splice(block.at, 0, ...add('gPlatformCycles', 'cyc', code + block.fixed),
+        ...(profile && code ? add('gPlatformGameCycles', 'gcyc', code) : []));
       blocks++;
     }
     block = null;
@@ -123,7 +169,7 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
         fnName = profile ? name : null;
         // (the profile's entry first, so the entry block's time is the function's)
         if (fnName) out.push(`  call void @PlatformProfileEnter(i32 ptrtoint (ptr @${fnName} to i32))`);
-        block = { at: out.length, cycles: 0, phis: true };
+        block = { at: out.length, cycles: 0, fixed: 0, phis: true };
       }
       continue;
     }
@@ -139,7 +185,7 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
       flush();
       out.push(line);
       labels.add(line.slice(0, line.indexOf(':')));
-      block = { at: out.length, cycles: 0, phis: true };
+      block = { at: out.length, cycles: 0, fixed: 0, phis: true };
       continue;
     }
     // A branch back to a block above (a loop's) polls the hardware first; a
@@ -156,6 +202,21 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
       pollAt = -1;
     }
     if (pollAt >= 0 && line.includes(']')) pollAt = -1;
+    // A copy or fill of a size known only as it runs adds its time then.
+    const copy = timed && block ? copyOf(line) : null;
+    if (copy && typeof copy.size === 'string') {
+      const id = counter++;
+      const [base, perByte] = copy.costs;
+      const size = copy.bits === '64' ? copy.size : `%__mz${id}`;
+      if (copy.bits !== '64') out.push(`  %__mz${id} = zext i32 ${copy.size} to i64`);
+      out.push(`  %__mm${id} = mul i64 ${size}, ${perByte}`,
+        `  %__md${id} = lshr i64 %__mm${id}, 4`,
+        `  %__mc${id} = load i64, ptr @gPlatformCycles, align 8`,
+        `  %__ma${id} = add i64 %__mc${id}, %__md${id}`,
+        `  %__mb${id} = add i64 %__ma${id}, ${base}`,
+        `  store i64 %__mb${id}, ptr @gPlatformCycles, align 8`);
+      blocks++;
+    }
     out.push(line);
     if (!block) continue;
     const t = line.trim();
@@ -165,7 +226,11 @@ export function addCpuTime(ir, { scale = CYCLE_SCALE, profile = false, factors =
       continue;
     }
     block.phis = false;
-    if (!free(line)) block.cycles += cost(line);
+    if (copy) {
+      if (typeof copy.size === 'number') block.fixed += copy.costs[0] + ((copy.size * copy.costs[1]) >> 4);
+    } else if (!free(line)) {
+      block.cycles += cost(line);
+    }
   }
   let result = out.join('\n');
   if (blocks && !/^@gPlatformCycles = /m.test(result)) result += '\n@gPlatformCycles = external global i64, align 8\n';

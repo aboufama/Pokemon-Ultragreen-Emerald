@@ -50,9 +50,12 @@ hand. The remake adds two things around it:
    - **timed** (`tools/cpu_time.mjs`): each basic block adds its instructions'
      ARM7 cost to the platform's CPU clock, corrected function by function
      where it was measured against the ROM (`tools/cpu_time.json`, from
-     `tools/calibrate.py`); the functions lose the memory effects the first
-     compile inferred for them (one said to write only through its arguments
-     now writes the clock, and a caller trusting that would drop its time);
+     `tools/calibrate.py`); copies and fills cost by their size, as newlib's
+     memcpy and memset do on the GBA; each loop turn polls the hardware, so
+     interrupts arrive inside loops that touch no register; the functions
+     lose the memory effects the first compile inferred for them (one said
+     to write only through its arguments now writes the clock, and a caller
+     trusting that would drop its time);
    - **I/O hooked** (`tools/volatile_io.mjs`): every volatile access to
      0x04xxxxxx goes to the platform, which gives registers the hardware's
      behavior; other memory is untouched.
