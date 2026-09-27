@@ -164,9 +164,9 @@ for a moment.
 
 The remake reads the game's structs and constants by name: the build writes
 their layouts and values (`CONTROLLER_*`, `B_POSITION_*`,
-`BATTLE_ENVIRONMENT_*`: `REMAKE_CONSTANTS` in `platform/build.mjs`) to
-`public/game/remake_state.json`, so `src/remake` repeats none of the game's
-numbers.
+`BATTLE_ENVIRONMENT_*`, `BATTLE_TYPE_*`: `REMAKE_CONSTANTS` in
+`platform/build.mjs`) to `public/game/remake_state.json`, so `src/remake`
+and the tools repeat none of the game's numbers.
 
 **Test battles.** `platform/game/remake_test.c` starts a wild battle from
 anywhere, as the game starts one, and starts it over when it ends: the game
