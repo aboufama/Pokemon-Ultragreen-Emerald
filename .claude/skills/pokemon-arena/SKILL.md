@@ -1,6 +1,6 @@
 ---
 name: pokemon-arena
-description: Design, paint or fix a battle arena (the place a battle happens) in this repo — the ground, the far view, what stands in it and how it moves — in the remake's pixel-art style with Hoenn's colors and no platforms under the Pokémon, beautiful but sparse like Emerald's own battle backgrounds, as calm and as sparse as the open sea so the Pokémon stay the focus. Use when adding a place to battle, when an arena looks flat, noisy, too busy, cluttered or "not like Pokémon", when something in an arena covers a Pokémon, when tools/arena/check.mjs fails (e.g. "as calm as the sea", "as sparse as the sea", "the Pokémon are the focus"), or when touching src/render3d/arena, environment.ts or ambience.ts.
+description: Design, paint or fix a battle arena (the place a battle happens) in this repo — the ground, the far view, what stands in it and how it moves — in the remake's pixel-art style with Hoenn's colors and no platforms under the Pokémon, beautiful but sparse like Emerald's own battle backgrounds, as calm and as sparse as the open sea so the Pokémon stay the focus. Use when adding a place to battle, when an arena looks flat, noisy, too busy, cluttered or "not like Pokémon", when its ground has a pool, oval or ring of light, when something in an arena covers a Pokémon, when tools/arena/check.mjs fails (e.g. "as calm as the sea", "as sparse as the sea", "no light pools", "the Pokémon are the focus"), or when touching src/render3d/arena, environment.ts or ambience.ts.
 ---
 
 # Battle arenas
@@ -19,13 +19,16 @@ and the header of `src/render3d/environment.ts`.
 **The Pokémon are the focus.** The user asked for fewer places, each
 "beautiful, but sparse", after Emerald's own battle backgrounds and the
 craft of pixel art (below). The open sea is **perfect** and is the benchmark:
-do not change it. It must paint bit-identically (hash `paintArena('water', …)`'s
-ground data and props with its `look`, `ripples`, `ambience`, `name` and
-`about`: `c24aba7d26cc2e68677e9d6613988e5881e60a2b50a1cbc8a7bbd49527337f61`),
+do not change it. It must paint bit-identically (the SHA-256 of
+`paintArena('water', …)`'s ground data, then each prop's sprite data, then
+`JSON.stringify({ look, ripples, ambience, name, about })` of its design:
+`c24aba7d26cc2e68677e9d6613988e5881e60a2b50a1cbc8a7bbd49527337f61`),
 and the ground shader's water path stays as it is. Every other place is held
 to the sea by `tools/arena/check.mjs` ([Calm](#calm-the-sea-is-the-benchmark),
-[Sparse](#sparse-like-emeralds-backgrounds)) and must leave the Pokémon the
-most saturated, highest-contrast things on screen ([Focus](#focus-the-pokémon-stand-out)).
+[Sparse](#sparse-like-emeralds-backgrounds)), lights its ground by distance
+with no pool of light ([No light pools](#no-light-pools)) and must leave the
+Pokémon the most saturated, highest-contrast things on screen
+([Focus](#focus-the-pokémon-stand-out)).
 
 ## What the battle view shows
 
@@ -102,8 +105,9 @@ Pedro Medeiros (saint11), Lospec's cluster and dithering tutorials and
 atmospheric-perspective guides:
 
 - **Fewer colors look better.** A few ramps of 3 (at most 4) steps.
-  Hue-shift them: shadows cooler and more saturated, lights warmer. Only the
-  focal thing gets a 4th step (the cave's daylight).
+  Hue-shift them: shadows cooler and more saturated, lights warmer. Only a
+  focal thing gets a 4th step (none needs one now: the cave's daylight lifts
+  its wall within the wall's own three steps).
 - **Atmospheric perspective.** The far view is lighter, less saturated and
   lower in contrast, shifted toward the sky or haze with fewer colors (the
   meadow's far row of trees has two tones; the cave's wall is its rock hazed
@@ -125,6 +129,13 @@ atmospheric-perspective guides:
   Pokémon stand, framing at the edges, lit from the upper left like the
   sprites. Test it in grayscale: a Pokémon that disappears needs value, not
   hue.
+- **Light flat ground by distance.** Emerald's backgrounds and good pixel-art
+  landscapes light flat ground in bands by distance: the same tone right
+  across the view at each distance, stepping toward the back (a thin stripe
+  of the next tone before it). The light's direction (the upper left) shows
+  on what stands or lies on the ground: lit flanks and tops, tufts and
+  pebbles lit on their upper left. Never a spotlight: a pool of light on the
+  ground reads as a stage or a platform.
 
 ## What an arena is made of
 
@@ -142,18 +153,24 @@ atmospheric-perspective guides:
 
 | place | palette (colors shown) | what is in it |
 |---|---|---|
-| Route 101 `meadow()` | meadow `#7cc2a4` `#98d1b4` `#b3e0bd`, leaves `#5f9f78` `#7fb888` `#a0cf98`, outline `#4a8466`, trunk `#6b7462` `#8a8672` (9) | a pale meadow in three broad tones, lightest over the battle; toward the back a thin stripe and the mid tone (Emerald's bands), then the trees' scalloped shade; a soft hazy tree line whose near row opens behind the wild Pokémon onto a hazier two-tone row; one clump of tall grass framing the left; a few tufts beside the player's Pokémon; every border drawn as blades |
+| Route 101 `meadow()` | meadow `#7cc2a4` `#98d1b4` `#b3e0bd`, leaves `#5f9f78` `#7fb888` `#a0cf98`, outline `#4a8466`, trunk `#6b7462` `#8a8672` (9) | a pale meadow in three broad tones, in bands by distance: the palest right across the view nearer; toward the back a thin stripe and the mid tone (Emerald's bands), then the trees' scalloped shade; a soft hazy tree line whose near row opens behind the wild Pokémon onto a hazier two-tone row; one clump of tall grass framing the left; a few tufts beside the player's Pokémon; every border drawn as blades |
 | Route 124 `sea()` | Hoenn's sea blues, pink-brown rock (15) | the benchmark: unchanged |
-| Granite Cave `cave()` | sand `#bd9c73` `#cdac7b` `#e6c58b` (the last only where the daylight lands), wall `#7d6361` `#957670` `#ab8d80`, Hoenn's pink-brown rock (11) | warm sand in a soft pool of light much bigger than the battlers, a close step darker around it; a quiet back wall in shadow, a step below the lit floor, of three bands, darker going up, each ledge's lip a row of low rounded rock tops catching the light; a column of daylight from the upper left crossing the wall and landing in a bright foot behind the wild Pokémon; a faceted boulder framing the left, a small hazed rock at the far right |
+| Granite Cave `cave()` | sand `#bd9c73` `#cdac7b`, wall `#7d6361` `#957670` `#ab8d80`, Hoenn's pink-brown rock (10) | warm sand in bands by distance: a close step darker by the wall and in a thin stripe in front of it, the lit sand right across the view nearer; a quiet back wall in shadow, a step below the lit floor, of three bands, darker going up, each ledge's lip a row of low rounded rock tops catching the light; a column of daylight from the upper left falling across the wall to its foot (it never lights the floor); a faceted boulder framing the left with a few pebbles of its rock beside it, a small hazed rock at the far right |
 
 ## Rules
 
-1. **No platforms.** Nothing ring-, disc- or ellipse-shaped under a battler;
-   the ground runs on under them. (Ripples spreading on water at the feet are
-   fine: they come and go.) A light pool is lighting, not a platform, only if
-   it is much bigger than the battlers, centered between them, and its edge
-   soft (close tones); a light spot is the foot of the beam that makes it,
-   away from the battlers, never concentric rings.
+1. **No platforms, no light pools.** Nothing ring-, disc- or ellipse-shaped
+   under a battler; the ground runs on under them. (Ripples spreading on
+   water at the feet are fine: they come and go.) No light pools of any size,
+   however big, soft or centered, and no ellipse, disc or ring of light
+   anywhere on the ground, not even where a beam lands: the user saw the huge
+   light ovals under Route 101's and Granite Cave's battles and said "the
+   huge light ovals look like shit". Light the ground the way Emerald's own
+   backgrounds and good pixel art do: in bands by distance (the same tone
+   right across the view at each distance), the light from the upper left on
+   what stands or lies on it, detail shapes. The ground under and between the
+   battlers is never lighter than the ground beside it at the same distance.
+   `check.mjs` holds it ([No light pools](#no-light-pools)).
 2. **Hoenn's colors.** Take ramps from the overworld tilesets (see
    [The Emerald reference](#the-emerald-reference)) and keep a pixel-art
    palette: a few ramps of 3-4 steps, hue-shifted (warm lights, cool shadows).
@@ -175,9 +192,10 @@ atmospheric-perspective guides:
    the calmest part of the far view right behind it (a hazier row of trees,
    open water, a plain wall); framing and the little detail go to the sides.
 8. **Composed.** A far view across the top, the arena's middle distance, and
-   framing at the edges (cropped by the frame); the battlers' ground the
-   brightest, darker toward the sides and the back; depth by the far view's
-   haze.
+   framing at the edges (cropped by the frame); the ground lighter near,
+   stepping darker toward the back in bands, never darker toward the sides
+   (that makes a pool of light: frame with things, not darker ground); depth
+   by the far view's haze.
 9. **Calm and sparse, like the sea.** Restraint, not blandness: each place
    keeps its character in a few well-drawn things. `node tools/arena/check.mjs`
    holds every place to the sea.
@@ -190,10 +208,11 @@ atmospheric-perspective guides:
    `ARENAS`, so that is the only list.
 2. Iterate fast in node: `node tools/arena/preview.mjs <arena> --wide --boxes`
    paints it in a second, saves what the resting camera sees
-   (`build/arenas/<arena>.paint.png`, and the whole painted area with
-   `--wide`) and prints its calm and sparse figures (run it with `water` too,
-   to compare with the sea). It matches the browser exactly except for the
-   ground shader's life and the Pokémon.
+   (`build/arenas/<arena>.paint.png`, the whole painted area with `--wide`,
+   the painted ground at 1:1 with the far view cut out with `--ground`) and
+   prints its calm and sparse figures and how near its ground comes to a
+   light pool (run it with `water` too, to compare with the sea). It matches
+   the browser exactly except for the ground shader's life and the Pokémon.
 3. Look at it in the browser with the Pokémon and the UI, and without:
    `/?mode=stage&env=<arena>&player=blaziken&enemy=swampert&scale=3` (`&ui=0`
    without the UI; try every species on both sides), or a still of the battle view with
@@ -203,7 +222,8 @@ atmospheric-perspective guides:
    sea: the places should feel like one family.
 4. `node tools/arena/check.mjs` (every arena names its place, no Emerald
    backgrounds, the screen fully painted, the palette, nothing over a battler,
-   seeded, painting time, as calm as the sea, as sparse as the sea);
+   seeded, painting time, as calm as the sea, as sparse as the sea, no light
+   pools, and the light-pool test still failing the old pools);
    `--render --base <dev server>` also renders each arena in the browser into
    build/arenas/ and checks that the Pokémon are the focus.
 5. Watch a battle in it (`/?mode=battle&env=<arena>`, or step one with
@@ -257,13 +277,15 @@ the sea passes by construction:
 | behind the wild Pokémon | busy over the shown pixels of its battler box widened by 12 px | 15.1 | sea +10% (16.6) |
 | props showing | props with 24+ pixels in the shown area | 0 | 3 |
 
-Where the places stand (before: as they were before the sparse repaint):
+Where the places stand (in parentheses: before the sparse repaint; taking
+out the light pools moved them little, e.g. open ground 76% to 73% on
+Route 101 and 75% to 71% in Granite Cave):
 
 | arena | busy | strong | specks | marks | open | behind foe | props |
 |---|---|---|---|---|---|---|---|
 | water (sea) | 15.9 | 22.9% | 26.4 | 7.0 | 36% | 15.1 | 0 |
-| grass | 5.1 (was 11.3) | 7.1% (15.5%) | 4.9 (25.0) | 2.4 (5.9) | 76% (51%) | 3.0 (7.3) | 0 (2) |
-| cave | 3.9 (was 11.8) | 6.0% (20.4%) | 1.4 (9.6) | 0.8 (8.0) | 75% (42%) | 3.5 (13.4) | 0 (0) |
+| grass | 5.3 (was 11.3) | 7.1% (15.5%) | 4.9 (25.0) | 2.4 (5.9) | 73% (51%) | 3.3 (7.3) | 0 (2) |
+| cave | 4.4 (was 11.8) | 6.0% (20.4%) | 1.4 (9.6) | 0.8 (8.0) | 71% (42%) | 3.9 (13.4) | 0 (0) |
 
 ## Sparse (like Emerald's backgrounds)
 
@@ -284,13 +306,59 @@ Every limit is the sea's own value, no margin but for the tones:
 | arena | colors | three tones | specks | marks | far darks | far contrast | props |
 |---|---|---|---|---|---|---|---|
 | water (sea) | 15 | 75.0% | 26.4 | 7.0 | 93.8 | 99.5 | 0 |
-| grass | 9 (was 31) | 81.8% (58.5%) | 4.9 (25.0) | 2.4 (5.9) | 132.9 (97.6) | 55.7 (69.1) | 0 (2) |
-| cave | 11 (was 10) | 77.3% (61.5%) | 1.4 (9.6) | 0.8 (8.0) | 106.5 (31.6) | 41.9 (144.7) | 0 (0) |
+| grass | 9 (was 31) | 82.0% (58.5%) | 4.9 (25.0) | 2.4 (5.9) | 132.9 (97.6) | 55.7 (69.1) | 0 (2) |
+| cave | 10 (was 10) | 77.0% (61.5%) | 1.4 (9.6) | 0.8 (8.0) | 106.5 (31.6) | 41.9 (144.7) | 0 (0) |
 
 Both places as they were before this pass fail it: the old meadow on colors
 and tones (flowers, a sand path, six greens in the grass), the old cave on
 tones, marks (floor hatching), far darks and far contrast (a near-black
 chamber behind a bright pool).
+
+## No light pools
+
+The user saw Route 101 with its middle one huge pale ellipse of lighter
+grass, darker round it, and Granite Cave with a large lighter ellipse of
+sand across the lower middle and a small yellow oval where the daylight
+landed, and said "the huge light ovals look like shit". Rule 1 has no size or
+softness loophole any more, and `check.mjs` ("no light pools") holds it on
+the painted ground, the far view left out (`screen.mjs` `lightRegions()`,
+`lightPools()`, the limits in `POOLS`):
+
+- A **light region** is a connected region of the ground at least as light
+  as some level, holes filled (a ring counts with what it encloses), found
+  on the luma with small detail taken out (the median of the 5x5
+  surroundings: tufts, crests, pebbles and dither drop out, a dithered or
+  smoothly graded pool still counts) and, for rings, on the luma itself (an
+  outline of light 1 px thin that encloses darker ground).
+- A screen row is one distance from the camera, so the ground beside a
+  region at the same distance is the ground just left and right of it on
+  each of its rows. A band by distance runs off both sides of the painted
+  area; a pool has darker ground beside it.
+
+| measure | what it is | limit |
+|---|---|---|
+| lift | its median luma minus that of the ground just beside it on its rows | counts from 6 luma (the old pools: 15 and 18) |
+| beside | the share of its row ends (two a row) with ground beside them, all darker, rather than the painted area's edge or the far view | under a third for a region holding the wild Pokémon's feet, the player's or the ground midway between them: else a pool of light under or between the battlers, any size or shape |
+| oval | how well it fills the ellipse of its moments (intersection over union), for a region ringed by darker ground (beside on 80% of its row ends and 80% of its outline) | under 0.9: a painted ellipse fills 0.98, a square or a stripe 0.83; else an ellipse, disc or ring of light, any size, anywhere |
+
+The old Route 101 and Granite Cave as they were painted (their painted
+area, the far view cut out, in `reference/arenas/grass-light-pool.png` and
+`cave-light-pool.png`: `node tools/arena/preview.mjs grass,cave --ground`
+with `arenas.ts` of commit 1b3a13b) must still fail it, so the test can't
+slacken without `check.mjs` failing. On made-up grounds it catches a
+spotlight under the wild Pokémon, a dithered pool, a pool graded in 1-luma
+steps, a dark vignette at both sides, a thin platform rim, a ring of light
+1 px thin and a 12x6 oval, and lets bands, stripes, a darker patch at one
+edge and the tree line's scalloped shade be. Darker ground all along one side
+counts: it is half a pool.
+
+| ground | under the battle: beside (limit 33%) | most oval ringed light patch (limit 0.90) | verdict |
+|---|---|---|---|
+| water (sea) | 7% | 0.82 | passes |
+| grass | 3% | none | passes |
+| cave | 1% | none | passes |
+| the old Route 101 | 48%, +18 luma, holding both battlers' feet and the ground between them | none | a pool |
+| the old Granite Cave | 54%, +15 luma, holding both battlers' feet and the ground between them | 0.98 (the beam's foot, +39 luma) | a pool and an oval |
 
 ## Focus (the Pokémon stand out)
 
@@ -309,7 +377,7 @@ outlines).
 |---|---|---|
 | water (sea) | 132 < 148-173 | 146 < 165-181 |
 | grass | 75-90 < 148-173 (was 198: the flowers) | 39-100 < 195-211 |
-| cave | 90-91 < 148-173 (was 99 < 148-173) | 55 < 161-181 (was 123 < 161-186) |
+| cave | 83-90 < 148-173 (was 99 < 148-173) | 55 < 161-181 (was 123 < 161-186) |
 
 ## Techniques that work
 
@@ -331,15 +399,19 @@ outlines).
 - **Tall grass as a fan** (`tallGrass()`): tapered blades curving outward,
   tallest in the middle, the ones behind dark, the ones in front mid with a lit
   left edge; outlined except along the ground.
+- **Light by distance** (both): the ground's tone depends on its distance
+  alone, a band right across the view at each distance, stepping darker
+  toward the back after a thin stripe of the next tone (the meadow's mid
+  tone, the cave's shade by the wall), the borders wandering gently.
 - **Ledges as rows of rock tops** (cave): each lip a row of low arcs (1 px
   high, 0.45-0.65 units wide), the lowest lip in the rock's light, the bands
   darker going up.
-- **A beam and its foot** (cave): a slanted column lifts what it crosses one
-  step (wall and floor) and ends in a small bright foot on the floor, the
-  place's one 4th step; no concentric halo.
-- **A soft pool of light from close tones** (cave): a lobed ellipse much
-  bigger than the battlers, the floor around it only ~15 luma darker, so its
-  edge reads soft with no dither.
+- **A beam on the wall** (cave): a slanted column of daylight lifts the wall
+  it crosses one step and stops at the wall's foot; landing on the floor it
+  would make a spot of light.
+- **Pebbles lit from the upper left** (cave): 2x2 and 3x2 clusters of the
+  boulder's rock, the upper-left pixel lit, each tone a shade off the sand,
+  in the strip beside the player's Pokémon like the meadow's tufts.
 - **Crisp lines at any distance** with `onLine()`: wave crests; lines that
   crowd closer than `maxStep` drop out.
 - **Reflections**: the object's own silhouette mirrored in darker water,
@@ -356,9 +428,11 @@ outlines).
 |---|---|
 | empty or washed out | sparse is not empty: a few well-drawn things at the edges and in the far band (framing, a tree line, a wall with ledges), lit from the upper left; the middle stays calm |
 | noisy, busy ground | too many marks or dithered noise everywhere: fewer, clearer patches, broad tones, marks only where the Pokémon stand |
-| a light pool that reads as a stage or platform | make it much bigger than the battlers, centered between them, its edge a close step (~15 luma), lobed a little |
-| a light spot that reads as a disc | draw it as the foot of the beam that lands there, one step, no halo around it |
-| a meadow border that reads as a runway | a tone edge at constant world x converges to the vanishing point: bend it with z, or keep it at the frame's edge |
+| a pool, oval or ring of light on the ground, of any size ("the huge light ovals look like shit") | light the ground by distance: one tone right across the view at each distance, stepping darker toward the back; no lighter middle, no darker sides; show the light's direction on what stands or lies on the ground |
+| a beam of light that lands in a spot | let it fall across the wall (or what stands) and stop at its foot: where it lands on the floor it makes a spot of light |
+| "no light pools" fails | it names the region (its lift over the ground beside it, how many of its row ends have darker ground beside them, which battler's feet it holds, or how well it fills its ellipse) and where it is: find what makes the ground there lighter than beside it at the same distance and light by distance instead (`preview.mjs` prints the same figures) |
+| framing made of darker ground along a side | frame with things painted into the ground (tall grass, a boulder): darker ground all along one side is half a pool |
+| a tone edge that runs toward the back (a runway, darker sides) | a tone edge at constant world x converges to the vanishing point, and darker ground at the sides makes a pool of light: run tone edges across the view, by distance |
 | a stripe that breaks into dashes far off | too thin: 2-3 px there, low wobble |
 | a dithered field (a gradient spread over many pixels) | slow gradients with `band()` softness dither wide: clean steps, close tones |
 | blade teeth or tufts counted as marks | the neighboring tones are over 20 luma apart: bring them within ~17-20 |

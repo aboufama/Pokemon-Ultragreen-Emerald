@@ -1,9 +1,9 @@
 // What the resting battle camera sees of a painted arena (the ground with
 // its props standing on it; no Pokémon, no ground shader life), which of it
 // a battle shows (not under the text box, the healthboxes or the player's
-// Pokémon), and how calm and how sparse that is, and whether the Pokémon
-// are the focus of the rendered battle view, for the arena tools
-// (preview.mjs, check.mjs).
+// Pokémon), and how calm and how sparse that is, whether its ground holds a
+// light pool, and whether the Pokémon are the focus of the rendered battle
+// view, for the arena tools (preview.mjs, check.mjs).
 
 /**
  * The screen at rest, RGBA, for GBA pixels [x0, x0 + w) x [y0, y0 + h):
@@ -224,6 +224,263 @@ export function sparse(img, mask) {
   const top = [...counts.values()].sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0);
   far.sort((a, b) => a - b);
   return { colours: counts.size, tones: (top / n) * 100, farDark: pct(far, 0.05), farRange: pct(far, 0.95) - pct(far, 0.05) };
+}
+
+/**
+ * The light regions of an arena's painted ground, to find light pools: a
+ * region of the ground lighter than the ground beside it at the same
+ * distance (a screen row is one distance from the camera; the camera has no
+ * roll). `ground` is the painted area as design.ts's Paint holds it
+ * ({ data, width, height, ox, oy }: RGBA, the material in A); the ground is
+ * every painted pixel that is not `backdrop` (the far view: trees, walls,
+ * rocks), which is left out. `feet` are the screen points the battle stands
+ * on (the wild Pokémon's feet, the player's, the ground midway between them).
+ *
+ * A light region is a connected region of the ground at least as light as
+ * some level, holes filled (a ring counts with what it encloses, a pool with
+ * the tufts in it), 40 px or more, found on the luma with small detail taken
+ * out:
+ *
+ *   areas    on the median of the ground's 5x5 surroundings (4-connected):
+ *            tufts, crests, pebbles and dither drop out, a dithered pool
+ *            still counts
+ *   rings    on the luma itself (8-connected), where an outline of light 1 px
+ *            thin still encloses what it rings: the light regions that
+ *            enclose darker ground (a hole of a quarter of their area or more)
+ *
+ * For each one:
+ *
+ *   lift     how much lighter it is than the ground beside it at the same
+ *            distance: its median luma minus the median of the ground just
+ *            left of its first run and just right of its last run, row by row
+ *   beside   the share of its row ends (two per row) with ground beside them,
+ *            which is darker (the region holds everything as light next to
+ *            it), rather than the painted area's edge or the far view: a band
+ *            by distance runs off both sides (0), a pool is ringed by darker
+ *            ground
+ *   closed   the share of its outline inside the painted area that faces
+ *            ground at least 6 luma darker (the far view counts against it)
+ *   ellipse  how well it fills the ellipse of its own moments (semi-axes
+ *            twice the standard deviations; intersection over union): about
+ *            0.98 for a painted ellipse, 0.83 for a rectangle (a square, a
+ *            stripe), less for a ragged shape
+ *   holds    which of `feet` it holds (their indices)
+ *
+ * and its area (holes filled), hole and bounding box (screen pixels).
+ */
+export function lightRegions(ground, feet, backdrop) {
+  const { data, width: W, height: H, ox, oy } = ground;
+  const n = W * H;
+  const isGround = new Uint8Array(n);
+  const L = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = data[i * 4 + 3];
+    isGround[i] = a !== 0 && a !== backdrop ? 1 : 0;
+    L[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+  }
+  /** The luma with small detail taken out: the median of the ground in each ground pixel's (2r+1)² surroundings. */
+  const median = (r) => {
+    const M = new Int16Array(n).fill(-1);
+    const win = new Float32Array((2 * r + 1) ** 2);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (!isGround[y * W + x]) continue;
+        let k = 0;
+        for (let Y = Math.max(0, y - r); Y <= Math.min(H - 1, y + r); Y++) {
+          for (let X = Math.max(0, x - r); X <= Math.min(W - 1, x + r); X++) {
+            if (!isGround[Y * W + X]) continue;
+            const v = L[Y * W + X];
+            let j = k++;
+            for (; j > 0 && win[j - 1] > v; j--) win[j] = win[j - 1];
+            win[j] = v;
+          }
+        }
+        M[y * W + x] = Math.round(win[k >> 1]);
+      }
+    }
+    return M;
+  };
+  const at = feet.map(([fx, fy]) => [Math.floor(fx) - ox, Math.floor(fy) - oy]);
+  const regions = [];
+  const lab = new Int32Array(n);
+  let stamp = 0;
+  /** Every level `M` has (the lowest holds all the ground), each level's connected regions that `keep` keeps, measured. */
+  const collect = (M, eight, keep) => {
+    const levels = [...new Set(M)].filter((v) => v >= 0).sort((a, b) => a - b).slice(1);
+    const seen = new Set();
+    for (const level of levels) {
+      stamp++;
+      for (let s = 0; s < n; s++) {
+        if (M[s] < level || lab[s] === stamp) continue;
+        const px = [s];
+        lab[s] = stamp;
+        for (let q = 0; q < px.length; q++) {
+          const k = px[q], x = k % W;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if ((!dx && !dy) || (!eight && dx && dy) || x + dx < 0 || x + dx >= W) continue;
+              const j = k + dy * W + dx;
+              if (j < 0 || j >= n || M[j] < level || lab[j] === stamp) continue;
+              lab[j] = stamp;
+              px.push(j);
+            }
+          }
+        }
+        if (px.length < (eight ? 12 : 40)) continue;
+        const r = lightRegion(px, M, isGround, W, H, at);
+        // The same region at several levels is measured once.
+        const key = `${r.bbox}:${px.length}`;
+        if (r.area < 40 || seen.has(key) || !keep(r)) continue;
+        seen.add(key);
+        r.bbox = [r.bbox[0] + ox, r.bbox[1] + oy, r.bbox[2] + ox, r.bbox[3] + oy];
+        regions.push(r);
+      }
+    }
+  };
+  // Areas, small detail taken out; rings, on the luma itself (the median of 1x1).
+  collect(median(2), false, () => true);
+  collect(median(0), true, (r) => r.hole >= r.area / 4);
+  return regions;
+}
+
+function lightRegion(px, M, isGround, W, H, at) {
+  let x0 = W, x1 = 0, y0 = H, y1 = 0;
+  for (const k of px) {
+    const x = k % W, y = (k - x) / W;
+    x0 = Math.min(x0, x);
+    x1 = Math.max(x1, x);
+    y0 = Math.min(y0, y);
+    y1 = Math.max(y1, y);
+  }
+  // The region in its box with a pixel of margin; what the margin reaches around it is outside, the rest
+  // (the region and its holes) inside.
+  const bw = x1 - x0 + 3, bh = y1 - y0 + 3;
+  const box = new Uint8Array(bw * bh);
+  for (const k of px) {
+    const x = k % W, y = (k - x) / W;
+    box[(y - y0 + 1) * bw + x - x0 + 1] = 1;
+  }
+  const out = [0];
+  box[0] = 2;
+  for (let q = 0; q < out.length; q++) {
+    const k = out[q], x = k % bw;
+    for (const j of [x > 0 ? k - 1 : -1, x < bw - 1 ? k + 1 : -1, k - bw, k + bw]) {
+      if (j < 0 || j >= box.length || box[j]) continue;
+      box[j] = 2;
+      out.push(j);
+    }
+  }
+  const inside = (x, y) => {
+    const X = x - x0 + 1, Y = y - y0 + 1;
+    return X >= 0 && Y >= 0 && X < bw && Y < bh && box[Y * bw + X] !== 2;
+  };
+  const own = px.map((k) => M[k]).sort((a, b) => a - b);
+  const median = own[own.length >> 1];
+  let area = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, rows = 0, dark = 0, facing = 0;
+  const beside = [];
+  for (let y = y0; y <= y1; y++) {
+    let first = -1, last = -1;
+    for (let x = x0; x <= x1; x++) {
+      if (!inside(x, y)) continue;
+      if (first < 0) first = x;
+      last = x;
+      area++;
+      sx += x;
+      sy += y;
+      sxx += x * x;
+      syy += y * y;
+      sxy += x * y;
+      for (const [X, Y] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+        if (X < 0 || Y < 0 || X >= W || Y >= H || inside(X, Y)) continue;
+        facing++;
+        if (isGround[Y * W + X] && M[Y * W + X] <= median - 6) dark++;
+      }
+    }
+    if (first < 0) continue;
+    rows++;
+    for (const x of [first - 1, last + 1]) if (x >= 0 && x < W && isGround[y * W + x]) beside.push(M[y * W + x]);
+  }
+  beside.sort((a, b) => a - b);
+  // The ellipse of its moments, and how well the region fills it.
+  const mx = sx / area, my = sy / area;
+  const cxx = sxx / area - mx * mx, cyy = syy / area - my * my, cxy = sxy / area - mx * my;
+  const mid = (cxx + cyy) / 2, d = Math.sqrt(Math.max(0, mid * mid - (cxx * cyy - cxy * cxy)));
+  const a = 2 * Math.sqrt(mid + d), b = 2 * Math.sqrt(Math.max(1e-6, mid - d));
+  const t = 0.5 * Math.atan2(2 * cxy, cxx - cyy), c = Math.cos(t), s = Math.sin(t);
+  let both = 0, inEllipse = 0;
+  for (let y = Math.floor(my - a - 1); y <= my + a + 1; y++) {
+    for (let x = Math.floor(mx - a - 1); x <= mx + a + 1; x++) {
+      const u = (x - mx) * c + (y - my) * s, v = (y - my) * c - (x - mx) * s;
+      if ((u / a) ** 2 + (v / b) ** 2 > 1) continue;
+      inEllipse++;
+      if (inside(x, y)) both++;
+    }
+  }
+  return {
+    area,
+    hole: area - px.length,
+    bbox: [x0, y0, x1, y1],
+    lift: beside.length ? median - beside[beside.length >> 1] : 0,
+    beside: beside.length / (2 * rows),
+    closed: facing ? dark / facing : 0,
+    ellipse: both / (area + inEllipse - both),
+    holds: at.flatMap(([x, y], i) => (inside(x, y) ? [i] : [])),
+  };
+}
+
+/**
+ * What makes a light region (lightRegions()) a light pool: lighter than the
+ * ground beside it at the same distance by a visible step (`lift` 6 luma; the
+ * old pools were 15 and 18) and
+ *
+ *   under the battle  darker ground beside it on a third of its row ends
+ *                     (`beside`), holding the wild Pokémon's feet, the
+ *                     player's or the ground midway between them: a pool of
+ *                     light under or between the battlers, any size or shape
+ *                     (a band by distance runs off both sides: 0; the sea's
+ *                     water round the battle 7%; the old Route 101's pale
+ *                     middle 48%, the old Granite Cave's pool 54%)
+ *   an oval           ringed by darker ground, beside it on `ringed` (80%)
+ *                     of its row ends and on `closed` (80%) of its outline,
+ *                     and filling the ellipse of its moments to `ellipse`
+ *                     (0.9): an ellipse, disc or ring of light anywhere, any
+ *                     size (a painted ellipse fills 0.98 of it, a square or a
+ *                     stripe 0.83; the old cave's beam foot 0.98, the sea's
+ *                     most oval light patch 0.82)
+ */
+export const POOLS = { lift: 6, beside: 1 / 3, ringed: 0.8, closed: 0.8, ellipse: 0.9 };
+
+/**
+ * The screen points a battle stands on, lightPools()'s `feet`: the wild
+ * Pokémon's feet, the player's, the ground midway between them (`view` is
+ * the arena's ArenaView, `player` and `enemy` the battlers' ground points).
+ */
+export const battleFeet = (view, player, enemy) => [view.screen(enemy.x, 0, enemy.z), view.screen(player.x, 0, player.z), view.screen((player.x + enemy.x) / 2, 0, (player.z + enemy.z) / 2)];
+const FEET = ["the wild Pokémon's feet", "the player's", 'the ground between them'];
+const where = (r) => `${r.area} px, ${r.bbox[0]},${r.bbox[1]} to ${r.bbox[2]},${r.bbox[3]}`;
+
+/**
+ * The light pools on an arena's painted ground (lightRegions()'s arguments):
+ * `pools` under the battle and `ovals`, `found`, a line on each, and
+ * `figures`, how near the ground comes to one: `under`, the light region
+ * under the battle most beside darker ground, and `oval`, the most oval light
+ * patch ringed by darker ground.
+ */
+export function lightPools(ground, feet, backdrop) {
+  const lifted = lightRegions(ground, feet, backdrop).filter((r) => r.lift >= POOLS.lift);
+  const under = lifted.filter((r) => r.holds.length).sort((a, b) => b.beside - a.beside);
+  const ringed = lifted.filter((r) => r.beside >= POOLS.ringed && r.closed >= POOLS.closed).sort((a, b) => b.ellipse - a.ellipse);
+  const pools = under.filter((r) => r.beside >= POOLS.beside), ovals = ringed.filter((r) => r.ellipse >= POOLS.ellipse);
+  const pct = (v) => `${(v * 100).toFixed(0)}%`;
+  const found = [
+    ...pools.map((r) => `a pool of light under the battle: +${r.lift} luma over the ground beside it, which is darker on ${pct(r.beside)} of its row ends (>= ${pct(POOLS.beside)}), holding ${r.holds.map((i) => FEET[i]).join(', ')} (${where(r)})`),
+    ...ovals.map((r) => `an oval of light: +${r.lift} luma, ringed by darker ground, filling its ellipse ${r.ellipse.toFixed(2)} (>= ${POOLS.ellipse.toFixed(2)}) (${where(r)})`),
+  ];
+  const figures = [
+    under.length ? `the light region under the battle has darker ground beside it on ${pct(under[0].beside)} of its row ends (< ${pct(POOLS.beside)})` : 'no light region under the battle',
+    ringed.length ? `the most oval light patch fills its ellipse ${ringed[0].ellipse.toFixed(2)} (< ${POOLS.ellipse.toFixed(2)})` : 'no light patch ringed by darker ground',
+  ].join(', ');
+  return { pools, ovals, found, figures, under: under[0] ?? null, oval: ringed[0] ?? null };
 }
 
 /**

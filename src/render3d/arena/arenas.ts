@@ -4,8 +4,10 @@
 // cave sand and rock) for the one battle camera, and composed with the
 // restraint of Emerald's own battle backgrounds: a few broad tones, a far
 // view across the top, framing at the edges, the ground around the Pokémon
-// quiet so they stay the focus. No platforms: the Pokémon stand on the
-// ground itself, with their shadows.
+// quiet so they stay the focus. The ground is lit the way those backgrounds
+// light it, in bands by distance (the same tone right across the view at
+// each distance), never in a pool, oval or ring of light. No platforms: the
+// Pokémon stand on the ground itself, with their shadows.
 
 import { MAT, type Rgb, type Sprite, band, bayer, fbm, hash2, hex, ramp, smoothstep } from './art';
 import { type ArenaContext, type ArenaDesign, type StandSpec, battlerBox, darker, fill, onLine, scatter, shift, stand } from './design';
@@ -41,13 +43,13 @@ function bladeTooth(sx: number, ppu: number): number {
 }
 
 /**
- * Route 101: a pale meadow in three broad tones, lit over the battle and
- * stepping down toward the back, after a thin stripe (Emerald's grass
- * background), into the shade of a soft, hazy tree line; every border drawn
- * as blades. The tree line opens behind the wild Pokémon onto a hazier row
- * farther off, the calmest part of the far view right behind it. One clump
- * of tall grass frames the left and a few tufts grow beside the player's
- * Pokémon; nothing else.
+ * Route 101: a pale meadow in three broad tones, in bands by distance: the
+ * palest right across the view nearer, stepping down toward the back, after
+ * a thin stripe (Emerald's grass background), into the shade of a soft, hazy
+ * tree line; every border drawn as blades. The tree line opens behind the
+ * wild Pokémon onto a hazier row farther off, the calmest part of the far
+ * view right behind it. One clump of tall grass frames the left and a few
+ * tufts grow beside the player's Pokémon; nothing else.
  */
 function meadow(ctx: ArenaContext): void {
   const { view, ground } = ctx;
@@ -77,14 +79,12 @@ function meadow(ctx: ArenaContext): void {
   }
   /** In the trees' shade: under each canopy and a little in front of it, so the shade's edge is scalloped. */
   const shaded = (x: number, z: number) => trees.some((t) => ((x - t.x) / (t.r * 0.95)) ** 2 + ((z - t.z) / 1.1) ** 2 < 1 || (z > t.z - 0.2 && Math.abs(x - t.x) < t.r));
-  /** The meadow's tone: 0 shade, 1 mid, 2 light. */
+  /** The meadow's tone, by distance: 0 shade, 1 mid, 2 light. */
   const tone = (x: number, z: number) => {
     if (shaded(x, z)) return 0;
     // Toward the back, the mid tone after a thin stripe of it, the borders wandering gently.
     const b = z + Math.sin(x * 0.7 + 1.3) * 0.22 + Math.sin(x * 1.9 + 0.4) * 0.08;
     if (b > 12.1 || (b > 11.45 && b < 11.75)) return 1;
-    // Darker grass coming in from the edges of the view.
-    if (x > 2.1 + Math.sin(z * 0.9 + 0.6) * 0.25 || x < -2.7 - Math.sin(z * 0.8 + 2) * 0.3 + (z - 9) * 0.15) return 1;
     return 2;
   };
   // The tones sampled a blade's height lower, so the nearer grass pokes up into the farther in blades.
@@ -229,13 +229,13 @@ function sea(ctx: ArenaContext): void {
 
 // --- GRANITE CAVE -----------------------------------------------------------------
 
-// Granite Cave's sand from the cave tileset (palette 06: #cdac7b, #e6c58b,
-// and a step between it and #ac8b6a): the floor around the light a close
-// step darker, where the daylight lands a step lighter. Its back wall: the
-// tileset's pink-gray rock (palette 07) in shadow, a step below the lit
-// floor, and hazed toward the dusty light (no near-black far off), three
-// steps. Its boulders are Hoenn's pink-brown rock, like the sea's stacks.
-const SAND = ramp('#bd9c73', '#cdac7b', '#e6c58b');
+// Granite Cave's sand from the cave tileset (palette 06: #cdac7b, and a step
+// between it and #ac8b6a): the lit floor, and a close step darker by the
+// wall, in its shade. Its back wall: the tileset's pink-gray rock (palette
+// 07) in shadow, a step below the lit floor, and hazed toward the dusty
+// light (no near-black far off), three steps. Its boulders and pebbles are
+// Hoenn's pink-brown rock, like the sea's stacks.
+const SAND = ramp('#bd9c73', '#cdac7b');
 const WALL = ramp('#7d6361', '#957670', '#ab8d80');
 
 /**
@@ -243,19 +243,20 @@ const WALL = ramp('#7d6361', '#957670', '#ab8d80');
  * layered ledges (Emerald's cave ledges: each lip a row of low rounded rock
  * tops catching the light, the bands darker going up into the gloom), the
  * wall coming forward at the chamber's corners. Daylight falls in a column
- * from an opening at the upper left and lands in a bright foot on the floor
- * behind the wild Pokémon; the battle stands in a soft pool of light much
- * bigger than the battlers, the floor a close step darker around it. A
- * boulder frames the left, a smaller rock the far right; nothing else.
+ * from an opening at the upper left across the wall, down to its foot. The
+ * floor is lit by distance, like Emerald's cave background: a close step
+ * darker by the wall and in a thin stripe in front of it, the lit sand right
+ * across the view nearer (no pool or spot of light). A boulder frames the
+ * left with a few pebbles beside it, a smaller rock the far right; nothing
+ * else.
  */
 function cave(ctx: ArenaContext): void {
   const { view, ground } = ctx;
   const cam = view.camera.position;
-  const cx = (ctx.player.x + ctx.enemy.x) / 2, cz = (ctx.player.z + ctx.enemy.z) / 2 + 1;
   // The back wall: its foot wanders a little and comes forward at the sides (the chamber's corners).
   const wallZ = (x: number) => 14.6 + Math.sin(x * 0.5 + 1) * 0.3 + Math.sin(x * 1.3) * 0.08 - 0.45 * Math.max(0, Math.abs(x + 0.4) - 3) ** 2;
-  // The daylight: a column bw px wide slanting down from the upper left in front of the wall, to where it
-  // lands on the floor (bx, by), behind and left of the wild Pokémon.
+  // The daylight: a column bw px wide slanting down from the upper left, its axis through (bx, by), across
+  // the back wall down to its foot. It lifts the wall it crosses a step and never lights the floor.
   const [bx, by] = view.screen(1.2, 0, 12.2);
   const lean = 0.42, bw = 24;
   /** A ledge's lip: a row of low rounded rock tops, each 0.45-0.65 wide (world units). */
@@ -265,7 +266,7 @@ function cave(ctx: ArenaContext): void {
     return (1 - (2 * f - 1) ** 2) * 0.035;
   };
   fill(ctx, (sx, sy, g) => {
-    const beam = sy <= by && Math.abs(sx + 0.5 - (bx + (sy - by) * lean)) < bw / 2;
+    const beam = Math.abs(sx + 0.5 - (bx + (sy - by) * lean)) < bw / 2;
     // Does the view ray meet the wall before the floor?
     let t = wallZ(g.x) / g.z;
     for (let n = 0; n < 5; n++) t = (wallZ(cam.x + (g.x - cam.x) * t) - cam.z) / (g.z - cam.z);
@@ -282,14 +283,10 @@ function cave(ctx: ArenaContext): void {
       if (y < ledge2) return [y > ledge2 - px ? WALL[2] : WALL[1 + lift], MAT.BACKDROP];
       return [WALL[lift], MAT.BACKDROP];
     }
-    // The floor: the pool of light over the battle, a step darker around it (close tones: a soft edge); the
-    // column a step lighter where it crosses the floor, ending in a bright foot where it lands (the place's
-    // one 4th step).
-    const a = Math.atan2(g.z - cz, g.x - cx);
-    const e = Math.hypot(g.x - cx, (g.z - cz) * 0.8) / (1 + Math.sin(a * 3 + 1) * 0.05 + Math.sin(a * 5 + 2) * 0.03);
-    const base = e < 3 ? 1 : 0;
-    const foot = ((sx + 0.5 - bx) / (bw * 0.6)) ** 2 + ((sy + 0.5 - by) / (bw * 0.18)) ** 2 < 1;
-    return [SAND[foot ? 2 : beam ? base + 1 : base], MAT.SOLID];
+    // The floor, lit by distance like Emerald's own cave background: by the wall a close step darker (the
+    // wall's shade), a thin stripe of it in front, the rest the lit tone right across the view.
+    const b = g.z + Math.sin(g.x * 0.6 + 0.5) * 0.2 + Math.sin(g.x * 1.7 + 2.1) * 0.07;
+    return [SAND[b > 12 || (b > 11.35 && b < 11.6) ? 0 : 1], MAT.SOLID];
   });
   // Framing: a boulder at the left edge of the foreground, cropped by the frame (painted into the ground:
   // the player's Pokémon is nearer and covers it), and a smaller one hazed at the wall's foot, past the right.
@@ -297,6 +294,15 @@ function cave(ctx: ArenaContext): void {
   ground.sprite(crag(g.ppu * 0.85, g.ppu * 0.7, { shades: ROCK.slice(1), outline: ROCK_OUTLINE }, ctx.rng.int(1, 1e6), 9), 12, 116);
   const r = view.ground(240, 30)!;
   stand(ctx, [{ sprite: crag(r.ppu * 0.8, r.ppu * 0.7, { shades: ROCK.slice(1, 4), outline: ROCK[1] }, ctx.rng.int(1, 1e6), 6), x: r.x, z: r.z }], darker([SAND]));
+  // A few pebbles of the boulder's rock in the strip left of the player's Pokémon (Emerald's cave has its
+  // pebbles where the Pokémon stand): lit on the upper left, each tone a shade off the sand.
+  const pebble = [[[0, -1, 1], [1, -1, 0], [-1, 0, 1], [0, 0, 0], [1, 0, 0]], [[0, -1, 1], [1, -1, 0], [0, 0, 0], [1, 0, 0]]];
+  scatter(ctx, 13, 29, (_x, _z, sx, sy, ppu, k) => {
+    if (k > 0.3 || sx > 44 || sy < 48 || sy > 108 || ppu < 36) return;
+    const shape = pebble[k < 0.12 ? 0 : 1];
+    if (shape.some(([dx, dy]) => indexIn(SAND, ground.get(sx + dx, sy + dy)) !== 1 || ground.material(sx + dx, sy + dy) !== MAT.SOLID)) return;
+    for (const [dx, dy, lit] of shape) ground.set(sx + dx, sy + dy, ROCK[3 + lit], MAT.SOLID);
+  });
 }
 
 /** Every arena, in the order the playtest lists the places. */
