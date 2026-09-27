@@ -8,7 +8,10 @@ description: Bring one Pokémon species into this repo's 3D battle system at the
 You are adding one species. The bar is Blaziken (`src/pokemon/blaziken/`):
 it looks like its stock sprites from both sides, every attack reads as *this*
 creature doing *that* move (Flamethrower comes from its beak with its arms
-braced; kicks leap and land with weight), and it never freezes. The gates in
+braced; a kick drives its whole weight at the foe from where it stands), and
+it never freezes. Its clips act in place: in the compiled game's battles the
+game moves the sprite and the body follows (the pokemon-animation skill,
+"Acting in place"). The gates in
 `tools/gauntlet/check.mjs` must all pass, and your own frame-by-frame review
 must back them up. Load the `pokemon-animation` skill before writing clips.
 
@@ -255,9 +258,8 @@ npx tsc --noEmit
 ```
 
 `motion.mjs` measures the clips as the battle plays them. Blaziken's numbers
-are the bar: pops only on strikes and landings, no dead holds, and no turn in
-the first 0.3 s of a move made from home (a pivot on the spot before a move
-reads as mechanical; the battler turns only while a contact move travels).
+are the bar: pops only on strikes, no dead holds, and no turn in the first
+0.3 s of a move (a pivot on the spot before a move reads as mechanical).
 
 All gates pass; fix warnings where they point at real gaps (a motif its moves
 use a lot still on a category clip, no springs). Commit

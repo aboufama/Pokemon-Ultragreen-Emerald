@@ -11,6 +11,33 @@ handful of good key poses into fluid, living motion — so your job is the
 honest weight. Read `src/pokemon/blaziken/clips.ts` before writing anything: it
 is the finished reference set, and its header explains the channels.
 
+## Acting in place: the game moves the sprite
+
+The battles are the compiled game's (docs/ARCHITECTURE.md, "Remake layer"):
+its move animations move the Pokémon's sprite (a lunge of 10-30 px toward
+the foe, a shake, a hop, a slide off the screen) and the 3D body follows the
+sprite exactly. The clip is the **acting on top**, in place: the body strikes,
+breathes, rears up and flinches where it stands, and the game's own motion
+carries it. So a clip never travels and never leaps:
+
+- `advance` stays 0 (the game makes the lunge);
+- the root stays over the spot: `root.x`, `root.z` within ±0.1 heights (a
+  lean, a curl back), `root.y` at most 0.02 (a heel lift; crouches below 0
+  are fine);
+- a contact strike reaches from home: coil, then drive the hips and spine
+  toward the foe (a lean of 15-35°, weight onto the front foot), the striking
+  limb or the jaws extending at it, follow-through, recover. The reach sells
+  the hit; the game adds the travel;
+- spins (`root.yaw`), rearing (`root.pitch`) and every pose of the body are
+  acting and stay.
+
+`tools/gauntlet/cliplint.mjs` reports a clip that travels or leaps
+(`travel`) and `tools/gauntlet/check.mjs` fails it; the remake also holds
+every body in place (`Battler3D.inPlace`), so a travelling clip would only
+show its legs tucked in the air. The game draws the move's effects (sparks,
+flames, water) with its own sprites; the clip's events (`impact`,
+`release`...) mark the moments for the review tools.
+
 ## What the engine already does (don't fight it)
 
 - **Smooth curves.** Keys without an `ease` are joined by monotone cubic
@@ -52,8 +79,9 @@ as Blaziken does). Rules:
   bones (a bone aimed in only some keys snaps halfway).
 - `post` — rotations after aims; `pelvis: { x, y, z }` in model heights (y
   -0.05 is a crouch); `root: { x, y, z, yaw, pitch, roll }` moves the whole
-  body (jumps, spins; `root.y` in heights); `advance` 0..1 travels toward the
-  foe; `plantFeet` pins feet with IK (1 = planted), `plantLeft`/`plantRight`
+  body (spins, rearing; `root.y` in heights, never above 0.02: see "Acting in
+  place"); `advance` stays 0 (the game moves the sprite toward the foe);
+  `plantFeet` pins feet with IK (1 = planted), `plantLeft`/`plantRight`
   per hind leg, `plantFront` for a quadruped's front feet; `fx.<channel>` drives
   effect meshes; `expression` picks an eye-atlas cell; `scale` pulses the body.
 - Use small reusable deltas (`GUARD`, `CHAMBER`, `jaw(deg)`, `bend(spine,
@@ -65,8 +93,8 @@ as Blaziken does). Rules:
 | clip | length | shape |
 |---|---|---|
 | hit | ~0.6 s | 3-frame snap into the flinch, ease back, a small overshoot, settle |
-| weak contact | ~1.3 s | 0.13 wind-up · 0.25 leap · land · snap strike · 0.2 follow-through · hop home |
-| strong contact | ~2.1 s | 0.3 coil · spring up · strike at the top · follow-through · land deep · hop home |
+| weak contact | ~1.0 s | 0.13 wind-up · lean in, weight forward · snap strike (the limb or jaws reach at the foe) · 0.2 follow-through · recover |
+| strong contact | ~1.6 s | 0.3 coil (crouch, wind back) · drive the hips and spine at the foe · strike at full reach · follow-through · settle deep · recover |
 | weak ranged | ~1.2 s | 0.24 breath in · 0.1 snap · release · recoil · settle |
 | strong ranged | ~2.3 s | 0.5 gather (charge) · hold · snap · 0.8 sustained (release → releaseEnd) · recover |
 | status | ~1.4–1.7 s | gather or rear up · the action with a moving hold · relax |
@@ -90,12 +118,13 @@ fold (Swampert: bowed deeper, its head fins splayed and it looked face down).
 ## The principles as rules for these clips
 
 1. **Anticipation**: every action starts with a counter-move — crouch before a
-   leap, wind back before a swing, inhale (chest up, head back) before a breath.
+   lunge, wind back before a swing, inhale (chest up, head back) before a breath.
 2. **Follow-through**: the striking limb carries past the target and hangs a
-   moment; the body settles after landing; the head recoils after a blast.
-3. **Arcs, not slides**: travel is a leap (`root.y` arc, `plantFeet: 0` and
-   tucked legs in the air, `LAND` = pelvis dip with `plantFeet: 1`). Never move
-   `advance` with the feet planted.
+   moment; the body settles after the strike; the head recoils after a blast.
+3. **In place, with reach**: no travel and no leaps (the game moves the
+   sprite); a strike is the whole body reaching from its spot, the hips and
+   spine driving toward the foe, the feet planted (`plantFeet: 1`), arcs in
+   the limbs and the spine rather than the root.
 4. **Weight**: heavy species (Blastoise, Swampert, Venusaur) move slower, lower,
    with bigger landings and screen shake on stomps; light ones (Sceptile) are
    quick and springy. Timing sells mass.
@@ -106,11 +135,10 @@ fold (Swampert: bowed deeper, its head fins splayed and it looked face down).
    **Stay clear of the healthboxes**: they are drawn over the Pokémon, so a
    body under one looks cut off. From our side the foe's box sits a few
    pixels above our Pokémon's head and ours to its right; the foe's feet touch
-   the top of ours. So at home: raise arms wide rather than overhead, keep
-   jumps low (or lean into them instead), keep side-steps narrow, curl a faint
-   back over the heels rather than forward over the feet. Clips that travel
-   (`advance`) are free to pass. `tools/gauntlet/uiclear.mjs` checks every
-   clip that stays at home, from both sides.
+   the top of ours. So: raise arms wide rather than overhead, lean into a
+   strike rather than rising, curl a faint back over the heels rather than
+   forward over the feet. `tools/gauntlet/uiclear.mjs` checks every clip from
+   both sides.
 6. **Exaggeration**: GBA pixels eat subtlety. Push extremes ~1.5× further than
    feels natural in the turntable; check at `--density 1`.
 7. **Moving holds and secondary action** are mostly automatic (life layer,
@@ -131,11 +159,12 @@ says what the body does; the species decides *how*:
 - **Type flavor**: fire moves flare fire meshes (`fx.flames`) and use sharp,
   aggressive timing; water moves brace against recoil; grass moves gather
   (sunlight charge) and release gracefully; ground moves stomp.
-- **The move's name**: Bite and Crunch lunge with the jaws; Slash and Leaf
-  Blade swing the claw or blade; Body Slam leaps and crushes; Rapid Spin
-  withdraws and spins; Earthquake rears up and stomps; Withdraw pulls into the
-  shell; Synthesis turns up to the light. `reference/motif-cookbook.md` has a
-  recipe for every motif with body-plan variants.
+- **The move's name**: Bite and Crunch snap the jaws forward; Slash and Leaf
+  Blade swing the claw or blade; Body Slam throws the body's weight forward
+  and down; Rapid Spin withdraws and spins; Earthquake rears up and stomps;
+  Withdraw pulls into the shell; Synthesis turns up to the light.
+  `reference/motif-cookbook.md` has a recipe for every motif with body-plan
+  variants (its leaps and travel are the game's to make: act them in place).
 
 Clip lookup per move (src/battle3d/director.ts `clipFor`): `moveClips[MOVE]` →
 `<motif>_strong` (strong moves) → `<motif>` → the category clip. Name motif
@@ -159,7 +188,7 @@ existing clips in `profile.motifClips`.
 | `shrink` | a faint is curled up | the body shrinks away into its middle (SE_FAINT); the clip holds the curl for `SHRINK_FRAMES` after it |
 
 Place events on the pose that causes them *plus the overlap delay* of the part
-that acts. Contact moves must have `advance: 1` at `impact`.
+that acts. A contact move's `impact` is on its strike at full reach.
 
 ## Workflow for one clip
 
@@ -186,14 +215,15 @@ that acts. Contact moves must have `advance: 1` at `impact`.
 | looks like | fix |
 |---|---|
 | stiff / robotic | extremes not pushed; every key eased; add anticipation and a breakdown key |
-| floaty | holds too long, landings too soft: shorten travel, add a pelvis dip and shake |
-| sliding | `advance` changes with `plantFeet: 1`: leap instead (`TUCK`, `root.y` arc) |
+| floaty | holds too long, settles too soft: shorten the holds, add a pelvis dip |
+| travels or leaps (cliplint `travel`) | the game moves the sprite: act in place, reach with the hips, spine and limbs; `advance` 0, the root on its spot |
+| a strike that doesn't reach | the lean is too small: drive the hips and spine 15-35° at the foe, weight on the front foot, the limb at full extension on the `impact` key |
 | flailing arms | arms not acting: brace them (`CHAMBER`/`BRACED`), let the acting part lead |
 | effect from the wrong place | emitter / `emitterFor`; verify with `/?mode=clipreview&mark=<emitter>` |
 | pop at a key | an aimed bone missing from some keys; an ease after a snap; a big pose change in < 3 frames |
 | turns to the foe before the move | the stance looks away from the foe: fix the stance (it must face the foe) rather than turning in the clip; `root.yaw` on planted feet is a pivot, twist the spine instead |
 | stutters mid-motion | a key that stops a channel halfway (a `fall()` that starts mid-descent instead of at the apex; a hop whose apex sits near the landing): fall from the top; put a hop's apex halfway across |
-| strike snaps harder than Blaziken's | under 5 frames, or a torso swing over ~50°: land, then a 0.08 s snap; cock the arm further back as it lands so the strike starts from a turnaround |
+| strike snaps harder than Blaziken's | under 5 frames, or a torso swing over ~50°: a 0.08 s snap from a turnaround; cock the arm further back in the coil |
 | unreadable from our side | the back view hides it: exaggerate the silhouette, move the action above y≈92 px |
-| cut off by a healthbox (uiclear fails) | from our side: arms raised wide not overhead, a lower jump, a narrower side-step toward our box; the foe's faint curls back over its heels (bowed forward over its feet, its head comes down onto our box) |
+| cut off by a healthbox (uiclear fails) | from our side: arms raised wide not overhead, lean rather than rise, a narrower twist toward our box; the foe's faint curls back over its heels (bowed forward over its feet, its head comes down onto our box) |
 | limbs through the body | aim directions crossing the torso: check the turntable in the rig lab |

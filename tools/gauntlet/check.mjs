@@ -16,7 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { speciesBrief } from './brief.mjs';
-import { lintClips } from './cliplint.mjs';
+import { lintClips, travelOf } from './cliplint.mjs';
 import { readGlbJson } from './rigmap.mjs';
 import { CATEGORY_CLIPS, MOMENT_CLIPS, ROOT, clipOf, gameData, loadProfile, reviewJobs } from './species.mjs';
 import { importTs } from './tsimport.mjs';
@@ -215,7 +215,12 @@ if (!(profile.dynamics ?? []).length) warn('no spring chains', 'loose parts (tai
 
 // Clip mistakes that read as robotic (tools/gauntlet/cliplint.mjs): slides,
 // planted pivots, half-aimed bones, hitches after snaps.
-for (const i of lintClips(clips)) warn(`clip ${i.clip}: ${i.kind}`, i.what);
+// Every clip acts in place: the compiled game moves the sprite, the body follows it.
+for (const [name, c] of Object.entries(clips)) {
+  const travel = travelOf(c);
+  gate(`clip ${name} acts in place`, !travel, travel ? `${travel}: the game moves the sprite; strike from the spot (the pokemon-animation skill, "Acting in place")` : '');
+}
+for (const i of lintClips(clips)) if (i.kind !== 'travel') warn(`clip ${i.clip}: ${i.kind}`, i.what);
 
 // Moves by body part (tools/gauntlet/classify_moves.mjs): every part must be
 // one the file offered; a missing file only warns (Jev needs an API key).

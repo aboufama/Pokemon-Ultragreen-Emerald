@@ -4,8 +4,13 @@
 //
 //   node tools/gauntlet/cliplint.mjs --species sceptile,swampert
 //
+//   travel  the body travels or leaps: advance, the root off its spot
+//           (x, z beyond ±0.1 heights) or above the ground (y over 0.02).
+//           The compiled game moves the sprite and the body follows it; a
+//           clip acts in place (the pokemon-animation skill; a gate in
+//           tools/gauntlet/check.mjs)
 //   slide   the body travels (advance changes) between two keys while the
-//           feet are planted: leap instead (TUCK/HOP, root.y arc)
+//           feet are planted
 //   pivot   the whole body yaws (root.yaw) on planted feet before travelling:
 //           twist the spine instead (a coil into a spin later in the clip is fine)
 //   aim     a bone is aimed in some keys and not others: it snaps halfway
@@ -18,10 +23,30 @@
 
 import { loadProfile } from './species.mjs';
 
+/** How far a clip may move the body off its spot (heights): a heel lift, a sway. */
+export const IN_PLACE = { side: 0.1, up: 0.02 };
+
+/** Where a clip travels or leaps (it must act in place), or null. */
+export function travelOf(clip) {
+  let advance = 0, side = 0, up = 0;
+  for (const k of clip.keys) {
+    advance = Math.max(advance, Math.abs(k.pose.advance ?? 0));
+    side = Math.max(side, Math.abs(k.pose.root?.x ?? 0), Math.abs(k.pose.root?.z ?? 0));
+    up = Math.max(up, k.pose.root?.y ?? 0);
+  }
+  const what = [];
+  if (advance > 0) what.push(`advance ${advance}`);
+  if (side > IN_PLACE.side) what.push(`the root ${side.toFixed(2)} off its spot`);
+  if (up > IN_PLACE.up) what.push(`the root ${up.toFixed(2)} above the ground`);
+  return what.length ? what.join(', ') : null;
+}
+
 export function lintClips(clips) {
   const issues = [];
   for (const [name, clip] of Object.entries(clips)) {
     const keys = clip.keys;
+    const travel = travelOf(clip);
+    if (travel) issues.push({ clip: name, kind: 'travel', what: `${travel}: act in place (the game moves the sprite)` });
     const spins = keys.some((k) => Math.abs(k.pose.root?.yaw ?? 0) >= 180);
     const aimed = new Map();
     keys.forEach((k, i) => {
