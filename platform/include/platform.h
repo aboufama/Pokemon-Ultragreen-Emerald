@@ -31,4 +31,9 @@ void PlatformRtcSet(int32_t year, int32_t month, int32_t day, int32_t hour, int3
 uint8_t *PlatformFlash(void);
 void PlatformFlashWritten(void);
 
+// The address a pointer into one of the game's variables in RAM has on the
+// GBA, for comparisons of addresses the game makes (RAM is laid out
+// differently here). Other pointers are returned as they are.
+uint32_t PlatformGbaAddress(const void *p);
+
 #endif // GUARD_PLATFORM_H

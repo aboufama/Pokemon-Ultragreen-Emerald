@@ -27,11 +27,22 @@ void PlatformWaitForFlag(volatile uint16_t *flag, uint16_t mask)
     sWaitMask = mask;
 }
 
+// Power on. The BIOS starts the cartridge with the display at scanline 126;
+// mGBA (the emulator the ROM is compared with) starts it 888 cycles into
+// that line, its HBlank 120 cycles away. crt0.s's start-up (the stacks, the
+// interrupt vector) then takes 248 cycles before AgbMain (measured on the
+// ROM).
+#define RESET_LINE 126
+#define RESET_DOT 888
+#define CRT0_CYCLES 248
+
 EXPORT(PlatformInit) void PlatformInit(void)
 {
+    PlatformClockReset(RESET_LINE, RESET_DOT);
     PlatformIoReset();
     PlatformPpuReset();
     sWaitFlag = 0;
+    PlatformSpend(CRT0_CYCLES);
     AgbMain();
 }
 

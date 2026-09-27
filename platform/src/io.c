@@ -54,26 +54,33 @@ static u32 TimerTicks(int i, u64 now)
         u64 ticksStart = t->start > p->start ? TimerTicks(i - 1, t->start) : 0;
         return (u32)(ticksNow / period - ticksStart / period);
     }
-    return (u32)((now - t->start) >> sPrescaleShift[t->control & 3]);
+    // The prescaler runs free from power on: a timer ticks on its multiples,
+    // the first one sooner than a whole period after it starts (as mGBA).
+    u32 shift = sPrescaleShift[t->control & 3];
+    return (u32)(((now - gPlatformPowerOn) >> shift) - ((t->start - gPlatformPowerOn) >> shift));
 }
 
+// The registers as the BIOS leaves them when it starts the cartridge, and as
+// RegisterRamReset sets them: the display in forced blank (the game's first
+// DISPSTAT write lands at once because of it), the affine backgrounds
+// unscaled. The scanline goes on (clock.c): VCOUNT and DISPSTAT's flags stay.
 void PlatformIoReset(void)
 {
+    u16 vcount = IO16(R_VCOUNT), status = IO16(R_DISPSTAT) & 7;
     for (u32 off = 0; off < IO_SIZE; off += 2)
         IO16(off) = 0;
     for (int i = 0; i < 4; i++)
         sTimers[i] = (struct Timer){ 0 };
-    // The state the BIOS leaves when it starts the cartridge: the display in
-    // forced blank at scanline 126 (the game's first DISPSTAT write lands
-    // at once because of the forced blank), the affine backgrounds unscaled.
+    IO16(R_VCOUNT) = vcount;
+    IO16(R_DISPSTAT) = status;
     IO16(R_DISPCNT) = 0x0080;
     IO16(R_KEYINPUT) = 0x3FF;
     IO16(R_BG2PA) = IO16(R_BG2PD) = IO16(R_BG3PA) = IO16(R_BG3PD) = 0x100;
     IO16(R_SOUNDCNT_X + 4) = 0x200;  // SOUNDBIAS
     IO16(R_RCNT) = 0x8000;
     IO8(R_POSTFLG) = 1;
-    PlatformClockReset(126);
     PlatformDmaReset();
+    PlatformSoundReset();
 }
 
 // ---------------------------------------------------------------- interrupts
@@ -83,6 +90,16 @@ extern u8 *gSTWIStatus;
 
 // crt0.s's IntrMain: the pending interrupt of highest priority, acknowledged,
 // its handler called with IME and IE as IntrMain sets them.
+//
+// The way there takes time on the GBA: the CPU takes the exception, the
+// BIOS's vector saves registers and jumps to IntrMain, which looks at the
+// flags in priority order (4 cycles each) until it finds the interrupt; and
+// the way back. Measured on the ROM: 93 cycles to the first flag's handler
+// (the VCount interrupt's), 109 to the fifth's (the VBlank's), 42 back.
+#define IRQ_ENTRY_CYCLES 93
+#define IRQ_FLAG_CYCLES 4
+#define IRQ_EXIT_CYCLES 42
+
 static const u16 sIntrOrder[14] = {
     1 << 2, 1 << 7, 1 << 6, 1 << 1, 1 << 0, 1 << 3, 1 << 4, 1 << 5,
     1 << 8, 1 << 9, 1 << 10, 1 << 11, 1 << 12, 1 << 13,
@@ -107,7 +124,9 @@ static void Dispatch(void)
         u8 timerSelect = gSTWIStatus ? gSTWIStatus[0xA] : 0;
         u16 nested = (u16)((8u << timerSelect) | IRQ_GAMEPAK | IRQ_SERIAL | (1 << 6) | IRQ_VCOUNT | IRQ_HBLANK);
         IO16(R_IE) = nested & ie & ~flag;
+        PlatformSpend(IRQ_ENTRY_CYCLES + IRQ_FLAG_CYCLES * slot);
         gIntrTable[slot]();
+        PlatformSpend(IRQ_EXIT_CYCLES);
         IO16(R_IE) = ie;
         IO16(R_IME) = ime;
     }
@@ -172,6 +191,8 @@ void PlatformIoWrite16(u32 off, u16 value)
     if (off >= R_TM0CNT_L && off < R_TM0CNT_L + 16) {
         int i = (off - R_TM0CNT_L) >> 2;
         struct Timer *t = &sTimers[i];
+        // (the sound FIFOs play at timer 0's or 1's overflows)
+        PlatformSoundSync();
         if (!(off & 2)) {
             t->reload = value;
             return;
@@ -189,12 +210,51 @@ void PlatformIoWrite16(u32 off, u16 value)
         return;
     }
     IO16(off) = value;
-    if (off >= R_DMA0SAD && off <= R_DMA3CNT_H && (off - R_DMA0SAD) % 12 == 10)
+    if (off >= R_DMA0SAD && off <= R_DMA3CNT_H && (off - R_DMA0SAD) % 12 == 10) {
         PlatformDmaControl((off - R_DMA0SAD) / 12, old, value);
-    else if (off >= R_SOUND1CNT_L && off < R_FIFO_A)
-        PlatformSoundRegWrite(off, old, value);
-    else if ((off >= R_BG2X && off < R_BG2X + 8) || (off >= R_BG3X && off < R_BG3X + 8))
+    } else if (off >= R_FIFO_A && off < R_FIFO_B + 4) {
+        // A halfword pushes a word into the FIFO, its other half as it is
+        // (mGBA's behavior; the sound DMA writes whole words).
+        u32 word = (off & 2) ? (IO16(off - 2) | ((u32)value << 16)) : (value | ((u32)IO16(off + 2) << 16));
+        PlatformSoundFifoWrite((off - R_FIFO_A) >> 2, word);
+    } else if (off >= R_SOUND1CNT_L && off < R_FIFO_A) {
+        // The sound chip takes a halfword as its two bytes, in order.
+        PlatformSoundRegWrite(off, (u8)value);
+        PlatformSoundRegWrite(off + 1, (u8)(value >> 8));
+    } else if ((off >= R_BG2X && off < R_BG2X + 8) || (off >= R_BG3X && off < R_BG3X + 8)) {
         PlatformPpuRegWrite(off);
+    }
+}
+
+// A word: two halfwords, but a FIFO takes it whole.
+void PlatformIoWrite32(u32 off, u32 value)
+{
+    off &= ~3u;
+    if (off == R_FIFO_A || off == R_FIFO_B) {
+        IO32(off) = value;
+        PlatformSoundFifoWrite((off - R_FIFO_A) >> 2, value);
+        return;
+    }
+    PlatformIoWrite16(off, (u16)value);
+    PlatformIoWrite16(off + 2, (u16)(value >> 16));
+}
+
+// When timer i next overflows after cycle `after`: every (0x10000 - reload)
+// ticks of its prescaler from its start. A timer counting the previous one's
+// overflows isn't followed (the sound FIFOs never use one); never, then.
+u64 PlatformTimerNextOverflow(int i, u64 after)
+{
+    struct Timer *t = &sTimers[i];
+    if (!(t->control & 0x80) || (i > 0 && (t->control & 0x04)))
+        return ~(u64)0;
+    // Ticks fall on the free-running prescaler's multiples; the timer
+    // overflows every (0x10000 - reload) of them from the one it started on.
+    u32 shift = sPrescaleShift[t->control & 3];
+    u64 period = 0x10000u - t->reload;
+    u64 first = (t->start - gPlatformPowerOn) >> shift;
+    u64 last = after < t->start ? first : (after - gPlatformPowerOn) >> shift;
+    u64 n = (last - first) / period + 1;
+    return gPlatformPowerOn + ((first + n * period) << shift);
 }
 
 uint32_t PlatformIoRead(uint32_t addr, uint32_t size)
@@ -225,9 +285,7 @@ void PlatformIoWrite(uint32_t addr, uint32_t value, uint32_t size)
         return;
     }
     if (size == 4) {
-        off &= ~3u;
-        PlatformIoWrite16(off, (u16)value);
-        PlatformIoWrite16(off + 2, (u16)(value >> 16));
+        PlatformIoWrite32(off, value);
         return;
     }
     if (size == 2) {
@@ -244,6 +302,13 @@ void PlatformIoWrite(uint32_t addr, uint32_t value, uint32_t size)
     }
     if (off == R_HALTCNT || off == R_POSTFLG) {
         IO8(off) = (u8)value;
+        return;
+    }
+    if (half >= R_SOUND1CNT_L && half < R_FIFO_A) {
+        // A sound register takes the byte alone (writing its other half
+        // again would, for NRx4, start the channel again).
+        IO8(off) = (u8)value;
+        PlatformSoundRegWrite(off, (u8)value);
         return;
     }
     u16 cur = IO16(half);

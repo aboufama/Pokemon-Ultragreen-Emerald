@@ -15,6 +15,7 @@ export interface GameOptions {
   log?: (text: string) => void;
   onVBlank?: (count: number) => void;
   onFrameStart?: () => void;
+  onInstance?: (exports: WebAssembly.Exports) => void;
 }
 
 export interface Game {
@@ -25,6 +26,10 @@ export interface Game {
   setKeys(bits: number): void;
   vblanks(): number;
   frameRGBA(): Uint8ClampedArray;
+  /** The sound's sample rate: stereo frames a second (65536). */
+  audioRate(): number;
+  /** The sound since the last call: interleaved stereo (left, right) 16-bit samples at audioRate(). */
+  readAudio(): Int16Array;
   flash(): Uint8Array;
   saved(): boolean;
   rtcOffset(): number;

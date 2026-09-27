@@ -1,0 +1,20 @@
+{
+  "about": "Power on, the intro untouched, the title screen (its music from frame 3240), START, NEW GAME with A, and Professor Birch's speech: A every 200 frames, Lotad out of its ball and its cry. Every kind of sound: songs on DirectSound and the GB channels, sound effects, cries (compressed samples).",
+  "frames": 6400,
+  "time": [2026, 1, 1, 4, 10, 0, 0],
+  "music": 3240,
+  "inputs": [
+    [4300, "START"], [4302, ""],
+    [4500, "A"], [4502, ""],
+    [4700, "A"], [4702, ""],
+    [4900, "A"], [4902, ""],
+    [5100, "A"], [5102, ""],
+    [5300, "A"], [5302, ""],
+    [5500, "A"], [5502, ""],
+    [5700, "A"], [5702, ""],
+    [5900, "A"], [5902, ""],
+    [6100, "A"], [6102, ""],
+    [6300, "A"], [6302, ""]
+  ],
+  "shots": [3300, 4000, 4400, 4600, 5000, 6080, 6200, 6400]
+}

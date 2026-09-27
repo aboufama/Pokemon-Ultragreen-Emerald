@@ -48,7 +48,11 @@ hand. The remake adds two things around it:
      GBA build's debug info.
    - compiled by clang for `wasm32` to LLVM IR;
    - **timed** (`tools/cpu_time.mjs`): each basic block adds its instructions'
-     ARM7 cost to the platform's CPU clock;
+     ARM7 cost to the platform's CPU clock, corrected function by function
+     where it was measured against the ROM (`tools/cpu_time.json`, from
+     `tools/calibrate.py`); the functions lose the memory effects the first
+     compile inferred for them (one said to write only through its arguments
+     now writes the clock, and a caller trusting that would drop its time);
    - **I/O hooked** (`tools/volatile_io.mjs`): every volatile access to
      0x04xxxxxx goes to the platform, which gives registers the hardware's
      behavior; other memory is untouched.
@@ -60,7 +64,8 @@ hand. The remake adds two things around it:
 4. **Replaced**: the hardware drivers (`platform/game`, compiled like the
    game): the flash chip and the real-time clock (each call as long as the
    GBA driver's, measured with `tools/timing.py`), the GameCube link, and the
-   sound engine's assembly half (`m4a_1.s`, ported to C).
+   sound engine's assembly half (`m4a_1.s`: the sequencer and the mixer,
+   ported to C instruction by instruction and timed as the GBA's).
 5. **Data** (`tools/elf2wasm.py`): each ARM data object converted to a wasm
    object with the same bytes (`.incbin`) and symbols, every pointer a
    relocation, function references typed from the C objects (`tools/wasmobj.py`).
@@ -73,26 +78,35 @@ hand. The remake adds two things around it:
 
 | GBA | here |
 |---|---|
-| CPU time | `gPlatformCycles`: the game's basic blocks, register polls, BIOS calls, DMA and the drivers' delays move it |
-| the screen's timeline | `clock.c`: as the clock moves, each scanline starts, is drawn and reaches its HBlank, line 160 its VBlank; interrupts are delivered then, inside whatever the game is doing. At line 0 the browser prepares the remake layer's pictures for the frame (`PlatformHostFrameStart`), at line 160 it takes the frame (`PlatformHostVBlank`) |
+| CPU time | `gPlatformCycles`: the game's basic blocks, register polls, BIOS calls, DMA, interrupts' way in and out, the sound engine and the drivers' delays move it, each as long as on the GBA (measured on the ROM in mGBA) |
+| the screen's timeline | `clock.c`: as the clock moves, each scanline starts, is drawn and reaches its HBlank, line 160 its VBlank; interrupts are delivered then, inside whatever the game is doing. The game starts 888 cycles into line 126, where mGBA starts it. At line 0 the browser prepares the remake layer's pictures for the frame (`PlatformHostFrameStart`), at line 160 it takes the frame (`PlatformHostVBlank`) |
 | main loop | `AgbMainFrame` is one iteration; the platform then waits as `WaitForVBlank` does, for the VBlank handler's flag. A slow iteration spans two VBlanks: a lag frame, as on the GBA |
-| I/O registers | `io.c`: VCOUNT and DISPSTAT from the timeline, IF write-1-to-clear, timers on the clock, the power-on state the BIOS leaves (forced blank, line 126) |
-| interrupts | `io.c`: crt0.s's IntrMain (priorities, acknowledging, IE/IME while the handler runs) calling `gIntrTable` |
-| DMA | `dma.c`: latched on enable; immediate, VBlank and HBlank transfers (the scanline effects); what the HBlank DMA will write to a register on each line of the frame (`PlatformPredictLines`, for the remake layer) |
-| BIOS | `bios.c`: the SWIs in C, with their cycle costs |
+| I/O registers | `io.c`: VCOUNT and DISPSTAT from the timeline, IF write-1-to-clear, timers on the clock (their prescalers running free from power on), the power-on state the BIOS leaves (forced blank, line 126) |
+| interrupts | `io.c`: crt0.s's IntrMain (priorities, acknowledging, IE/IME while the handler runs) calling `gIntrTable`, with the time the BIOS's vector and IntrMain take |
+| DMA | `dma.c`: latched on enable; immediate, VBlank and HBlank transfers (the scanline effects), timed by the memory they read and write; what the HBlank DMA will write to a register on each line of the frame (`PlatformPredictLines`, for the remake layer). The sound FIFOs' DMA runs in `apu.c` |
+| BIOS | `bios.c`: the SWIs in C, with their cycle costs (CpuSet, CpuFastSet by the memory they touch, LZ77 by what the data holds) |
 | PPU | `ppu.c`: a scanline renderer: modes 0-5, text and affine backgrounds, sprites (affine, double size, mosaic, semi-transparent, window), windows, blending; the remake layer's pictures standing in for a background and for sprites |
-| sound | `apu.c` and the m4a engine: the mixer's output and the four GB channels |
+| sound | the m4a engine (the decomp's `m4a.c`, and `platform/game/m4a_1.c`: `m4a_1.s`'s sequencer and mixer in C) and `apu.c`, the sound chip: DirectSound A and B fed by the sound DMA from the mixer's buffer as their FIFOs run low, the four GB channels as the engine's register writes set them, SOUNDCNT's mixing and volumes, SOUNDBIAS; stereo samples at 65536 Hz into a ring the browser reads (`game.readAudio()`, `game.audioRate()`) |
 | cartridge | `cartridge.c`: 128 KB flash kept in the browser, the real-time clock from the device's |
 | keypad | keyboard, touch pad, gamepad (`src/game/main.ts`) |
 
 ## Tools (`platform/tools`)
 
 - `run.mjs`: the compiled game headless, on an input script (`platform/tests`),
-  frames saved as PNG.
+  frames saved as PNG, its sound as a WAV file (`--wav`).
 - `reference.py`: the decomp's GBA ROM in mGBA on the same script.
 - `compare.py`: frame by frame, the GBA's 15-bit colors (`--slack` finds a
   timing shift). The boot matches the ROM frame for frame through the intro.
 - `timing.py`: how many cycles functions take on the ROM (the drivers' costs).
+- `sound_check.py`: the sound against the ROM's, frame by frame on an input
+  script (`platform/tests/title.json`): the music players, their tracks and
+  channels equal; the mixer's PCM buffer equal byte for byte; the writes to
+  the sound registers equal; both runs' audio as WAV files, compared.
+- `profile.mjs`: where the compiled game's time goes, function by function
+  (a profile build), and a trace of calls with their frame, line and cycle.
+- `calibrate.py`: each function's own time on the compiled game and on the
+  ROM (mGBA's breakpoints) over an input script, and the corrections of the
+  time model where they differ (`tools/cpu_time.json`).
 - `layouts.py`: every struct's layout against the GBA build's.
 - `platform/tests/opening.json`: the opening played key for key, power-on
   to a wild battle in Route 101's grass (recorded on the ROM by

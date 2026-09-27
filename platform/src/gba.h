@@ -62,6 +62,7 @@ enum {
 
 // io.c: registers, timers, interrupts, the CPU clock.
 extern u64 gPlatformCycles;          // the CPU clock (16.78 MHz cycles)
+extern u64 gPlatformPowerOn;         // its value at power on (the free-running counters count from there)
 
 // Time the hardware spends on work the platform does at once (BIOS copies,
 // decompression, DMA), so the scanline and the timers move on as on the GBA.
@@ -74,13 +75,16 @@ void PlatformIoReset(void);
 void PlatformRaiseIrq(u16 flag);
 u16 PlatformIoRead16(u32 off);
 void PlatformIoWrite16(u32 off, u16 value);
+void PlatformIoWrite32(u32 off, u32 value);
 
 // clock.c: the hardware's timeline on the CPU clock.
-void PlatformClockReset(u32 line);
+void PlatformClockReset(u32 line, u32 dot);  // power on: the CPU starts `dot` cycles into `line`
 void PlatformCatchUp(void);            // run the hardware up to gPlatformCycles
+void PlatformPoll(void);               // catch up if an event is due (the game's loops call it)
 void PlatformAdvanceToNextEvent(void); // let time pass to the next hardware event
 u32 PlatformLine(void);
 u32 PlatformVBlanks(void);
+u64 PlatformClockNow(void);            // the hardware's time: the last line start or HBlank
 
 // dma.c
 void PlatformDmaControl(int ch, u16 old, u16 value);
@@ -88,6 +92,9 @@ void PlatformDmaHBlank(void);
 void PlatformDmaVBlank(void);
 void PlatformDmaReset(void);
 const u16 *PlatformPredictLines(u32 off);  // a register's value on each line of the frame about to be drawn
+// The GBA's memory region an address here stands for, for access times:
+// 2 EWRAM, 3 IWRAM, 4 I/O, 5 the palettes, 6 VRAM, 7 OAM, 8 the cartridge.
+u32 PlatformRegion(u32 addr);
 
 // ppu.c
 extern u32 gPlatformFrame[SCREEN_W * SCREEN_H];  // the frame, 0xAABBGGRR
@@ -97,7 +104,15 @@ void PlatformPpuVBlank(void);          // the affine reference points reload
 void PlatformPpuRegWrite(u32 off);     // BG2X/Y, BG3X/Y writes reload them
 
 // apu.c
-void PlatformSoundRegWrite(u32 off, u16 old, u16 value);
+void PlatformSoundReset(void);
+void PlatformSoundCatchUp(void);       // run the sound chip up to the hardware's time (clock.c)
+void PlatformSoundSync(void);          // the hardware, then the sound chip, up to the CPU's cycle
+void PlatformSoundRegWrite(u32 off, u8 value);  // a byte to a sound register or the wave RAM (0x60-0x9F)
+void PlatformSoundFifoWrite(int fifo, u32 word);  // a word to FIFO A (0) or B (1)
+void PlatformSoundDma(int ch, u32 source, u32 dest, int fifo, int started);
+
+// io.c: when timer i overflows next after cycle `after` (never: ~0).
+u64 PlatformTimerNextOverflow(int i, u64 after);
 
 // What the browser provides (imports from "env").
 #define HOST(name) __attribute__((import_module("env"), import_name(#name)))

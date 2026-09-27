@@ -39,9 +39,30 @@ static const s16 sSine[256] = {
     -3196, -2801, -2404, -2006, -1606, -1205, -804, -402,
 };
 
-// Cycle costs: the BIOS loops' timing, near enough for the scanline to move
-// on as it does on the GBA while the game copies and decompresses.
+// Cycle costs: the BIOS loops' timing, so the scanline moves on as it does on
+// the GBA while the game copies and decompresses. CpuSet, CpuFastSet and the
+// LZ77 decompression are timed as mGBA's BIOS runs them (the emulator the
+// ROM is compared with), measured on the ROM call by call; the rest near
+// enough.
 #define SWI_CYCLES 40
+
+// A unit read or written by the BIOS's copy loops, in cycles: EWRAM's
+// 16-bit bus with its wait states, the 16-bit bus of the palettes and VRAM,
+// the cartridge's reads (WS0 as the game sets it; a word in one ldm).
+static u32 AccessCycles(const void *p, int wide, int read)
+{
+    switch (PlatformRegion((u32)(uintptr_t)p)) {
+    case 2:
+        return wide ? 6 : 3;
+    case 5:
+    case 6:
+        return wide ? 2 : 1;
+    case 8:
+        return read ? (wide ? 2 : 4) : 1;
+    default:
+        return 1;
+    }
+}
 
 static void Done(void)
 {
@@ -49,11 +70,16 @@ static void Done(void)
     PlatformCatchUp();
 }
 
+// CpuSet: 107 cycles, then a unit copied in 7 plus its read and write, or a
+// unit filled in 5 plus its write (after 5 more to start).
 void CpuSet(const void *src, void *dest, u32 control)
 {
     u32 count = control & 0x1FFFFF;
-    PlatformSpend(SWI_CYCLES + count * 9);
-    int fixed = (control >> 24) & 1;
+    int fixed = (control >> 24) & 1, wide = (control >> 26) & 1;
+    if (fixed)
+        PlatformSpend(112 + count * (5 + AccessCycles(dest, wide, 0)));
+    else
+        PlatformSpend(107 + count * (7 + AccessCycles(src, wide, 1) + AccessCycles(dest, wide, 0)));
     if (control & (1u << 26)) {
         const u32 *s = (const u32 *)((uintptr_t)src & ~3u);
         u32 *d = (u32 *)((uintptr_t)dest & ~3u);
@@ -76,11 +102,15 @@ void CpuSet(const void *src, void *dest, u32 control)
     Done();
 }
 
+// CpuFastSet: words, 8 a loop turn (5 cycles, 6 copying) plus their reads
+// and writes, after 116 cycles.
 void CpuFastSet(const void *src, void *dest, u32 control)
 {
-    // Words, in blocks of 8.
     u32 count = ((control & 0x1FFFFF) + 7) & ~7u;
-    PlatformSpend(SWI_CYCLES + count * 3);
+    if (control & (1u << 24))
+        PlatformSpend(116 + count / 8 * 5 + count * AccessCycles(dest, 1, 0));
+    else
+        PlatformSpend(116 + count / 8 * 6 + count * (AccessCycles(src, 1, 1) + AccessCycles(dest, 1, 0)));
     const u32 *s = (const u32 *)((uintptr_t)src & ~3u);
     u32 *d = (u32 *)((uintptr_t)dest & ~3u);
     if (control & (1u << 24)) {
@@ -92,11 +122,20 @@ void CpuFastSet(const void *src, void *dest, u32 control)
     Done();
 }
 
-static void LZ77UnComp(const u8 *src, u8 *dest)
+// LZ77: the time depends on what the data holds. Measured on the ROM (in
+// 1/256 cycle): a literal byte 38.4 cycles, a reference 44.4, each byte it
+// copies 11.0 into VRAM or 9.0 into WRAM, and 96 or 86 more.
+struct LZ77Costs {
+    u32 base, literal, reference, copied;
+};
+static const struct LZ77Costs sLZ77Vram = { 24543, 9831, 11374, 2818 };
+static const struct LZ77Costs sLZ77Wram = { 22039, 9827, 11346, 2309 };
+
+static void LZ77UnComp(const u8 *src, u8 *dest, const struct LZ77Costs *costs)
 {
     u32 header = src[0] | (src[1] << 8) | (src[2] << 16) | ((u32)src[3] << 24);
     u32 size = header >> 8;
-    PlatformSpend(SWI_CYCLES + size * 20);
+    u32 literals = 0, references = 0, copied = 0;
     src += 4;
     u8 *end = dest + size;
     while (dest < end) {
@@ -106,26 +145,31 @@ static void LZ77UnComp(const u8 *src, u8 *dest)
                 u32 len = (src[0] >> 4) + 3;
                 u32 disp = (((src[0] & 0xF) << 8) | src[1]) + 1;
                 src += 2;
+                references++;
                 while (len-- && dest < end) {
                     *dest = *(dest - disp);
                     dest++;
+                    copied++;
                 }
             } else {
                 *dest++ = *src++;
+                literals++;
             }
         }
     }
+    u64 cost = costs->base + (u64)literals * costs->literal + (u64)references * costs->reference + (u64)copied * costs->copied;
+    PlatformSpend((u32)((cost + 128) >> 8));
     Done();
 }
 
 void LZ77UnCompWram(const u32 *src, void *dest)
 {
-    LZ77UnComp((const u8 *)src, dest);
+    LZ77UnComp((const u8 *)src, dest, &sLZ77Wram);
 }
 
 void LZ77UnCompVram(const u32 *src, void *dest)
 {
-    LZ77UnComp((const u8 *)src, dest);
+    LZ77UnComp((const u8 *)src, dest, &sLZ77Vram);
 }
 
 static void RLUnComp(const u8 *src, u8 *dest)
