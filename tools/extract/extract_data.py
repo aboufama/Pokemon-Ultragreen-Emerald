@@ -74,7 +74,11 @@ def main(decomp: Path, out_dir: Path) -> None:
 
     species_ids = {k: v for k, v in consts.items() if k.startswith("SPECIES_") and k not in ("SPECIES_EGG",)}
     num_species = consts["NUM_SPECIES"]
-    type_by_value = name_of({k: v for k, v in consts.items() if k.startswith("TYPE_") and not k.startswith("TYPE_MUL")}, "TYPE_")
+    # The types are the TYPE_* constants of the header that defines them:
+    # other headers have TYPE_ constants with other meanings and the same
+    # values (TYPE_NAME_LENGTH is 6, as TYPE_BUG is).
+    type_names_defined = C.parse_defines(C.read(decomp / "include/constants/pokemon.h"))
+    type_by_value = name_of({k: consts[k] for k in type_names_defined if k.startswith("TYPE_") and k in consts}, "TYPE_")
 
     # ---- names -----------------------------------------------------------
     species_names = {k: C.parse_string_literal(v) for k, v in
