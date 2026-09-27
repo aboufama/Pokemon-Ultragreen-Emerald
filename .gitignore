@@ -10,3 +10,4 @@ __pycache__/
 public/libs/
 build/
 .claude/worktrees/
+public/game/

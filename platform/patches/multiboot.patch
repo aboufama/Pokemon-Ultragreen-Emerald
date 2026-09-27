@@ -1,0 +1,39 @@
+multiboot.c: the multiboot library's cycle-counting delay loop.
+
+MultiBootWaitCycles counts down CPU cycles in assembly; PlatformWaitCycles
+advances the platform's clock by as many.
+
+--- a/src/multiboot.c
++++ b/src/multiboot.c
+@@ -1,5 +1,8 @@
+ #include "global.h"
+ #include "gba/gba.h"
++#ifdef PLATFORM_WASM
++#include "platform.h"
++#endif
+ #include "multiboot.h"
+ 
+ static u16 MultiBoot_required_data[MULTIBOOT_NCHILD];
+@@ -436,6 +439,14 @@
+ #undef must_data
+ }
+ 
++#ifdef PLATFORM_WASM
++// PLATFORM_WASM: a delay loop of `cycles` CPU cycles; the platform advances
++// its clock instead.
++static void MultiBootWaitCycles(u32 cycles)
++{
++    PlatformWaitCycles(cycles);
++}
++#else
+ NAKED
+ static void MultiBootWaitCycles(u32 cycles)
+ {
+@@ -454,6 +465,7 @@
+     bgt  MultiBootWaitCyclesLoop\n\
+     bx   lr\n");
+ }
++#endif
+ 
+ static void MultiBootWaitSendDone(void)
+ {

@@ -1,0 +1,27 @@
+script.c: the halt when the null script runs.
+
+The GBA halts forever (svc 2); PlatformHalt stops the game and says why.
+
+--- a/src/script.c
++++ b/src/script.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_WASM
++#include "platform.h"
++#endif
+ #include "script.h"
+ #include "event_data.h"
+ #include "mystery_gift.h"
+@@ -102,8 +105,12 @@
+ 
+             if (ctx->scriptPtr == gNullScriptPtr)
+             {
++#ifdef PLATFORM_WASM
++                PlatformHalt("script: the null script ran"); // the game halts here
++#else
+                 while (1)
+                     asm("svc 2"); // HALT
++#endif
+             }
+ 
+             cmdCode = *(ctx->scriptPtr);

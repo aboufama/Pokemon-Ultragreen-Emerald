@@ -1,0 +1,21 @@
+librfu_rfu.c: the wireless library's copy routine, run from RAM.
+
+rfu_initializeAPI copies rfu_STC_fastCopy into RAM and calls the copy, for
+speed; code can't run from RAM here, so it calls the function itself.
+
+--- a/src/librfu_rfu.c
++++ b/src/librfu_rfu.c
+@@ -195,7 +195,13 @@
+         0x60 / sizeof(u16)
+         );
+ #endif
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: code can't run from RAM; the function itself (the copy
++    // only made it faster).
++    gRfuFixed->fastCopyPtr = rfu_STC_fastCopy;
++#else
+     gRfuFixed->fastCopyPtr = (void *)gRfuFixed->fastCopyBuffer + 1;
++#endif
+     return 0;
+ }
+ 

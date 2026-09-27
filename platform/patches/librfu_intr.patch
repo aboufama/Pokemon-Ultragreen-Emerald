@@ -1,0 +1,41 @@
+librfu_intr.c: the wireless adapter library's callback jumps.
+
+Three naked functions jump to their callback argument (bx rN) with the
+arguments still in registers; in C they are calls.
+
+--- a/src/librfu_intr.c
++++ b/src/librfu_intr.c
+@@ -395,6 +395,28 @@
+     REG_SIOCNT = SIO_INTR_ENABLE | SIO_32BIT_MODE | SIO_57600_BPS | SIO_ENABLE;
+ }
+ 
++#ifdef PLATFORM_WASM
++// PLATFORM_WASM: these jump to the callback with the arguments in place
++// ("bx rN"); in C that is a call.
++#if __STDC_VERSION__ < 202311L
++static void Callback_Dummy_M(int reqCommandId, int error, void (*callbackM)())
++#else
++static void Callback_Dummy_M(int reqCommandId, int error, void (*callbackM)(...))
++#endif
++{
++    callbackM(reqCommandId, error);
++}
++
++static void Callback_Dummy_S(u16 reqCommandId, void (*callbackS)(u16))
++{
++    callbackS(reqCommandId);
++}
++
++static void Callback_Dummy_ID(void (*callbackId)(void))
++{
++    callbackId();
++}
++#else
+ NAKED
+ #if __STDC_VERSION__ < 202311L
+ static void Callback_Dummy_M(int reqCommandId, int error, void (*callbackM)())
+@@ -416,3 +438,4 @@
+ {
+     asm("bx r0");
+ }
++#endif

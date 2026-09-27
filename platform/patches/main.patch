@@ -1,0 +1,51 @@
+main.c: the browser runs the main loop.
+
+AgbMain initializes and returns; AgbMainFrame is one iteration of the loop,
+run by the platform (PlatformFrame). WaitForVBlank names the flag it waits
+for instead of spinning; the platform lets time pass until the VBlank
+interrupt handler sets it.
+
+--- a/src/main.c
++++ b/src/main.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_WASM
++#include "platform.h"
++#endif
+ #include "crt0.h"
+ #include "malloc.h"
+ #include "link.h"
+@@ -128,8 +131,18 @@
+     AGBPrintInit();
+ #endif
+ #endif
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the browser runs the main loop, one iteration a frame
++    // (AgbMainFrame below), so AgbMain returns after initializing.
++}
++
++void AgbMainFrame(void)
++{
++    {
++#else
+     for (;;)
+     {
++#endif
+         ReadKeys();
+ 
+         if (gSoftResetDisabled == FALSE
+@@ -411,8 +424,14 @@
+ {
+     gMain.intrCheck &= ~INTR_FLAG_VBLANK;
+ 
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: AgbMainFrame returns after this; the platform waits for
++    // the flag (the hardware runs meanwhile) before the next iteration.
++    PlatformWaitForFlag(&gMain.intrCheck, INTR_FLAG_VBLANK);
++#else
+     while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
+         ;
++#endif
+ }
+ 
+ void SetTrainerHillVBlankCounter(u32 *counter)

@@ -1,0 +1,39 @@
+m4a.c: the sound engine's C half, two linker constants and an unused BIOS call.
+
+NUM_MUSIC_PLAYERS and MAX_LINES are the addresses of linker script symbols
+(gNumMusicPlayers = 4, gMaxLines = 0 in ld_script_modern.ld); here they are
+the constants. MusicPlayerJumpTableCopy (swi 0x2A) is never called; it is
+compiled out.
+
+--- a/src/m4a.c
++++ b/src/m4a.c
+@@ -1,6 +1,16 @@
+ #include "global.h"
+ #include "gba/m4a_internal.h"
+ 
++#ifdef PLATFORM_WASM
++// PLATFORM_WASM: gNumMusicPlayers and gMaxLines are linker script symbols
++// whose addresses are the values (ld_script_modern.ld); here they are
++// constants.
++#undef NUM_MUSIC_PLAYERS
++#undef MAX_LINES
++#define NUM_MUSIC_PLAYERS 4
++#define MAX_LINES 0
++#endif
++
+ extern const u8 gCgb3Vol[];
+ 
+ #define BSS_CODE __attribute__((section(".bss.code")))
+@@ -325,10 +335,12 @@
+     soundInfo->ident = ident;
+ }
+ 
++#ifndef PLATFORM_WASM // (unused; a BIOS call)
+ static void UNUSED MusicPlayerJumpTableCopy(void)
+ {
+     asm("swi 0x2A");
+ }
++#endif
+ 
+ void ClearChain(void *x)
+ {

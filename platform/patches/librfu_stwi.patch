@@ -1,0 +1,23 @@
+librfu_stwi.c: the wireless adapter's serial interrupt handler, run from RAM.
+
+STWI_init_all copies IntrSIO32 into RAM and installs the copy as the serial
+interrupt handler, for speed; code can't run from RAM here, so the handler
+itself is installed (the library's buffers stay laid out as with the copy).
+
+--- a/src/librfu_stwi.c
++++ b/src/librfu_stwi.c
+@@ -17,8 +17,14 @@
+     // interrupt usually is a pointer to gIntrTable[1]
+     if (copyInterruptToRam == TRUE)
+     {
++#ifdef PLATFORM_WASM
++        // PLATFORM_WASM: code can't run from RAM; the handler itself (the
++        // copy only made it faster).
++        *interrupt = IntrSIO32;
++#else
+         *interrupt = (IntrFunc)interruptStruct->block1;
+         DmaCopy16(3, &IntrSIO32, interruptStruct->block1, sizeof(interruptStruct->block1));
++#endif
+         gSTWIStatus = &interruptStruct->block2;
+     }
+     else
