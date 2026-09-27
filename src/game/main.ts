@@ -192,6 +192,8 @@ async function main() {
       vblanks: () => game.vblanks(),
       /** The canvas (the last frame shown) as a PNG data URL. */
       png: () => canvas.toDataURL('image/png'),
+      /** The game itself (its exports and memory), for tools that read its state. */
+      game,
     };
     return;
   }

@@ -13,7 +13,7 @@
 import type { Battler3D } from '../battle3d/battler';
 import { clipFor } from '../battle3d/director';
 import { MOVES, type MoveData } from '../data';
-import { REMAKE_ANIM, constant, type BattleState, type GameInfo } from './state';
+import { constant, type BattleState, type GameInfo } from './state';
 
 const MOVES_BY_ID = new Map<number, MoveData>(Object.values(MOVES).map((m) => [m.id, m]));
 
@@ -27,11 +27,13 @@ export class Acting {
   /** Battlers whose 'intro' has played since they appeared. */
   private readonly introduced = new Set<number>();
   private readonly healthboxes = new Map<number, boolean>();
+  private readonly MOVE_ANIM: number;
   private readonly HIT: number;
   private readonly FAINT: number;
   private readonly COME_OUT: number[];
 
   constructor(info: GameInfo) {
+    this.MOVE_ANIM = constant(info, 'REMAKE_ANIM_MOVE');
     this.HIT = constant(info, 'CONTROLLER_HITANIMATION');
     this.FAINT = constant(info, 'CONTROLLER_FAINTANIMATION');
     this.COME_OUT = ['CONTROLLER_SWITCHINANIM', 'CONTROLLER_INTROTRAINERBALLTHROW'].map((n) => constant(info, n));
@@ -59,7 +61,7 @@ export class Acting {
   update(state: BattleState, bodyOf: (battler: number) => Battler3D | null, shows: (battler: number) => boolean): void {
     // A move's animation. (The first frame only notes where the game is: an
     // animation from before is not replayed.)
-    if (this.animSerial !== null && state.animSerial !== this.animSerial && state.animTable === REMAKE_ANIM.MOVE) {
+    if (this.animSerial !== null && state.animSerial !== this.animSerial && state.animTable === this.MOVE_ANIM) {
       const attacker = bodyOf(state.animAttacker);
       const move = MOVES_BY_ID.get(state.animId);
       if (attacker && move && !this.fainting.has(state.animAttacker)) void attacker.perform(clipFor(attacker, move));

@@ -5,11 +5,6 @@
 // game's constants by name from the same file, so nothing here repeats the C
 // layout or the game's numbers.
 
-export const REMAKE_ANIM = { NONE: 0, MOVE: 1, STATUS: 2, GENERAL: 3, SPECIAL: 4 } as const;
-
-/** BattleState.background when BG3 shows the main battle background (the place's). */
-export const REMAKE_BG_MAIN = 0xffff;
-
 /** field: [offset, size, C type]. */
 export type StructLayouts = Record<string, { size: number; fields: Record<string, [number, number, string]> }>;
 
@@ -101,11 +96,12 @@ export interface BattleState {
   battlerCount: number;
   animActive: boolean;
   animSerial: number;
+  /** REMAKE_ANIM_* */
   animTable: number;
   animId: number;
   animAttacker: number;
   animTarget: number;
-  /** REMAKE_BG_MAIN, or the move background (BG_*) BG3 shows. */
+  /** REMAKE_BG_MAIN (the place's), or the move background (BG_*) BG3 shows. */
   background: number;
   plttUnfaded: number;
   plttFaded: number;

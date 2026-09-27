@@ -26,15 +26,11 @@ import speciesTable from '../data/generated/species.json';
 import { Battler3D } from '../battle3d/battler';
 import { hasProfile } from '../pokemon/registry';
 import { SLOT_PIXEL_ID } from '../pokemon/instantiate';
+import { PixelPipeline } from '../render3d/pipeline';
 import { BattleStage, type SlotName } from '../render3d/stage';
-import type { Game } from '../../platform/host/game.mjs';
+import { WIDTH, HEIGHT, type Game } from '../../platform/host/game.mjs';
 import { Acting } from './acting';
-import { REMAKE_BG_MAIN, StructView, constant, readBattleState, type BattleState, type GameInfo, type StructLayouts } from './state';
-
-const WIDTH = 240;
-const HEIGHT = 160;
-const OPAQUE = 0x8000;
-const FORMAT_INDEX = 1;
+import { StructView, constant, readBattleState, type BattleState, type GameInfo, type StructLayouts } from './state';
 /** A GBA frame: 280896 cycles at 16.78 MHz. */
 const FRAME_SECONDS = 280896 / 16777216;
 
@@ -184,7 +180,18 @@ export class RemakeLayer {
   private readonly bodies = new Map<number, Body>();
   private target: THREE.WebGLRenderTarget | null = null;
   private readonly rgba = new Uint8Array(WIDTH * HEIGHT * 4);
+  /** The arena's picture is drawn with a margin around the screen (the game shakes the background): its own pipeline, camera and target. */
+  private arenaPipeline: PixelPipeline | null = null;
+  private arenaCamera: THREE.PerspectiveCamera | null = null;
+  private arenaTarget: THREE.WebGLRenderTarget | null = null;
+  private readonly arenaRgba: Uint8Array;
   private readonly layouts: StructLayouts;
+  private readonly OPAQUE: number;
+  private readonly FORMAT_INDEX: number;
+  private readonly BG_MAIN: number;
+  private readonly MARGIN: number;
+  private readonly BG_WIDTH: number;
+  private readonly BG_HEIGHT: number;
   private readonly arenas = new Map<number, string>();
   private readonly slots = new Map<number, SlotName>();
   private readonly acting: Acting;
@@ -197,6 +204,13 @@ export class RemakeLayer {
 
   constructor(private readonly game: Game, info: GameInfo) {
     this.layouts = info.structs;
+    this.OPAQUE = constant(info, 'REMAKE_OPAQUE');
+    this.FORMAT_INDEX = constant(info, 'REMAKE_FORMAT_INDEX');
+    this.BG_MAIN = constant(info, 'REMAKE_BG_MAIN');
+    this.MARGIN = constant(info, 'REMAKE_BG_MARGIN');
+    this.BG_WIDTH = constant(info, 'REMAKE_BG_WIDTH');
+    this.BG_HEIGHT = constant(info, 'REMAKE_BG_HEIGHT');
+    this.arenaRgba = new Uint8Array(this.BG_WIDTH * this.BG_HEIGHT * 4);
     for (const [name, arena] of Object.entries(ARENAS)) this.arenas.set(constant(info, name), arena);
     for (const [name, slot] of Object.entries(SLOTS)) this.slots.set(constant(info, name), slot);
     this.acting = new Acting(info);
@@ -243,9 +257,10 @@ export class RemakeLayer {
     }
     if (!state.battleScreen) return;
     const stage = this.ensureStage();
-    const arena = state.background === REMAKE_BG_MAIN ? this.arenas.get(state.environment) ?? null : null;
+    const arena = state.background === this.BG_MAIN ? this.arenas.get(state.environment) ?? null : null;
     if (arena && arena !== this.arena && !this.arenaLoading) this.loadArena(arena);
-    const shown = this.placeBodies(state);
+    const scroll = this.backgroundScroll(this.view());
+    const shown = this.placeBodies(state, scroll);
     const showing = new Set([...shown.values()].map((b) => b.battlerId));
     this.acting.update(state, (i) => this.bodies.get(i)?.battler ?? null, (i) => showing.has(i));
     if (!this.ready()) {
@@ -263,7 +278,7 @@ export class RemakeLayer {
       this.placeSprite(body);
     }
     if (!this.drawPictures) return;
-    if (arena && arena === this.arena) this.renderArena(state);
+    if (arena && arena === this.arena) this.renderArena(state, scroll.pan);
     if (shown.size) this.renderBodies(shown);
   }
 
@@ -282,8 +297,18 @@ export class RemakeLayer {
 
   private ensureStage(): BattleStage {
     if (!this.stage) {
-      this.stage = new BattleStage(document.createElement('canvas'), undefined, { density: 1 });
-      this.target = new THREE.WebGLRenderTarget(WIDTH, HEIGHT, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, colorSpace: THREE.NoColorSpace });
+      const stage = new BattleStage(document.createElement('canvas'), undefined, { density: 1 });
+      const target = (w: number, h: number) => new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, colorSpace: THREE.NoColorSpace });
+      this.target = target(WIDTH, HEIGHT);
+      // The arena: the resting camera seeing the margin too, pixel for pixel.
+      this.arenaPipeline = new PixelPipeline(stage.renderer, { density: 1, screen: [this.BG_WIDTH, this.BG_HEIGHT] });
+      this.arenaTarget = target(this.BG_WIDTH, this.BG_HEIGHT);
+      const cam = stage.homeCamera.clone();
+      cam.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * (this.BG_HEIGHT / HEIGHT)));
+      cam.aspect = this.BG_WIDTH / this.BG_HEIGHT;
+      cam.updateProjectionMatrix();
+      this.arenaCamera = cam;
+      this.stage = stage;
     }
     return this.stage;
   }
@@ -320,10 +345,9 @@ export class RemakeLayer {
    * lacks), placed where their sprites are this frame. Returns the ones to
    * draw, by the tile their sprite shows.
    */
-  private placeBodies(state: BattleState): Map<number, Body> {
+  private placeBodies(state: BattleState, scroll: ReturnType<RemakeLayer['backgroundScroll']>): Map<number, Body> {
     const view = this.view();
     const shown = new Map<number, Body>();
-    const lines = this.backgroundScroll(view);
     state.battlers.forEach((b, i) => {
       const slot = this.slots.get(b.position);
       const slug = SLUGS.get(b.species);
@@ -347,8 +371,10 @@ export class RemakeLayer {
       if (!fainting) body.battler.visible = !!sprite;
       if (!sprite) return;
       if (!fainting) {
+        // Riding the background: its scroll at the sprite's row, less what
+        // the arena itself shows of it (a shake).
         const row = Math.max(0, Math.min(HEIGHT - 1, Math.round(sprite.y)));
-        body.battler.screenOffset = [sprite.x - b.homeX + lines.x[row], sprite.y - b.homeY + lines.y[row]];
+        body.battler.screenOffset = [sprite.x - b.homeX + scroll.x[row] - scroll.pan[0], sprite.y - b.homeY + scroll.y[row] - scroll.pan[1]];
         const [a, bb, c, d] = sprite.map;
         body.battler.spriteScale = Math.sqrt(Math.abs(a * d - bb * c));
         body.sprite.userData.map = sprite.map;
@@ -392,16 +418,22 @@ export class RemakeLayer {
 
   /**
    * How far the battle background is scrolled at each line of this frame
-   * (its registers and the HBlank DMA's writes): the arena stays still, so a
-   * battler whose sprite moves with the background (the intro's slide) keeps
-   * its place on the arena.
+   * (its registers and the HBlank DMA's writes), and the part of it the arena
+   * shows (`pan`): a scroll the whole screen shares, as a shake, up to the
+   * arena's margin. Where the lines differ (the intro's halves sliding in)
+   * the arena stays still, and a battler whose sprite moves with the
+   * background keeps its place on the arena.
    */
-  private backgroundScroll(view: DataView): { x: number[]; y: number[] } {
+  private backgroundScroll(view: DataView): { x: number[]; y: number[]; pan: [number, number] } {
     const predict = this.game.exports().PlatformPredictLines as (off: number) => number;
     const read = (off: number) => Array.from(new Uint16Array(this.game.memory().buffer, predict(off), HEIGHT));
     const cnt = view.getUint16(IO + REG_BG3CNT, true);
     const width = cnt & 0x4000 ? 512 : 256, height = cnt & 0x8000 ? 512 : 256;
-    return { x: read(REG_BG3HOFS).map((v) => signedScroll(v, width)), y: read(REG_BG3VOFS).map((v) => signedScroll(v, height)) };
+    const x = read(REG_BG3HOFS).map((v) => signedScroll(v, width));
+    const y = read(REG_BG3VOFS).map((v) => signedScroll(v, height));
+    const uniform = x.every((v) => v === x[0]) && y.every((v) => v === y[0]);
+    const clamp = (v: number) => Math.max(-this.MARGIN, Math.min(this.MARGIN, v));
+    return { x, y, pan: uniform ? [clamp(x[0]), clamp(y[0])] : [0, 0] };
   }
 
   /** The sprite's turn and stretch (its affine map without the scale, which `appear` carries), about the body's middle. */
@@ -446,38 +478,43 @@ export class RemakeLayer {
     };
     if (which === 'arena') {
       for (const body of this.bodies.values()) hide(body.sprite);
+      this.arenaPipeline!.render(stage.scene, this.arenaCamera!, { target: this.arenaTarget! });
     } else {
       hide(stage.environment?.group);
       hide(stage.ambience?.group);
       for (const slot of Object.values(stage.slots)) for (const o of slot.children) if (o.name === 'ground-shadow') hide(o);
+      stage.render({ target: this.target!, indices: true });
     }
-    stage.render({ target: this.target!, indices: which === 'bodies' });
     for (const o of hidden) o.visible = true;
-    stage.renderer.readRenderTargetPixels(this.target!, 0, 0, WIDTH, HEIGHT, this.rgba);
+    if (which === 'arena') stage.renderer.readRenderTargetPixels(this.arenaTarget!, 0, 0, this.BG_WIDTH, this.BG_HEIGHT, this.arenaRgba);
+    else stage.renderer.readRenderTargetPixels(this.target!, 0, 0, WIDTH, HEIGHT, this.rgba);
   }
 
   /** The arena alone (BG3's picture): rendered, faded as the game fades BG3's palette, and handed to the PPU. */
-  private renderArena(state: BattleState): void {
+  private renderArena(state: BattleState, pan: [number, number]): void {
     this.renderPass('arena');
     const view = this.view();
     const fade = this.backgroundFade(view, state);
     const layers = this.layers();
     const bg = layers.struct('background', 'RemakeBackground');
-    const out = new Uint16Array(view.buffer, bg.address + this.field('RemakeBackground', 'pixels'), WIDTH * HEIGHT);
+    const W = this.BG_WIDTH, H = this.BG_HEIGHT, OPAQUE = this.OPAQUE;
+    const out = new Uint16Array(view.buffer, bg.address + this.field('RemakeBackground', 'pixels'), W * H);
     const [tr, tg, tb] = fade.target, k = fade.coeff;
-    for (let y = 0; y < HEIGHT; y++) {
-      const src = (HEIGHT - 1 - y) * WIDTH * 4;
-      for (let x = 0; x < WIDTH; x++) {
+    for (let y = 0; y < H; y++) {
+      const src = (H - 1 - y) * W * 4;
+      for (let x = 0; x < W; x++) {
         const i = src + x * 4;
-        let r = this.rgba[i] >> 3, g = this.rgba[i + 1] >> 3, b = this.rgba[i + 2] >> 3;
+        let r = this.arenaRgba[i] >> 3, g = this.arenaRgba[i + 1] >> 3, b = this.arenaRgba[i + 2] >> 3;
         if (k) {
           r += ((tr - r) * k) >> 4;
           g += ((tg - g) * k) >> 4;
           b += ((tb - b) * k) >> 4;
         }
-        out[y * WIDTH + x] = OPAQUE | r | (g << 5) | (b << 10);
+        out[y * W + x] = OPAQUE | r | (g << 5) | (b << 10);
       }
     }
+    view.setInt32(bg.address + this.field('RemakeBackground', 'panX'), pan[0], true);
+    view.setInt32(bg.address + this.field('RemakeBackground', 'panY'), pan[1], true);
     view.setUint32(bg.address + this.field('RemakeBackground', 'bg'), 3, true);
     view.setUint32(bg.address + this.field('RemakeBackground', 'active'), 1, true);
   }
@@ -516,12 +553,12 @@ export class RemakeLayer {
         const src = (HEIGHT - 1 - y) * WIDTH * 4;
         for (let x = 0; x < WIDTH; x++) {
           const i = src + x * 4;
-          out[y * WIDTH + x] = this.rgba[i + 3] === id ? OPAQUE | this.rgba[i] : 0;
+          out[y * WIDTH + x] = this.rgba[i + 3] === id ? this.OPAQUE | this.rgba[i] : 0;
         }
       }
       const [cx, cy] = body.sprite.userData.center as [number, number];
       view.setUint32(sprite.address + this.field('RemakeSprite', 'tileNum'), tileNum, true);
-      view.setUint32(sprite.address + this.field('RemakeSprite', 'format'), FORMAT_INDEX, true);
+      view.setUint32(sprite.address + this.field('RemakeSprite', 'format'), this.FORMAT_INDEX, true);
       view.setInt32(sprite.address + this.field('RemakeSprite', 'centerX'), cx, true);
       view.setInt32(sprite.address + this.field('RemakeSprite', 'centerY'), cy, true);
       view.setUint32(sprite.address + this.field('RemakeSprite', 'active'), 1, true);

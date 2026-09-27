@@ -142,12 +142,15 @@ the frame's lines then use:
   black) colors the 3D body exactly as it colors the sprite, and a shiny
   Pokémon is shiny.
 
-The arena stays still: where the GBA scrolls BG3 (the intro's two halves
-sliding in), a battler whose sprite moves with the background keeps its
-place on the arena (its offset plus BG3's scroll at its row, from the
-registers and the HBlank DMA's writes for the frame: `PlatformPredictLines`).
-So the wild Pokémon is already standing there when the window opens, as the
-remake's intro was designed. The two renders are passes of the same stage:
+The arena is drawn with a margin around the screen (`REMAKE_BG_MARGIN`,
+within the margin the arenas are painted with), so when the game scrolls BG3
+the same on every line (a shake: Earthquake's 13 px) the arena moves with
+it. Where the lines differ (the intro's two halves sliding in) the arena
+stays still, and a battler whose sprite moves with the background keeps its
+place on it: its offset plus BG3's scroll at its row, less what the arena
+shows of it, from the registers and the HBlank DMA's writes for the frame
+(`PlatformPredictLines`). So the wild Pokémon is already standing there when
+the window opens, as the remake's intro was designed. The two renders are passes of the same stage:
 the arena with the battlers' shadows, then the battlers alone with their
 object ids, split into one picture each.
 

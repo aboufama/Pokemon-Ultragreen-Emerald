@@ -329,22 +329,24 @@ function link(objects) {
  * game's numbers.
  */
 const REMAKE_CONSTANTS = [
-  ['include/battle_controllers.h', 'CONTROLLER_'],
-  ['include/constants/battle.h', 'BATTLE_ENVIRONMENT_'],
-  ['include/constants/battle.h', 'B_POSITION_'],
-  ['include/constants/battle.h', 'B_SIDE_'],
+  ['battle_controllers.h', 'CONTROLLER_'],
+  ['constants/battle.h', 'BATTLE_ENVIRONMENT_'],
+  ['constants/battle.h', 'B_POSITION_'],
+  ['constants/battle.h', 'B_SIDE_'],
+  ['remake_state.h', 'REMAKE_'],
 ];
 
 function gameConstants() {
   const headers = [...new Set(REMAKE_CONSTANTS.map(([h]) => h))];
   const names = new Set();
   for (const [header, prefix] of REMAKE_CONSTANTS) {
-    const text = fs.readFileSync(path.join(DECOMP, header), 'utf8');
+    const file = [path.join(DECOMP, 'include', header), path.join(HERE, 'include', header)].find((f) => fs.existsSync(f));
+    const text = fs.readFileSync(file, 'utf8');
     for (const m of text.matchAll(new RegExp(`^\\s*#define\\s+(${prefix}\\w+)\\s+\\S`, 'gm'))) names.add(m[1]);
     for (const m of text.matchAll(new RegExp(`^\\s*(${prefix}\\w+)\\s*(?:=[^,\\n]*)?,?\\s*(?://.*)?$`, 'gm'))) names.add(m[1]);
   }
   const probe = path.join(OUT, 'remake_constants_probe.c');
-  fs.writeFileSync(probe, ['#include "global.h"', ...headers.map((h) => `#include "${h.replace(/^include\//, '')}"`),
+  fs.writeFileSync(probe, ['#include "global.h"', ...headers.map((h) => `#include "${h}"`),
     ...[...names].map((n) => `int const__${n} = ${n};`)].join('\n') + '\n');
   const flags = CPPFLAGS.filter((f) => f !== '-E');
   const r = spawnSync('clang', [...flags, '-O2', '-S', '-o', '-', probe], { cwd: DECOMP, encoding: 'utf8' });
@@ -362,10 +364,14 @@ function structLayouts() {
   for (const m of text.matchAll(/struct (\w+) \{([^}]*)\};/g)) {
     const [, name, body] = m;
     probes.push(`int size__${name} = sizeof(struct ${name});`);
-    for (const f of body.matchAll(/^\s*[\w ]+?\s+(\w+)(\[\w+\])?(?:,\s*(\w+))*;/gm)) {
-      const decl = f[0].replace(/\/\/.*$/, '').trim().replace(/;$/, '');
-      const type = /^(?:const\s+)?((?:struct\s+)?\w+)/.exec(decl)[1];
-      const names = decl.replace(/^(const\s+)?(struct\s+)?\w+\s+/, '').split(',').map((n) => n.trim().replace(/\[.*$/, ''));
+    // Every declaration of the body (comments dropped), so a field the
+    // parser cannot read stops the build instead of going missing.
+    const decls = body.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').split(';').map((d) => d.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    for (const decl of decls) {
+      const d = /^(?:const )?((?:struct )?\w+) (.+)$/.exec(decl);
+      const names = d ? d[2].split(',').map((n) => n.trim().replace(/\s*\[.*$/, '')) : [];
+      if (!d || !names.every((n) => /^\w+$/.test(n))) throw new Error(`remake_state.h: struct ${name}: cannot read the field "${decl}"`);
+      const type = d[1];
       for (const field of names) {
         (types[name] ??= {})[field] = type;
         probes.push(`int off__${name}__${field} = __builtin_offsetof(struct ${name}, ${field});`);

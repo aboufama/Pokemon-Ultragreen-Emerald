@@ -20,6 +20,12 @@ export const MAX_ECHOES = 4;
 export interface PixelSettings {
   /** Output pixels per GBA pixel (1 = native 240x160). */
   density: number;
+  /**
+   * The picture's size in GBA pixels: the screen (240x160), or more (the
+   * remake layer's arena, drawn with a margin around the screen so the game
+   * can shake the background).
+   */
+  screen: [number, number];
   /** Scene samples per output pixel along each axis. */
   supersample: number;
   outline: boolean;
@@ -31,6 +37,7 @@ export interface PixelSettings {
 
 export const DEFAULT_PIXEL_SETTINGS: PixelSettings = {
   density: 1,
+  screen: [240, 160],
   supersample: 2,
   outline: true,
   innerOutline: true,
@@ -93,6 +100,8 @@ const compositeFrag = /* glsl */ `
   uniform sampler2D tDepth;
   uniform ivec2 srcSize;
   uniform int ss;
+  // The picture's size in GBA pixels (PixelSettings.screen).
+  uniform ivec2 screenSize;
   uniform bool outline;
   uniform bool innerOutline;
   uniform bool paletteSnap;
@@ -198,7 +207,7 @@ const compositeFrag = /* glsl */ `
   /** The GBA pixel an output pixel belongs to (row 0 at the top). */
   ivec2 screenPixel(ivec2 outPx) {
     ivec2 outSize = srcSize / ss;
-    int density = outSize.x / 240;
+    int density = outSize.x / screenSize.x;
     return ivec2(outPx.x / density, (outSize.y - 1 - outPx.y) / density);
   }
 
@@ -302,7 +311,7 @@ const compositeFrag = /* glsl */ `
   void main() {
     ivec2 outPx = ivec2(gl_FragCoord.xy);
     ivec2 outSize = srcSize / ss;
-    int density = outSize.x / 240;
+    int density = outSize.x / screenSize.x;
     ivec2 screen = screenPixel(outPx);
     if (rippleAmp > 0.0) {
       // Ripple: BGxVOFS per row = Sin(((sin + y * 0x180) >> 8) & 0xFF, amplitude).
@@ -369,8 +378,8 @@ export class PixelPipeline {
     settings: Partial<PixelSettings> = {},
   ) {
     this.settings = { ...DEFAULT_PIXEL_SETTINGS, ...settings };
-    this.outWidth = 240 * this.settings.density;
-    this.outHeight = 160 * this.settings.density;
+    this.outWidth = this.settings.screen[0] * this.settings.density;
+    this.outHeight = this.settings.screen[1] * this.settings.density;
     const palettes = Array.from({ length: MAX_PALETTES * 16 }, () => new THREE.Vector3());
     const display = Array.from({ length: MAX_PALETTES * 16 }, () => new THREE.Vector3());
     this.composite = new THREE.ShaderMaterial({
@@ -380,6 +389,7 @@ export class PixelPipeline {
         tDepth: { value: null },
         srcSize: { value: new THREE.Vector2() },
         ss: { value: 1 },
+        screenSize: { value: new THREE.Vector2(...this.settings.screen) },
         outline: { value: true },
         innerOutline: { value: true },
         paletteSnap: { value: true },

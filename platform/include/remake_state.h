@@ -76,6 +76,12 @@ struct RemakeState {
 #define REMAKE_OPAQUE 0x8000u
 #define REMAKE_LAYER_SPRITES 4
 #define REMAKE_PIXELS (240 * 160)
+// The background's picture has a margin around the screen, so the game can
+// shake the background (a uniform scroll: RemakeBackground.panX/Y) up to it.
+#define REMAKE_BG_MARGIN 16  // within the arenas' painted margin (src/render3d/arena/design.ts PAINT_*)
+#define REMAKE_BG_WIDTH (240 + 2 * REMAKE_BG_MARGIN)
+#define REMAKE_BG_HEIGHT (160 + 2 * REMAKE_BG_MARGIN)
+#define REMAKE_BG_PIXELS (REMAKE_BG_WIDTH * REMAKE_BG_HEIGHT)
 
 // What a picture's pixels hold (below REMAKE_OPAQUE).
 enum {
@@ -88,7 +94,8 @@ enum {
 struct RemakeBackground {
     uint32_t active;        // the picture replaces the background's pixels
     uint32_t bg;            // which background (3: the battle's)
-    uint16_t pixels[REMAKE_PIXELS];
+    int32_t panX, panY;     // the screen shows the picture moved by this (-margin..margin): the background's scroll
+    uint16_t pixels[REMAKE_BG_PIXELS];  // the screen at (REMAKE_BG_MARGIN, REMAKE_BG_MARGIN)
 };
 
 struct RemakeSprite {

@@ -412,7 +412,13 @@ void PlatformPpuLine(u32 line)
             if (!bgOn[bg])
                 continue;
             if (sRemake.background.active && sRemake.background.bg == (u32)bg) {
-                const u16 *src = &sRemake.background.pixels[line * SCREEN_W];
+                const struct RemakeBackground *r = &sRemake.background;
+                s32 px = r->panX, py = r->panY;
+                if (px < -REMAKE_BG_MARGIN) px = -REMAKE_BG_MARGIN;
+                if (px > REMAKE_BG_MARGIN) px = REMAKE_BG_MARGIN;
+                if (py < -REMAKE_BG_MARGIN) py = -REMAKE_BG_MARGIN;
+                if (py > REMAKE_BG_MARGIN) py = REMAKE_BG_MARGIN;
+                const u16 *src = &r->pixels[(line + REMAKE_BG_MARGIN + py) * REMAKE_BG_WIDTH + REMAKE_BG_MARGIN + px];
                 for (int x = 0; x < SCREEN_W; x++)
                     sBg[bg][x] = (src[x] & LAYER_OPAQUE) ? (src[x] & 0x7FFF) : TRANSPARENT;
                 continue;
