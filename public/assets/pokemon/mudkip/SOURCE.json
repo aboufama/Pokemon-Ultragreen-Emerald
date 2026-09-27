@@ -1,0 +1,24 @@
+{
+  "dex": 258,
+  "slug": "mudkip",
+  "upstream": "https://github.com/Pokemon-3D-api/assets",
+  "fetchedAt": "2026-09-27T02:24:51.385Z",
+  "license": "Model assets are property of Nintendo / Creatures Inc. / GAME FREAK inc. (per upstream README).",
+  "files": [
+    {
+      "file": "model.glb",
+      "variant": "regular",
+      "url": "https://raw.githubusercontent.com/Pokemon-3D-api/assets/main/models/opt/regular/258.glb",
+      "bytes": 37940,
+      "sha256": "319cb250466af6b90d3805567783b99470c71763f0c969ec571547c5a96ca9f3"
+    }
+  ],
+  "optimized": {
+    "tool": "tools/models/optimize_model.mjs",
+    "removedAnimations": 0,
+    "droppedNodes": 0,
+    "bytesBefore": 37940,
+    "bytes": 37952,
+    "sha256": "65e1aafcb708dbc995b35b038defc01b3b5a38a205ae13ffa6686b4905a7446e"
+  }
+}
