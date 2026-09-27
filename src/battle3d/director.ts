@@ -735,8 +735,10 @@ async function emitFx(attacker: Battler3D, target: Battler3D, move: MoveData, mo
     return;
   }
   if (at === 'eyes' || motif === 'glare') {
-    // Leer, Scary Face: a glint at the attacker's eyes.
-    void vfx.sprite(at === 'eyes' ? sprite : 'Leer', towardCamera(attacker, attacker.emitterPoints('eyes')[0], 0.15), { px: 32, fps: 14 });
+    // Leer, Scary Face: a glint at what the species stares with (its emitter
+    // for the motif: Mudkip's head fin for Foresight; the eyes by default).
+    const from = emitterPoints(attacker, 'glare', move)[0] ?? towardCamera(attacker, attacker.emitterPoints('eyes')[0], 0.15);
+    void vfx.sprite(at === 'eyes' ? sprite : 'Leer', from, { px: 32, fps: 14 });
     await sleep(vfx, 0.5);
     return;
   }

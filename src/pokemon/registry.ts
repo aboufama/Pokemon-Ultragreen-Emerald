@@ -12,6 +12,7 @@ type ProfileFactory = (palettes: { normal: SpeciesProfile['palette']; shiny: Spe
 const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
   sceptile: async () => (await import('./sceptile')).createProfile,
   blaziken: async () => (await import('./blaziken')).createProfile,
+  mudkip: async () => (await import('./mudkip')).createProfile,
   swampert: async () => (await import('./swampert')).createProfile,
   poochyena: async () => (await import('./poochyena')).createProfile,
   zigzagoon: async () => (await import('./zigzagoon')).createProfile,
