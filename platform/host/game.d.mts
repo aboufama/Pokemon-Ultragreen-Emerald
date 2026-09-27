@@ -14,6 +14,7 @@ export interface GameOptions {
   rtcOffset?: number;
   log?: (text: string) => void;
   onVBlank?: (count: number) => void;
+  onFrameStart?: () => void;
 }
 
 export interface Game {

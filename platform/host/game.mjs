@@ -38,6 +38,9 @@ export function keysFrom(text) {
  * options.log(text)
  * options.onVBlank(count): a frame is done (count VBlanks since power-on);
  *   the frame is in frameRGBA(), and keys set now are the next frame's.
+ * options.onFrameStart(): a frame is about to be drawn (line 0): the
+ *   hardware's OAM, palettes and registers are the frame's (the remake layer
+ *   fills its pictures for it, src/remake/layer.ts).
  */
 export async function loadGame(bytes, options = {}) {
   const log = options.log ?? ((t) => console.log(`[game] ${t}`));
@@ -63,6 +66,7 @@ export async function loadGame(bytes, options = {}) {
       new Int32Array(memory.buffer, ptr, 7).set(t);
     },
     PlatformHostVBlank: (count) => options.onVBlank?.(count),
+    PlatformHostFrameStart: () => options.onFrameStart?.(),
   };
   let flash = options.flash ? new Uint8Array(options.flash) : null;
   let rtcOffset = options.rtcOffset ?? 0;

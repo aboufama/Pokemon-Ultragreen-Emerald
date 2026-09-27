@@ -161,7 +161,8 @@ export class BattleStage {
     this.camera.copy(this.homeCamera);
   }
 
-  render(): void {
-    this.pipeline.render(this.scene, this.camera);
+  /** Render the scene through the pixel pipeline (to the canvas, or as PixelPipeline.render's options say). */
+  render(opts: Parameters<PixelPipeline['render']>[2] = {}): void {
+    this.pipeline.render(this.scene, this.camera, opts);
   }
 }

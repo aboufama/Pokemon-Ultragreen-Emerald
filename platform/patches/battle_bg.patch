@@ -1,0 +1,27 @@
+battle_bg.c: the remake layer learns the battle background is the main one.
+
+DrawMainBattleBackground draws the place's background (at the battle's start,
+after a menu, and when a move's background is taken down); the remake
+layer's hook records it, so the remake shows its arena in its place.
+
+--- a/src/battle_bg.c
++++ b/src/battle_bg.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_WASM
++#include "remake_state.h"
++#endif
+ #include "battle.h"
+ #include "battle_bg.h"
+ #include "battle_main.h"
+@@ -759,6 +762,10 @@
+ 
+ void DrawMainBattleBackground(void)
+ {
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the remake layer learns the battle background is the main one.
++    RemakeBattleBackground(REMAKE_BG_MAIN);
++#endif
+     if (gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_FRONTIER | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_RECORDED_LINK))
+     {
+         LZDecompressVram(gBattleEnvironmentTiles_Building, (void *)(BG_CHAR_ADDR(2)));

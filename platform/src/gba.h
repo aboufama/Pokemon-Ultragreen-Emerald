@@ -87,6 +87,7 @@ void PlatformDmaControl(int ch, u16 old, u16 value);
 void PlatformDmaHBlank(void);
 void PlatformDmaVBlank(void);
 void PlatformDmaReset(void);
+const u16 *PlatformPredictLines(u32 off);  // a register's value on each line of the frame about to be drawn
 
 // ppu.c
 extern u32 gPlatformFrame[SCREEN_W * SCREEN_H];  // the frame, 0xAABBGGRR
@@ -107,6 +108,10 @@ HOST(PlatformHostSoftReset) void PlatformHostSoftReset(void) __attribute__((nore
 HOST(PlatformHostTime) void PlatformHostTime(s32 *out);
 // A frame is done (the VBlank): its lines are in gPlatformFrame. `count` counts VBlanks since power-on.
 HOST(PlatformHostVBlank) void PlatformHostVBlank(u32 count);
+// A frame is about to be drawn (line 0 starts): OAM, the palettes and the
+// registers are the frame's, and PlatformPredictLines tells what the HBlank
+// DMA will change. The remake layer prepares its pictures for it.
+HOST(PlatformHostFrameStart) void PlatformHostFrameStart(void);
 
 // What the platform gives the browser (exports).
 #define EXPORT(name) __attribute__((export_name(#name)))

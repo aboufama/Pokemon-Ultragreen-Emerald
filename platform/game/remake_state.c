@@ -5,13 +5,15 @@
 #include "global.h"
 #include "battle.h"
 #include "battle_anim.h"
+#include "battle_main.h"
+#include "data.h"
 #include "main.h"
 #include "palette.h"
 #include "pokemon.h"
 #include "sprite.h"
 #include "remake_state.h"
 
-static struct RemakeState sState;
+static struct RemakeState sState = { .background = REMAKE_BG_MAIN };
 
 extern const u8 *const gBattleAnims_Moves[];
 extern const u8 *const gBattleAnims_StatusConditions[];
@@ -35,11 +37,17 @@ void RemakeBattleAnimation(const u8 *const animsTable[], u16 tableId, u8 isMoveA
     sState.animId = tableId;
 }
 
+void RemakeBattleBackground(u16 background)
+{
+    sState.background = background;
+}
+
 __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void)
 {
     s32 i;
 
     sState.inBattle = gMain.inBattle;
+    sState.battleScreen = gMain.inBattle && gMain.vblankCallback == VBlankCB_Battle;
     sState.typeFlags = gBattleTypeFlags;
     sState.environment = gBattleEnvironment;
     sState.battlerCount = gMain.inBattle ? gBattlersCount : 0;
@@ -72,8 +80,15 @@ __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void
         if (b->spriteId >= MAX_SPRITES)
             continue;
         sprite = &gSprites[b->spriteId];
+        b->homeX = GetBattlerSpriteCoord(i, BATTLER_COORD_X_2);
+        b->homeY = GetBattlerSpriteDefault_Y(i);
         b->shown = sprite->inUse && !sprite->invisible;
         b->invisible = sprite->invisible;
+        // A Pokémon picture animates as one: the back pictures all alike, the
+        // front ones by species (a Transform changes them); a trainer's
+        // picture, which holds the battler's sprite during the intro, as the
+        // trainer's.
+        b->showsPokemon = sprite->inUse && sprite->anims == (b->side == B_SIDE_PLAYER ? gAnims_MonPic : gMonFrontAnimsPtrTable[b->species]);
         b->x = sprite->x;
         b->y = sprite->y;
         b->x2 = sprite->x2;

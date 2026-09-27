@@ -97,6 +97,10 @@ const compositeFrag = /* glsl */ `
   uniform bool innerOutline;
   uniform bool paletteSnap;
   uniform bool rgb555;
+  // The remake layer's pictures (src/remake/layer.ts): a Pokémon's pixels
+  // come out as the palette index its sprite would hold (red), and every
+  // pixel's object id in alpha.
+  uniform bool indexOut;
   uniform vec3 palettes[${MAX_PALETTES * 16}];
   uniform vec3 display[${MAX_PALETTES * 16}];
   uniform int paletteSize[${MAX_PALETTES}];
@@ -221,8 +225,40 @@ const compositeFrag = /* glsl */ `
     return id;
   }
 
-  /** An output pixel's color as object \`id\`: averaged, outlined, palette-snapped and blended. */
-  vec3 objectColor(ivec2 outPx, int id) {
+  /**
+   * The palette index a Pokémon's output pixel shows: its averaged color \`c\`
+   * snapped to the palette, or an outline's; -1 when it keeps its color.
+   */
+  int pokemonIndex(ivec2 outPx, int id, vec3 c, float nearest) {
+    int slot = id - 1;
+    bool outer = false;
+    bool inner = false;
+    if (outline) {
+      ivec2 center = outPx * ss + ivec2(ss / 2);
+      ivec2 dirs[4] = ivec2[4](ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1));
+      for (int k = 0; k < 4; k++) {
+        ivec2 q = center + dirs[k] * ss;
+        int nid = idAt(q);
+        if (nid != id && !(nid >= FIRST_FX_ID)) outer = true;
+        // Inner edges: a neighbor of the same object that is much farther away.
+        if (innerOutline && nid == id && linearDepth(q) - nearest > innerThreshold * nearest) inner = true;
+      }
+    }
+    if (!(paletteSnap || indexOut || outer || inner)) return -1;
+    int si = snapIndex(c, slot);
+    if (outer) {
+      bool lit = dot(palettes[slot * 16 + si], vec3(0.299, 0.587, 0.114)) > 0.62;
+      return (selective[slot] && lit) ? darkOf[slot * 16 + si] : outerIndex[slot];
+    }
+    if (inner) return innerIndex[slot];
+    return si;
+  }
+
+  /**
+   * An output pixel's color as object \`id\`: averaged, outlined, palette-snapped
+   * and blended; \`index\` is a Pokémon pixel's palette index (-1 otherwise).
+   */
+  vec3 objectColor(ivec2 outPx, int id, out int index) {
     ivec2 base = outPx * ss;
     vec3 c = vec3(0.0);
     float nC = 0.0;
@@ -236,35 +272,12 @@ const compositeFrag = /* glsl */ `
       nearest = min(nearest, linearDepth(p));
     }
     c /= max(nC, 1.0);
+    index = -1;
 
     if (id >= 1 && id < FIRST_FX_ID) {
       int slot = id - 1;
-      bool outer = false;
-      bool inner = false;
-      if (outline) {
-        ivec2 center = base + ivec2(ss / 2);
-        ivec2 dirs[4] = ivec2[4](ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1));
-        for (int k = 0; k < 4; k++) {
-          ivec2 q = center + dirs[k] * ss;
-          int nid = idAt(q);
-          if (nid != id && !(nid >= FIRST_FX_ID)) outer = true;
-          // Inner edges: a neighbor of the same object that is much farther away.
-          if (innerOutline && nid == id && linearDepth(q) - nearest > innerThreshold * nearest) inner = true;
-        }
-      }
-      if (paletteSnap || outer || inner) {
-        int si = snapIndex(c, slot);
-        vec3 sc = palettes[slot * 16 + si];
-        if (outer) {
-          bool lit = dot(sc, vec3(0.299, 0.587, 0.114)) > 0.62;
-          int oi = (selective[slot] && lit) ? darkOf[slot * 16 + si] : outerIndex[slot];
-          c = display[slot * 16 + oi];
-        } else if (inner) {
-          c = display[slot * 16 + innerIndex[slot]];
-        } else {
-          c = display[slot * 16 + si];
-        }
-      }
+      index = pokemonIndex(outPx, id, c, nearest);
+      if (index >= 0) c = display[slot * 16 + index];
       // Blending the palette on the GBA recolors every pixel of the sprite,
       // outline included, so it applies after snapping.
       c = mix(c, blend[slot].rgb, blend[slot].a);
@@ -304,7 +317,12 @@ const compositeFrag = /* glsl */ `
       outPx.y = clamp(y, 0, outSize.y - 1);
     }
     int id = majorityId(outPx);
-    vec3 c = objectColor(outPx, id);
+    int index;
+    vec3 c = objectColor(outPx, id, index);
+    if (indexOut) {
+      gl_FragColor = index >= 0 ? vec4(float(index) / 255.0, 0.0, 0.0, float(id) / 255.0) : vec4(toRgb555(c), float(id) / 255.0);
+      return;
+    }
 
     // Afterimages go behind their Pokémon and effects, over everything else.
     for (int e = 0; e < ${MAX_ECHOES}; e++) {
@@ -312,7 +330,8 @@ const compositeFrag = /* glsl */ `
       if (eid == 0 || id == eid || id >= FIRST_FX_ID) continue;
       ivec2 q = outPx - echoOffset[e];
       if (q.x < 0 || q.y < 0 || q.x >= outSize.x || q.y >= outSize.y || majorityId(q) != eid) continue;
-      vec3 copy = mix(objectColor(q, eid), echoLook[e].rgb, echoLook[e].a);
+      int echoIndex;
+      vec3 copy = mix(objectColor(q, eid, echoIndex), echoLook[e].rgb, echoLook[e].a);
       c = min(vec3(1.0), copy * echoAlpha[e].x + c * echoAlpha[e].y);
     }
 
@@ -365,6 +384,7 @@ export class PixelPipeline {
         innerOutline: { value: true },
         paletteSnap: { value: true },
         rgb555: { value: true },
+        indexOut: { value: false },
         palettes: { value: palettes },
         display: { value: display },
         paletteSize: { value: new Array(MAX_PALETTES).fill(0) },
@@ -614,10 +634,13 @@ export class PixelPipeline {
   }
 
   /**
-   * Render the scene through the pixel pipeline to the canvas.
-   * Objects carry their id in userData.pixelId (inherited by descendants).
+   * Render the scene through the pixel pipeline to the canvas, or to
+   * \`target\`. Objects carry their id in userData.pixelId (inherited by
+   * descendants). With \`indices\` (the remake layer's pictures), a Pokémon's
+   * pixels come out as the palette index its sprite would hold (red) and
+   * every pixel carries its object id in alpha; the rest keep their color.
    */
-  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera): void {
+  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, opts: { target?: THREE.WebGLRenderTarget; indices?: boolean } = {}): void {
     const r = this.renderer;
     const prevTarget = r.getRenderTarget();
     const prevClear = r.getClearColor(new THREE.Color());
@@ -638,10 +661,12 @@ export class PixelPipeline {
     u.innerOutline.value = this.settings.innerOutline;
     u.paletteSnap.value = this.settings.paletteSnap;
     u.rgb555.value = this.settings.rgb555;
+    u.indexOut.value = !!opts.indices;
     u.cameraNear.value = camera.near;
     u.cameraFar.value = camera.far;
-    r.setRenderTarget(prevTarget);
+    r.setRenderTarget(opts.target ?? prevTarget);
     r.setClearColor(prevClear, prevAlpha);
     r.render(this.quadScene, this.quadCamera);
+    if (opts.target) r.setRenderTarget(prevTarget);
   }
 }

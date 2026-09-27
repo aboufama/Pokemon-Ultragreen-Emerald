@@ -1,22 +1,49 @@
 // The remake layer: the compiled game's battles drawn in 3D
-// (docs/ARCHITECTURE.md, "Remake layer"). At each VBlank it reads the
-// battle's state from the game's memory (state.ts), renders the scene with
-// the 3D stack at the GBA's resolution and hands the pictures to the
-// platform's PPU (struct RemakeLayers, platform/include/remake_state.h),
-// which composes them for the next frame like its own layers: the arena in
-// place of the battle background (BG3).
+// (docs/ARCHITECTURE.md, "Remake layer"). At the start of each frame (the
+// platform's line 0) it reads the battle from the game (state.ts) and the
+// hardware's state for that frame (OAM, the palettes, the registers line by
+// line), renders the scene with the 3D stack at the GBA's resolution and
+// hands the pictures to the platform's PPU (struct RemakeLayers,
+// platform/include/remake_state.h), which composes them in the frame like
+// its own layers:
 //
-// ?remake=0 turns it off; ?remake=arena puts the grass arena in place of
-// BG0, the front background, whatever the game shows (a test of the path
-// from WebGL to the PPU outside battles).
+//   - the arena in place of the battle background (BG3) while BG3 shows the
+//     place's own background (not a move's), faded as the game fades BG3's
+//     palette;
+//   - each battler the remake has a 3D model for in place of its sprite. The
+//     body stands where the sprite is (its offset from where it rests, plus
+//     the battle background's scroll at its row: the arena stays still where
+//     the GBA slides its background, as in the intro, and the body rides it),
+//     is scaled, turned and stretched as the sprite's affine transform draws
+//     it, shows when the sprite shows, and its pixels are the sprite's
+//     palette indices, so the game's own fades, tints and flashes color it.
+//
+// ?remake=0 turns it off.
 
-import { BattleStage } from '../render3d/stage';
+import * as THREE from 'three';
+import speciesTable from '../data/generated/species.json';
+import { Battler3D } from '../battle3d/battler';
+import { hasProfile } from '../pokemon/registry';
+import { SLOT_PIXEL_ID } from '../pokemon/instantiate';
+import { BattleStage, type SlotName } from '../render3d/stage';
 import type { Game } from '../../platform/host/game.mjs';
-import { StructView, readBattleState, type StructLayouts } from './state';
+import { REMAKE_BG_MAIN, StructView, readBattleState, type BattleState, type StructLayouts } from './state';
 
 const WIDTH = 240;
 const HEIGHT = 160;
 const OPAQUE = 0x8000;
+const FORMAT_INDEX = 1;
+/** A GBA frame: 280896 cycles at 16.78 MHz. */
+const FRAME_SECONDS = 280896 / 16777216;
+
+// The GBA's memory map (the game's memory is laid out as the GBA's).
+const IO = 0x04000000;
+const PLTT = 0x05000000;
+const VRAM = 0x06000000;
+const OAM = 0x07000000;
+const REG_BG3CNT = 0x0e;
+const REG_BG3HOFS = 0x1c;
+const REG_BG3VOFS = 0x1e;
 
 /** The battle environments (BATTLE_ENVIRONMENT_*) the remake has an arena for; the others keep the game's background. */
 const ARENAS: Record<number, string> = {
@@ -29,103 +56,428 @@ const ARENAS: Record<number, string> = {
   9: 'grass', // PLAIN
 };
 
-type Mode = 'off' | 'battle' | 'arena-test';
+/** Where each battle position (B_POSITION_*) stands on the stage. Doubles' positions 2 and 3 keep the game's sprites for now. */
+const SLOTS: Record<number, SlotName> = { 0: 'player', 1: 'enemy' };
 
-function pageMode(): Mode {
-  const q = new URLSearchParams(location.search).get('remake');
-  if (q === '0') return 'off';
-  if (q === 'arena') return 'arena-test';
-  return 'battle';
+/** A species' model name (src/pokemon/<slug>) by its number (SPECIES_*). */
+const SLUGS = new Map<number, string>(Object.values(speciesTable as Record<string, { id: number; slug: string }>).map((s) => [s.id, s.slug]));
+
+/** The GBA's sprite sizes by shape and size. */
+const OBJ_SIZE: [number, number][][] = [
+  [[8, 8], [16, 16], [32, 32], [64, 64]],
+  [[16, 8], [32, 8], [32, 16], [64, 32]],
+  [[8, 16], [8, 32], [16, 32], [32, 64]],
+];
+
+/** A sprite as OAM draws it this frame. */
+interface OamSprite {
+  /** Its centre on screen. */
+  x: number;
+  y: number;
+  /** The linear map it is drawn with about its centre (x right, y down): the inverse of its affine matrix. */
+  map: [number, number, number, number];
+}
+
+/** The first sprite in OAM drawing tile `tileNum` (not hidden, not a window), as the hardware reads it. */
+function oamSprite(view: DataView, tileNum: number): OamSprite | null {
+  for (let i = 0; i < 128; i++) {
+    const a0 = view.getUint16(OAM + i * 8, true);
+    const a1 = view.getUint16(OAM + i * 8 + 2, true);
+    const a2 = view.getUint16(OAM + i * 8 + 4, true);
+    const affine = (a0 & 0x100) !== 0;
+    if ((!affine && (a0 & 0x200)) || ((a0 >> 10) & 3) === 2 || (a2 & 0x3ff) !== tileNum) continue;
+    const shape = a0 >> 14;
+    if (shape === 3) continue;
+    const [w, h] = OBJ_SIZE[shape][a1 >> 14];
+    const double = affine && (a0 & 0x200) !== 0;
+    const bw = double ? w * 2 : w, bh = double ? h * 2 : h;
+    let x = a1 & 0x1ff;
+    if (x >= WIDTH) x -= 512;
+    let y = a0 & 0xff;
+    if (y + bh > 256) y -= 256;
+    let map: OamSprite['map'] = [1, 0, 0, 1];
+    if (affine) {
+      const m = OAM + ((a1 >> 9) & 31) * 32;
+      const pa = view.getInt16(m + 6, true), pb = view.getInt16(m + 14, true);
+      const pc = view.getInt16(m + 22, true), pd = view.getInt16(m + 30, true);
+      const det = (pa * pd - pb * pc) / 65536;
+      map = det === 0 ? [0, 0, 0, 0] : [pd / 256 / det, -pb / 256 / det, -pc / 256 / det, pa / 256 / det];
+    }
+    return { x: x + bw / 2, y: y + bh / 2, map };
+  }
+  return null;
+}
+
+/** A scroll register's value as an offset within its background's map (-size/2 .. size/2). */
+function signedScroll(v: number, size: number): number {
+  const m = v % size;
+  return m >= size / 2 ? m - size : m;
+}
+
+/**
+ * A palette fade as the game makes one (BlendPalette: each channel moves
+ * coeff/16 of the way to the target, in 5-bit steps) that turns `from`
+ * into `to`, or the closest one when the change is something else.
+ */
+function estimateBlend(from: number[], to: number[]): { coeff: number; target: [number, number, number] } {
+  if (from.every((c, i) => c === to[i])) return { coeff: 0, target: [0, 0, 0] };
+  let best = { coeff: 0, target: [0, 0, 0] as [number, number, number], error: Infinity };
+  for (let coeff = 1; coeff <= 16; coeff++) {
+    const target: [number, number, number] = [0, 0, 0];
+    let error = 0;
+    for (let ch = 0; ch < 3; ch++) {
+      let bestT = 0, bestE = Infinity;
+      for (let t = 0; t < 32; t++) {
+        let e = 0;
+        for (let i = 0; i < from.length; i++) {
+          const u = (from[i] >> (ch * 5)) & 31;
+          const f = (to[i] >> (ch * 5)) & 31;
+          e += Math.abs(u + (((t - u) * coeff) >> 4) - f);
+        }
+        if (e < bestE) {
+          bestE = e;
+          bestT = t;
+        }
+      }
+      target[ch] = bestT;
+      error += bestE;
+    }
+    if (error < best.error) best = { coeff, target, error };
+    if (error === 0) break;
+  }
+  return { coeff: best.coeff, target: best.target };
+}
+
+/** A battler the remake draws: its 3D body in a slot of the stage. */
+interface Body {
+  species: number;
+  slot: SlotName;
+  battler: Battler3D | null;
+  /** The sprite's affine transform beyond its scale (a turn, a stretch), about its centre: the body's parent in the slot. */
+  sprite: THREE.Group;
+  loading: Promise<void> | null;
+  failed: boolean;
+}
+
+function pageMode(): 'off' | 'on' {
+  return new URLSearchParams(location.search).get('remake') === '0' ? 'off' : 'on';
 }
 
 export class RemakeLayer {
   readonly mode = pageMode();
   private stage: BattleStage | null = null;
   private arena: string | null = null;
-  private loading: Promise<void> | null = null;
-  private readonly pixels = new Uint8Array(WIDTH * HEIGHT * 4);
-  private last = performance.now();
+  private arenaLoading: Promise<void> | null = null;
+  /** The 3D bodies by the game's battler number. */
+  private readonly bodies = new Map<number, Body>();
+  private target: THREE.WebGLRenderTarget | null = null;
+  private readonly rgba = new Uint8Array(WIDTH * HEIGHT * 4);
 
   constructor(private readonly game: Game, private readonly layouts: StructLayouts) {}
 
-  /** The platform's picture buffers, as the game's memory (a view: take it anew each time). */
+  /** False while a body or an arena the battle needs is loading: the page holds the game until it is ready. */
+  ready(): boolean {
+    if (this.arenaLoading) return false;
+    for (const body of this.bodies.values()) if (body.loading) return false;
+    return true;
+  }
+
+  private view(): DataView {
+    return new DataView(this.game.memory().buffer);
+  }
+
+  /** The platform's picture buffers (struct RemakeLayers). */
   private layers(): StructView {
     const address = (this.game.exports().PlatformRemakeLayers as () => number)();
-    return new StructView(this.layouts, 'RemakeLayers', new DataView(this.game.memory().buffer), address);
+    return new StructView(this.layouts, 'RemakeLayers', this.view(), address);
   }
 
-  private background(): { view: DataView; base: number } {
+  private field(type: string, name: string): number {
+    return this.layouts[type].fields[name][0];
+  }
+
+  /** Turn every picture off: the game's own layers show. */
+  private clearPictures(): void {
+    const view = this.view();
     const layers = this.layers();
-    const bg = layers.struct('background', 'RemakeBackground');
-    return { view: new DataView(this.game.memory().buffer), base: bg.address };
+    view.setUint32(layers.struct('background', 'RemakeBackground').address + this.field('RemakeBackground', 'active'), 0, true);
+    const count = this.layouts.RemakeLayers.fields.sprites[1] / this.layouts.RemakeSprite.size;
+    for (let i = 0; i < count; i++) view.setUint32(layers.struct('sprites', 'RemakeSprite', i).address + this.field('RemakeSprite', 'active'), 0, true);
   }
 
-  private setBackground(active: boolean, bg = 3): void {
-    const { view, base } = this.background();
-    const f = this.layouts.RemakeBackground.fields;
-    view.setUint32(base + f.active[0], active ? 1 : 0, true);
-    view.setUint32(base + f.bg[0], bg, true);
-  }
-
-  /** Make sure the stage shows `arena`; false while it loads. */
-  private ready(arena: string): boolean {
-    if (this.stage && this.arena === arena && !this.loading) return true;
-    if (!this.loading) {
-      if (!this.stage) {
-        const canvas = document.createElement('canvas');
-        this.stage = new BattleStage(canvas, undefined, { density: 1 });
-      }
-      this.arena = arena;
-      this.loading = this.stage.setEnvironment(arena).then(() => {
-        this.loading = null;
-        console.log(`remake: ${arena} arena ready`);
-      }, (e) => {
-        console.warn('remake: arena failed to load', e);
-        this.loading = null;
-        this.arena = null;
-      });
-    }
-    return false;
-  }
-
-  /** A frame is done: prepare the next frame's pictures. */
-  onVBlank(): void {
+  /** A frame is about to be drawn: prepare its pictures. */
+  onFrameStart(): void {
     if (this.mode === 'off') return;
-    let arena: string | null = null;
-    if (this.mode === 'arena-test') {
-      arena = 'grass';
-    } else {
-      const address = (this.game.exports().RemakeState as () => number)();
-      const state = readBattleState(this.layouts, this.game.memory(), address);
-      arena = state.inBattle ? ARENAS[state.environment] ?? null : null;
-    }
-    if (!arena || !this.ready(arena)) {
-      this.setBackground(false);
+    this.clearPictures();
+    const state = readBattleState(this.layouts, this.game.memory(), (this.game.exports().RemakeState as () => number)());
+    if (!state.inBattle) {
+      this.endBattle();
       return;
     }
-    const now = performance.now();
-    const dt = Math.min(0.1, (now - this.last) / 1000);
-    this.last = now;
-    this.renderArena(dt, this.mode === 'arena-test' ? 0 : 3);
+    if (!state.battleScreen) return;
+    const stage = this.ensureStage();
+    const arena = state.background === REMAKE_BG_MAIN ? ARENAS[state.environment] ?? null : null;
+    if (arena && arena !== this.arena && !this.arenaLoading) this.loadArena(arena);
+    const shown = this.placeBodies(state);
+    if (!this.ready()) {
+      // The page holds the game on this frame until everything is loaded:
+      // meanwhile the sprites of the bodies still loading are hidden.
+      this.hideLoading(state);
+      return;
+    }
+
+    stage.update(FRAME_SECONDS);
+    for (const [, body] of shown) body.battler!.update(FRAME_SECONDS);
+    for (const [, body] of shown) this.placeSprite(body);
+    if (arena && arena === this.arena) this.renderArena(state);
+    if (shown.size) this.renderBodies(shown);
   }
 
-  /** The arena alone (BG3's picture): rendered, read back and handed to the PPU. */
-  private renderArena(dt: number, bg: number): void {
+  private hideLoading(state: BattleState): void {
+    const view = this.view();
+    const layers = this.layers();
+    let n = 0;
+    state.battlers.forEach((b, i) => {
+      if (!this.bodies.get(i)?.loading || !b.showsPokemon) return;
+      const sprite = layers.struct('sprites', 'RemakeSprite', n++);
+      new Uint16Array(view.buffer, sprite.address + this.field('RemakeSprite', 'pixels'), WIDTH * HEIGHT).fill(0);
+      view.setUint32(sprite.address + this.field('RemakeSprite', 'tileNum'), b.tileNum, true);
+      view.setUint32(sprite.address + this.field('RemakeSprite', 'active'), 1, true);
+    });
+  }
+
+  private ensureStage(): BattleStage {
+    if (!this.stage) {
+      this.stage = new BattleStage(document.createElement('canvas'), undefined, { density: 1 });
+      this.target = new THREE.WebGLRenderTarget(WIDTH, HEIGHT, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, colorSpace: THREE.NoColorSpace });
+    }
+    return this.stage;
+  }
+
+  private loadArena(arena: string): void {
+    this.arenaLoading = this.stage!.setEnvironment(arena).then(
+      () => {
+        this.arena = arena;
+        this.arenaLoading = null;
+      },
+      (e) => {
+        console.warn(`remake: the ${arena} arena failed to load`, e);
+        this.arenaLoading = null;
+      },
+    );
+  }
+
+  /** The battle is over: the bodies leave the stage (the arena stays loaded for the next one). */
+  private endBattle(): void {
+    for (const battler of [...this.bodies.keys()]) this.removeBody(battler);
+  }
+
+  private removeBody(battler: number): void {
+    const body = this.bodies.get(battler);
+    if (!body) return;
+    body.battler?.dispose();
+    body.sprite.parent?.remove(body.sprite);
+    this.bodies.delete(battler);
+  }
+
+  /**
+   * Bodies for the battlers the remake has models for (loading the ones it
+   * lacks), placed where their sprites are this frame. Returns the ones to
+   * draw, by the tile their sprite shows.
+   */
+  private placeBodies(state: BattleState): Map<number, Body> {
+    const view = this.view();
+    const shown = new Map<number, Body>();
+    const lines = this.backgroundScroll(view);
+    state.battlers.forEach((b, i) => {
+      const slot = SLOTS[b.position];
+      const slug = SLUGS.get(b.species);
+      if (!b.present || !slot || !slug || !hasProfile(slug)) {
+        this.removeBody(i);
+        return;
+      }
+      let body = this.bodies.get(i);
+      if (body && body.species !== b.species) {
+        this.removeBody(i);
+        body = undefined;
+      }
+      if (!body) body = this.addBody(i, b.species, slot, slug);
+      // A trainer's picture (the intro) or the substitute doll keeps the game's sprite.
+      if (!body.battler || b.behindSubstitute || !b.showsPokemon) return;
+      // The body shows where the sprite does, and only when it does.
+      const sprite = oamSprite(view, b.tileNum);
+      body.battler.visible = !!sprite;
+      if (!sprite) return;
+      const row = Math.max(0, Math.min(HEIGHT - 1, Math.round(sprite.y)));
+      body.battler.screenOffset = [sprite.x - b.homeX + lines.x[row], sprite.y - b.homeY + lines.y[row]];
+      const [a, bb, c, d] = sprite.map;
+      body.battler.appear = Math.sqrt(Math.abs(a * d - bb * c));
+      body.sprite.userData.map = sprite.map;
+      shown.set(b.tileNum, body);
+    });
+    return shown;
+  }
+
+  private addBody(battler: number, species: number, slot: SlotName, slug: string): Body {
     const stage = this.stage!;
-    stage.update(dt);
-    stage.render();
-    const gl = stage.renderer.getContext();
-    gl.readPixels(0, 0, WIDTH, HEIGHT, gl.RGBA, gl.UNSIGNED_BYTE, this.pixels);
-    const { view, base } = this.background();
-    const pixelsAt = base + this.layouts.RemakeBackground.fields.pixels[0];
-    const out = new Uint16Array(view.buffer, pixelsAt, WIDTH * HEIGHT);
+    const sprite = new THREE.Group();
+    sprite.name = `remake-sprite-${slot}`;
+    sprite.matrixAutoUpdate = false;
+    stage.slots[slot].add(sprite);
+    const body: Body = { species, slot, battler: null, sprite, loading: null, failed: false };
+    body.loading = Battler3D.create(stage, slot, slug).then(
+      (b3d) => {
+        body.loading = null;
+        if (this.bodies.get(battler) !== body) {
+          b3d.dispose();
+          return;
+        }
+        // The body goes under the sprite's transform, in its slot.
+        sprite.add(b3d.inst.root);
+        body.battler = b3d;
+      },
+      (e) => {
+        console.warn(`remake: no 3D body for ${slug}`, e);
+        body.loading = null;
+        body.failed = true;
+      },
+    );
+    this.bodies.set(battler, body);
+    return body;
+  }
+
+  /**
+   * How far the battle background is scrolled at each line of this frame
+   * (its registers and the HBlank DMA's writes): the arena stays still, so a
+   * battler whose sprite moves with the background (the intro's slide) keeps
+   * its place on the arena.
+   */
+  private backgroundScroll(view: DataView): { x: number[]; y: number[] } {
+    const predict = this.game.exports().PlatformPredictLines as (off: number) => number;
+    const read = (off: number) => Array.from(new Uint16Array(this.game.memory().buffer, predict(off), HEIGHT));
+    const cnt = view.getUint16(IO + REG_BG3CNT, true);
+    const width = cnt & 0x4000 ? 512 : 256, height = cnt & 0x8000 ? 512 : 256;
+    return { x: read(REG_BG3HOFS).map((v) => signedScroll(v, width)), y: read(REG_BG3VOFS).map((v) => signedScroll(v, height)) };
+  }
+
+  /** The sprite's turn and stretch (its affine map without the scale, which `appear` carries), about the body's middle. */
+  private placeSprite(body: Body): void {
+    const b3d = body.battler!;
+    const [a, b, c, d] = body.sprite.userData.map as [number, number, number, number];
+    const s = b3d.appear || 1;
+    const m = [a / s, b / s, c / s, d / s];
+    const group = body.sprite;
+    if (Math.abs(m[0] - 1) + Math.abs(m[1]) + Math.abs(m[2]) + Math.abs(m[3] - 1) < 1e-3) {
+      group.matrix.identity();
+      group.matrixWorldNeedsUpdate = true;
+      return;
+    }
+    const stage = this.stage!;
+    const slot = stage.slots[body.slot];
+    slot.updateMatrixWorld(true);
+    // The camera's axes: screen right, screen up (y up: the map's y is down) and back.
+    const cam = stage.homeCamera;
+    const basis = new THREE.Matrix4().makeRotationFromQuaternion(cam.quaternion);
+    const screen = new THREE.Matrix4().set(m[0], -m[1], 0, 0, -m[2], m[3], 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    const pivot = b3d.inst.root.position.clone().addScaledVector(b3d.appearPivot, b3d.height).applyMatrix4(slot.matrixWorld);
+    const world = new THREE.Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z)
+      .multiply(basis).multiply(screen).multiply(basis.clone().transpose())
+      .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
+    group.matrix.copy(slot.matrixWorld.clone().invert().multiply(world).multiply(slot.matrixWorld));
+    group.matrixWorldNeedsUpdate = true;
+  }
+
+  /**
+   * Render one of the two passes into the target and read it back: the
+   * arena alone (with the bodies' shadows), or the bodies alone.
+   */
+  private renderPass(which: 'arena' | 'bodies'): void {
+    const stage = this.stage!;
+    const hidden: THREE.Object3D[] = [];
+    const hide = (o: THREE.Object3D | undefined) => {
+      if (o?.visible) {
+        o.visible = false;
+        hidden.push(o);
+      }
+    };
+    if (which === 'arena') {
+      for (const body of this.bodies.values()) hide(body.sprite);
+    } else {
+      hide(stage.environment?.group);
+      hide(stage.ambience?.group);
+      for (const slot of Object.values(stage.slots)) for (const o of slot.children) if (o.name === 'ground-shadow') hide(o);
+    }
+    stage.render({ target: this.target!, indices: which === 'bodies' });
+    for (const o of hidden) o.visible = true;
+    stage.renderer.readRenderTargetPixels(this.target!, 0, 0, WIDTH, HEIGHT, this.rgba);
+  }
+
+  /** The arena alone (BG3's picture): rendered, faded as the game fades BG3's palette, and handed to the PPU. */
+  private renderArena(state: BattleState): void {
+    this.renderPass('arena');
+    const view = this.view();
+    const fade = this.backgroundFade(view, state);
+    const layers = this.layers();
+    const bg = layers.struct('background', 'RemakeBackground');
+    const out = new Uint16Array(view.buffer, bg.address + this.field('RemakeBackground', 'pixels'), WIDTH * HEIGHT);
+    const [tr, tg, tb] = fade.target, k = fade.coeff;
     for (let y = 0; y < HEIGHT; y++) {
       const src = (HEIGHT - 1 - y) * WIDTH * 4;
       for (let x = 0; x < WIDTH; x++) {
         const i = src + x * 4;
-        out[y * WIDTH + x] = OPAQUE | (this.pixels[i] >> 3) | ((this.pixels[i + 1] >> 3) << 5) | ((this.pixels[i + 2] >> 3) << 10);
+        let r = this.rgba[i] >> 3, g = this.rgba[i + 1] >> 3, b = this.rgba[i + 2] >> 3;
+        if (k) {
+          r += ((tr - r) * k) >> 4;
+          g += ((tg - g) * k) >> 4;
+          b += ((tb - b) * k) >> 4;
+        }
+        out[y * WIDTH + x] = OPAQUE | r | (g << 5) | (b << 10);
       }
     }
-    this.setBackground(true, bg);
+    view.setUint32(bg.address + this.field('RemakeBackground', 'bg'), 3, true);
+    view.setUint32(bg.address + this.field('RemakeBackground', 'active'), 1, true);
+  }
+
+  /**
+   * How the game has faded the battle background's palette this frame (the
+   * palette its map uses most, as the hardware has it, against the game's
+   * unfaded copy): the arena fades the same way.
+   */
+  private backgroundFade(view: DataView, state: BattleState): ReturnType<typeof estimateBlend> {
+    const cnt = view.getUint16(IO + REG_BG3CNT, true);
+    const map = VRAM + ((cnt >> 8) & 0x1f) * 0x800;
+    const blocks = [1, 2, 2, 4][cnt >> 14];
+    const uses = new Array(16).fill(0);
+    for (let i = 0; i < blocks * 1024; i++) uses[view.getUint16(map + i * 2, true) >> 12]++;
+    const bank = uses.indexOf(Math.max(...uses));
+    const unfaded: number[] = [], faded: number[] = [];
+    for (let i = 0; i < 16; i++) {
+      unfaded.push(view.getUint16(state.plttUnfaded + (bank * 16 + i) * 2, true));
+      faded.push(view.getUint16(PLTT + (bank * 16 + i) * 2, true));
+    }
+    return estimateBlend(unfaded, faded);
+  }
+
+  /** The bodies alone: each one's pixels, as its sprite's palette indices, stand in for its sprite. */
+  private renderBodies(shown: Map<number, Body>): void {
+    this.renderPass('bodies');
+    const view = this.view();
+    const layers = this.layers();
+    let n = 0;
+    for (const [tileNum, body] of shown) {
+      const sprite = layers.struct('sprites', 'RemakeSprite', n++);
+      const out = new Uint16Array(view.buffer, sprite.address + this.field('RemakeSprite', 'pixels'), WIDTH * HEIGHT);
+      const id = SLOT_PIXEL_ID[body.slot];
+      for (let y = 0; y < HEIGHT; y++) {
+        const src = (HEIGHT - 1 - y) * WIDTH * 4;
+        for (let x = 0; x < WIDTH; x++) {
+          const i = src + x * 4;
+          out[y * WIDTH + x] = this.rgba[i + 3] === id ? OPAQUE | this.rgba[i] : 0;
+        }
+      }
+      view.setUint32(sprite.address + this.field('RemakeSprite', 'tileNum'), tileNum, true);
+      view.setUint32(sprite.address + this.field('RemakeSprite', 'format'), FORMAT_INDEX, true);
+      view.setUint32(sprite.address + this.field('RemakeSprite', 'active'), 1, true);
+    }
   }
 }

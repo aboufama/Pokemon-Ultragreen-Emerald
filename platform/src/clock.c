@@ -7,7 +7,8 @@
 // moves, the hardware catches up: each scanline starts (VCOUNT, the VCount
 // interrupt), is drawn and reaches its HBlank (HBlank DMA and interrupt),
 // and line 160 brings the VBlank (the frame is done, VBlank DMA and
-// interrupt). Interrupt handlers run then, inside whatever the game was
+// interrupt); at line 0 the browser prepares the remake layer's pictures
+// for the frame about to be drawn. Interrupt handlers run then, inside whatever the game was
 // doing, as on the GBA: the VBlank interrupts during the boot's busy waits
 // run the sound engine and advance the random number generator exactly as
 // many times as on the hardware.
@@ -56,6 +57,8 @@ static void StartLine(void)
     if (match)
         stat |= 4;
     IO16(R_DISPSTAT) = stat;
+    if (sLine == 0)
+        PlatformHostFrameStart();
     if (sLine == 160) {
         sVBlanks++;
         PlatformPpuVBlank();

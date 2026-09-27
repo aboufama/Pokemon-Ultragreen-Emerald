@@ -25,7 +25,7 @@ static u8 sObjSemi[SCREEN_W];
 static u8 sObjWin[SCREEN_W];
 
 // The remake layer's pictures (platform/include/remake_state.h), filled by
-// the browser at each VBlank for the next frame.
+// the browser at the start of each frame.
 #define LAYER_OPAQUE REMAKE_OPAQUE
 #define REMAKE_SPRITES REMAKE_LAYER_SPRITES
 
@@ -223,14 +223,17 @@ static void Sprites(u32 line, int bitmapMode)
             *done = 1;
             u32 row = rmosaic ? line - line % mosV : line;
             const u16 *src = &remake->pixels[row * SCREEN_W];
+            // Color indices take the entry's palette, as its tiles would.
+            int indexed = remake->format == REMAKE_FORMAT_INDEX;
+            u32 rbase = (a0 & 0x2000) ? 0 : (a2 >> 12) * 16, rmask = (a0 & 0x2000) ? 0xFF : 0xF;
             for (s32 sx = 0; sx < SCREEN_W; sx++) {
                 u16 c = src[rmosaic ? sx - sx % (s32)mosH : sx];
-                if (!(c & LAYER_OPAQUE))
+                if (!(c & LAYER_OPAQUE) || (indexed && !(c & rmask)))
                     continue;
                 if (rmode == 2) {
                     sObjWin[sx] = 1;
                 } else if (rprio < sObjPrio[sx]) {
-                    sObj[sx] = c & 0x7FFF;
+                    sObj[sx] = indexed ? ObjPal(rbase + (c & rmask)) : c & 0x7FFF;
                     sObjPrio[sx] = (u8)rprio;
                     sObjSemi[sx] = rmode == 1;
                 }

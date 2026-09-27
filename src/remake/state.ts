@@ -6,6 +6,9 @@
 
 export const REMAKE_ANIM = { NONE: 0, MOVE: 1, STATUS: 2, GENERAL: 3, SPECIAL: 4 } as const;
 
+/** BattleState.background when BG3 shows the main battle background (the place's). */
+export const REMAKE_BG_MAIN = 0xffff;
+
 /** field: [offset, size, C type]. */
 export type StructLayouts = Record<string, { size: number; fields: Record<string, [number, number, string]> }>;
 
@@ -50,6 +53,9 @@ export interface BattlerState {
   y: number;
   x2: number;
   y2: number;
+  /** Where its centre rests (the position the game creates the sprite at). */
+  homeX: number;
+  homeY: number;
   /** pa, pb, pc, pd (8.8). */
   matrix: [number, number, number, number];
   affineMode: number;
@@ -59,6 +65,8 @@ export interface BattlerState {
   priority: number;
   objMode: number;
   invisible: boolean;
+  /** The sprite shows its Pokémon (in the intro the trainer's picture takes its place). */
+  showsPokemon: boolean;
   callback: number;
   personality: number;
   hp: number;
@@ -67,6 +75,8 @@ export interface BattlerState {
 
 export interface BattleState {
   inBattle: boolean;
+  /** The battle's screen is up (not a menu over it). */
+  battleScreen: boolean;
   typeFlags: number;
   environment: number;
   battlerCount: number;
@@ -76,6 +86,8 @@ export interface BattleState {
   animId: number;
   animAttacker: number;
   animTarget: number;
+  /** REMAKE_BG_MAIN, or the move background (BG_*) BG3 shows. */
+  background: number;
   plttUnfaded: number;
   plttFaded: number;
   battlers: BattlerState[];
@@ -99,6 +111,8 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
       y: b.get('y'),
       x2: b.get('x2'),
       y2: b.get('y2'),
+      homeX: b.get('homeX'),
+      homeY: b.get('homeY'),
       matrix: [b.get('matrix', 0), b.get('matrix', 1), b.get('matrix', 2), b.get('matrix', 3)],
       affineMode: b.get('affineMode'),
       hFlip: !!b.get('hFlip'),
@@ -107,6 +121,7 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
       priority: b.get('priority'),
       objMode: b.get('objMode'),
       invisible: !!b.get('invisible'),
+      showsPokemon: !!b.get('showsPokemon'),
       callback: b.get('callback'),
       personality: b.get('personality'),
       hp: b.get('hp'),
@@ -115,6 +130,7 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
   }
   return {
     inBattle: !!s.get('inBattle'),
+    battleScreen: !!s.get('battleScreen'),
     typeFlags: s.get('typeFlags'),
     environment: s.get('environment'),
     battlerCount: s.get('battlerCount'),
@@ -124,6 +140,7 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
     animId: s.get('animId'),
     animAttacker: s.get('animAttacker'),
     animTarget: s.get('animTarget'),
+    background: s.get('background'),
     plttUnfaded: s.get('plttUnfaded'),
     plttFaded: s.get('plttFaded'),
     battlers,

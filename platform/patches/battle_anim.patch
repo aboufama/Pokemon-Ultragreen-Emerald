@@ -1,8 +1,12 @@
-battle_anim.c: the remake layer learns which battle animation runs.
+battle_anim.c: the remake layer learns which battle animation runs, and when
+a move puts up its own background.
 
 LaunchBattleAnimation starts every battle animation (a move's, a status
 condition's, the general and special ones); the remake layer's hook records
 the table and the index (the game keeps them in a static it never reads).
+LoadMoveBg puts a move's background in the battle background's place (BG3's
+map and tiles); the hook records which one, so the remake shows its arena
+only while the main background is up.
 
 --- a/src/battle_anim.c
 +++ b/src/battle_anim.c
@@ -26,3 +30,14 @@ the table and the index (the game keeps them in a static it never reads).
      if (!IsContest())
      {
          InitPrioritiesForVisibleBattlers();
+@@ -1200,6 +1208,10 @@
+     }
+     else
+     {
++#ifdef PLATFORM_WASM
++        // PLATFORM_WASM: the remake layer learns the battle background is a move's.
++        RemakeBattleBackground(bgId);
++#endif
+         LZDecompressVram(gBattleAnimBackgroundTable[bgId].tilemap, (void *)BG_SCREEN_ADDR(26));
+         LZDecompressVram(gBattleAnimBackgroundTable[bgId].image, (void *)BG_CHAR_ADDR(2));
+         LoadCompressedPalette(gBattleAnimBackgroundTable[bgId].palette, BG_PLTT_ID(2), PLTT_SIZE_4BPP);

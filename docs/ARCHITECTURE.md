@@ -74,13 +74,13 @@ hand. The remake adds two things around it:
 | GBA | here |
 |---|---|
 | CPU time | `gPlatformCycles`: the game's basic blocks, register polls, BIOS calls, DMA and the drivers' delays move it |
-| the screen's timeline | `clock.c`: as the clock moves, each scanline starts, is drawn and reaches its HBlank, line 160 its VBlank; interrupts are delivered then, inside whatever the game is doing |
+| the screen's timeline | `clock.c`: as the clock moves, each scanline starts, is drawn and reaches its HBlank, line 160 its VBlank; interrupts are delivered then, inside whatever the game is doing. At line 0 the browser prepares the remake layer's pictures for the frame (`PlatformHostFrameStart`), at line 160 it takes the frame (`PlatformHostVBlank`) |
 | main loop | `AgbMainFrame` is one iteration; the platform then waits as `WaitForVBlank` does, for the VBlank handler's flag. A slow iteration spans two VBlanks: a lag frame, as on the GBA |
 | I/O registers | `io.c`: VCOUNT and DISPSTAT from the timeline, IF write-1-to-clear, timers on the clock, the power-on state the BIOS leaves (forced blank, line 126) |
 | interrupts | `io.c`: crt0.s's IntrMain (priorities, acknowledging, IE/IME while the handler runs) calling `gIntrTable` |
-| DMA | `dma.c`: latched on enable; immediate, VBlank and HBlank transfers (the scanline effects) |
+| DMA | `dma.c`: latched on enable; immediate, VBlank and HBlank transfers (the scanline effects); what the HBlank DMA will write to a register on each line of the frame (`PlatformPredictLines`, for the remake layer) |
 | BIOS | `bios.c`: the SWIs in C, with their cycle costs |
-| PPU | `ppu.c`: a scanline renderer: modes 0-5, text and affine backgrounds, sprites (affine, double size, mosaic, semi-transparent, window), windows, blending |
+| PPU | `ppu.c`: a scanline renderer: modes 0-5, text and affine backgrounds, sprites (affine, double size, mosaic, semi-transparent, window), windows, blending; the remake layer's pictures standing in for a background and for sprites |
 | sound | `apu.c` and the m4a engine: the mixer's output and the four GB channels |
 | cartridge | `cartridge.c`: 128 KB flash kept in the browser, the real-time clock from the device's |
 | keypad | keyboard, touch pad, gamepad (`src/game/main.ts`) |
@@ -101,27 +101,60 @@ Battles are the game's battles, with these substitutions:
 
 | the game draws | the remake draws | how it knows |
 |---|---|---|
-| each battler's sprite | the species' 3D model, placed where the sprite is, following its offsets, affine scale/rotation, visibility and palette blends frame by frame | the battler sprite (`gBattlerSpriteIds`) read each frame |
-| a move's motion of the attacker (lunge, shake, spin) | the same motion on the 3D body, with an in-place acting clip in sync | the move animation script running (`gAnimMoveIndex`, attacker, target) |
-| the battle background (BG3) | the painted 3D arena for the battle's environment | `gBattleEnvironment` |
-| the faint's slide down | the curl over and shrink | the faint sprite callback starting |
-| an OBJ-window copy of a battler (stat changes) | the 3D battler's silhouette | the copy's source battler |
+| each battler's sprite, while it shows the Pokémon | the species' 3D model where the sprite is: its offset from where it rests, its affine scale, turn and stretch, shown when the sprite is, in the sprite's palette | the battler's sprite (`gBattlerSpriteIds`, `showsPokemon`: a trainer's picture holds the sprite during the intro, a substitute doll behind a Substitute) and its OAM entry this frame |
+| the battle background (BG3), while it shows the place's own | the painted 3D arena for the battle's environment, faded as the game fades BG3's palette | `gBattleEnvironment`; the hooks where the game draws its main background or a move's (`platform/patches/battle_bg.patch`, `battle_anim.patch`) |
+| a move's motion of the attacker (lunge, shake, spin) | the same motion on the 3D body (it follows the sprite), with an in-place acting clip in sync (to come) | the move animation starting (`RemakeBattleAnimation`: its table and index) |
+| the faint's slide down | the curl over and shrink (to come) | the faint sprite callback starting |
 
-A species without a 3D model is drawn by the game (its 2D sprite): the layer
-only substitutes what it has.
+A species without a 3D model, a battle position without a place on the stage
+(doubles' second positions, for now) and a place without an arena are drawn
+by the game: the layer only substitutes what it has. Menus over the battle
+(the bag, the party) are the game's (`battleScreen`: the battle's VBlank
+callback runs).
 
 **How the pictures combine.** The 3D renders are layers the platform's PPU
 composes like its own, so everything the GBA does to a picture applies to
-them too: at each VBlank the remake layer reads the battle's state from the
-game's memory, renders the arena and the battlers at 240x160, and hands the
-PPU two layers for the next frame: the arena in place of BG3's pixels (with
-BG3's priority, window and blending), the battlers in place of their OBJs
-(their OAM entries are skipped; the 3D pixels take their priority, so text
-boxes, healthboxes and move effects stay above or below as the game draws
-them). The game fades and tints through palettes (fades to black or white, a
-battler flashing red); the layer reads each battler's and BG3's palette state
-(the faded palette against the unfaded one) and applies the same blend to the
-3D pixels.
+them too. At the start of each frame (line 0, `PlatformHostFrameStart`) the
+hardware holds that frame's OAM, palettes and registers; the remake layer
+reads them and the battle's state from the game's memory (`RemakeState`,
+`platform/game/remake_state.c`), renders at 240x160 and fills the PPU's
+pictures (`struct RemakeLayers`, `platform/include/remake_state.h`), which
+the frame's lines then use:
+
+- the arena, in color, in place of BG3's pixels (BG3's priority, windows and
+  blending apply). The game fades BG3 through its palette (to black or white,
+  a move's darkening): the layer compares the palette BG3's map uses, as the
+  hardware has it, with the game's unfaded copy, finds the game's fade
+  (`BlendPalette`'s coefficient and color) and applies it to the arena in the
+  same 5-bit steps.
+- each battler, in place of its sprite's OAM entries (at their place in the
+  OAM order, with their priority, mode and mosaic; a window copy shapes the
+  OBJ window). Its pixels are **palette indices**: the pixel pipeline snaps
+  the 3D colors to the species' palette (as it always did) and outputs the
+  index, and the PPU colors it with the sprite's own palette as the line is
+  drawn. So every palette effect of the game (the wild Pokémon's silhouette
+  in the intro, the ball's color on a send-out, a hit's flash, a fade to
+  black) colors the 3D body exactly as it colors the sprite, and a shiny
+  Pokémon is shiny.
+
+The arena stays still: where the GBA scrolls BG3 (the intro's two halves
+sliding in), a battler whose sprite moves with the background keeps its
+place on the arena (its offset plus BG3's scroll at its row, from the
+registers and the HBlank DMA's writes for the frame: `PlatformPredictLines`).
+So the wild Pokémon is already standing there when the window opens, as the
+remake's intro was designed. The two renders are passes of the same stage:
+the arena with the battlers' shadows, then the battlers alone with their
+object ids, split into one picture each.
+
+While a battle's models or arena load, the page holds the game (it runs no
+frame) and the loading battlers' sprites are hidden, so no 2D Pokémon shows
+for a moment.
+
+**Test battles.** `platform/game/remake_test.c` starts a wild battle from
+anywhere, as the game starts one, and starts it over when it ends: the game
+page's `?battle=BLAZIKEN:50,SWAMPERT:50,GRASS` (the player's Pokémon, the wild
+one, the place), so the remake's battles can be looked at without playing up
+to one.
 
 ## Content milestones
 

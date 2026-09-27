@@ -135,6 +135,50 @@ void PlatformDmaHBlank(void)
     Run(2);
 }
 
+// A 16-bit register's value on each line of the frame about to be drawn
+// (called at its start): its value now, then what the armed HBlank DMA
+// writes to it at the end of each line (the scanline effects: the battle
+// intro's sliding background, waves), channel by channel as the hardware
+// runs them. What the CPU itself writes during the frame is not foreseen.
+EXPORT(PlatformPredictLines) const u16 *PlatformPredictLines(u32 off)
+{
+    static u16 lines[SCREEN_H];
+    u32 at = IO_BASE + off;
+    u16 v = IO16(off);
+    struct Dma dma[4];
+    for (int ch = 0; ch < 4; ch++)
+        dma[ch] = sDma[ch];
+    for (int y = 0; y < SCREEN_H; y++) {
+        lines[y] = v;
+        for (int ch = 0; ch < 4; ch++) {
+            struct Dma *d = &dma[ch];
+            u16 c = d->control;
+            if (!d->armed || ((c >> 12) & 3) != 2)
+                continue;
+            int wide = (c >> 10) & 1;
+            u32 unit = wide ? 4 : 2;
+            int srcStep = ((c >> 7) & 3) == 0 ? 1 : ((c >> 7) & 3) == 1 ? -1 : 0;
+            int dstStep = ((c >> 5) & 3) == 1 ? -1 : ((c >> 5) & 3) == 2 ? 0 : 1;
+            u32 src = d->src & ~(unit - 1), dst = d->dst & ~(unit - 1);
+            for (u32 i = 0; i < d->count; i++) {
+                if (dst == at || (wide && dst + 2 == at)) {
+                    u32 word = Read(src, wide);
+                    v = (u16)(dst == at ? word : word >> 16);
+                }
+                src += srcStep * (s32)unit;
+                dst += dstStep * (s32)unit;
+            }
+            d->src = src;
+            d->dst = dst;
+            if ((c & 0x200) && ((c >> 5) & 3) == 3)
+                d->dst = IO32(R_DMA0SAD + ch * 12 + 4) & sDstMask[ch];
+            if (!(c & 0x200))
+                d->armed = 0;
+        }
+    }
+    return lines;
+}
+
 void PlatformDmaVBlank(void)
 {
     Run(1);

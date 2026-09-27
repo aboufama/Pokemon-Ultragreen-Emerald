@@ -129,6 +129,25 @@ export class Battler3D {
     return this.inst.profile;
   }
 
+  /** Take the battler off the stage (a switch, the battle's end) and free its model. */
+  dispose(): void {
+    this.stage.slots[this.slot].remove(this.inst.root, this.shadow.mesh);
+    this.stage.environment?.setStanding(this.slot === 'player' ? 0 : 1, false);
+    const materials = new Set<THREE.Material>();
+    this.inst.root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry.dispose();
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(m);
+    });
+    for (const m of materials) {
+      for (const value of Object.values(m)) if (value instanceof THREE.Texture) value.dispose();
+      m.dispose();
+    }
+    this.shadow.mesh.geometry.dispose();
+    (this.shadow.mesh.material as THREE.Material).dispose();
+  }
+
   get height(): number {
     return this.profile.calibration.height;
   }

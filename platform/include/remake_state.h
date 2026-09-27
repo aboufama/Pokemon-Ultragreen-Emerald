@@ -19,6 +19,7 @@ struct RemakeBattler {
     uint8_t behindSubstitute;
     int16_t x, y;           // the sprite's position
     int16_t x2, y2;         // and its offsets (moves, the faint): its centre is (x + x2, y + y2)
+    int16_t homeX, homeY;   // where its centre rests (the position the game creates the sprite at)
     int16_t matrix[4];      // pa, pb, pc, pd (8.8) when affine
     uint8_t affineMode;     // 0 off, 1 affine, 3 double size
     uint8_t hFlip;
@@ -27,6 +28,7 @@ struct RemakeBattler {
     uint8_t priority;
     uint8_t objMode;
     uint8_t invisible;
+    uint8_t showsPokemon;   // the sprite shows its Pokémon (in the intro the trainer's picture takes its place)
     uint32_t callback;      // its sprite callback (function table index): what it is doing
     uint32_t personality;
     uint16_t hp, maxHp;
@@ -41,8 +43,14 @@ enum {
     REMAKE_ANIM_SPECIAL,    // gBattleAnims_Special (B_ANIM_* : balls, switches...)
 };
 
+// What the battle background (BG3) shows: the main one (the place's, as
+// DrawMainBattleBackground draws it) or a move's (BG_* of a move animation's
+// fadetobg or changebg).
+#define REMAKE_BG_MAIN 0xFFFF
+
 struct RemakeState {
     uint32_t inBattle;
+    uint32_t battleScreen;  // the battle's screen is up (its VBlank callback runs), not a menu over it
     uint32_t typeFlags;     // gBattleTypeFlags
     uint32_t environment;   // gBattleEnvironment (BATTLE_ENVIRONMENT_*)
     uint32_t battlerCount;
@@ -51,7 +59,7 @@ struct RemakeState {
     uint16_t animTable;     // REMAKE_ANIM_* of the last one launched
     uint16_t animId;        // its index in that table
     uint8_t animAttacker, animTarget;
-    uint8_t pad[2];
+    uint16_t background;    // REMAKE_BG_MAIN, or the move background shown
     uint32_t plttUnfaded;   // gPlttBufferUnfaded and gPlttBufferFaded (addresses): fades and tints
     uint32_t plttFaded;
     struct RemakeBattler battlers[REMAKE_BATTLERS];
@@ -59,11 +67,20 @@ struct RemakeState {
 
 // The remake layer's pictures, which the platform's PPU composes as its own
 // layers (docs/ARCHITECTURE.md, "How the pictures combine"): the browser
-// fills them at each VBlank for the next frame. Pixels are the GBA's colors
-// with REMAKE_OPAQUE set where the picture has something.
+// fills them at the start of each frame (PlatformHostFrameStart), from the
+// hardware's state for that frame. A pixel has REMAKE_OPAQUE set where the
+// picture has something.
 #define REMAKE_OPAQUE 0x8000u
 #define REMAKE_LAYER_SPRITES 4
 #define REMAKE_PIXELS (240 * 160)
+
+// What a picture's pixels hold (below REMAKE_OPAQUE).
+enum {
+    REMAKE_FORMAT_COLOR,    // the GBA's color
+    REMAKE_FORMAT_INDEX,    // a color index in the palette of the sprite it stands in for, as its tiles
+                            // hold: the palette the hardware has when the line is drawn (the game's fades
+                            // and tints) colors it
+};
 
 struct RemakeBackground {
     uint32_t active;        // the picture replaces the background's pixels
@@ -74,6 +91,7 @@ struct RemakeBackground {
 struct RemakeSprite {
     uint32_t active;        // the picture replaces the sprite's OAM entries
     uint32_t tileNum;       // the entries with this first tile are the sprite's
+    uint32_t format;        // REMAKE_FORMAT_*
     uint16_t pixels[REMAKE_PIXELS];
 };
 
@@ -82,7 +100,9 @@ struct RemakeLayers {
     struct RemakeSprite sprites[REMAKE_LAYER_SPRITES];
 };
 
-// The game's hook (platform/patches/battle_anim.patch): an animation starts.
+// The game's hooks (platform/patches/battle_anim.patch, battle_bg.patch): an
+// animation starts; the battle background is drawn (REMAKE_BG_MAIN or a move's).
 void RemakeBattleAnimation(const uint8_t *const animsTable[], uint16_t tableId, uint8_t isMoveAnim);
+void RemakeBattleBackground(uint16_t background);
 
 #endif // GUARD_REMAKE_STATE_H

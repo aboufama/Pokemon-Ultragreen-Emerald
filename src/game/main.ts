@@ -1,9 +1,16 @@
 // The compiled game in the browser: pret/pokeemerald built for WebAssembly
 // (platform/, docs/ARCHITECTURE.md), run at the GBA's frame rate on a
 // canvas, with the keyboard, a gamepad or the touch pad, and the cartridge's
-// save kept in the browser.
+// save kept in the browser. Its battles are drawn in 3D by the remake layer
+// (src/remake).
+//
+// ?battle=BLAZIKEN:50,SWAMPERT:50[,GRASS] starts a test battle as soon as
+// the game can (platform/game/remake_test.c): the player's Pokémon and the
+// wild one with their levels, and the place (BATTLE_ENVIRONMENT_*, the map's
+// by default).
 
 import { loadGame, KEYS, GameHalt, WIDTH, HEIGHT, type Game } from '../../platform/host/game.mjs';
+import speciesTable from '../data/generated/species.json';
 import { RemakeLayer } from '../remake/layer';
 import { loadStructLayouts } from '../remake/state';
 
@@ -121,22 +128,44 @@ function storeSave(game: Game) {
   }, 300);
 }
 
+// ---------------------------------------------------------------- test battles
+
+const ENVIRONMENTS = ['GRASS', 'LONG_GRASS', 'SAND', 'UNDERWATER', 'WATER', 'POND', 'MOUNTAIN', 'CAVE', 'BUILDING', 'PLAIN'];
+
+/** The test battle ?battle= asks for: RemakeTestBattle's arguments. */
+function testBattle(): number[] | null {
+  const q = new URLSearchParams(location.search).get('battle');
+  if (!q) return null;
+  const species = new Map(Object.values(speciesTable as Record<string, { id: number; const: string }>).map((s) => [s.const, s.id]));
+  const [player, wild, place] = q.split(',');
+  const mon = (text: string) => {
+    const [name, level] = text.split(':');
+    const id = species.get(`SPECIES_${name.toUpperCase()}`);
+    if (id === undefined) throw new Error(`?battle=: no species ${name}`);
+    return [id, Number(level) || 5];
+  };
+  const env = place ? ENVIRONMENTS.indexOf(place.toUpperCase()) : 0xff;
+  if (env < 0) throw new Error(`?battle=: no place ${place} (${ENVIRONMENTS.join(', ')})`);
+  return [...mon(player), ...mon(wild), env];
+}
+
 // ---------------------------------------------------------------- run
 
 async function main() {
   const url = new URL('game/pokeemerald.wasm', document.baseURI);
   const [module, layouts] = await Promise.all([WebAssembly.compileStreaming(fetch(url)), loadStructLayouts()]);
-  // The remake layer draws the battles in 3D (src/remake): at each VBlank
-  // it prepares the next frame's pictures.
+  // The remake layer draws the battles in 3D (src/remake): at the start of
+  // each frame it prepares the frame's pictures.
   let remake: RemakeLayer | null = null;
   const game = await loadGame(module, {
     flash: loadSave(),
     rtcOffset: Number(localStorage.getItem(RTC_KEY) ?? 0) || 0,
     log: (t) => console.log(`[game] ${t}`),
-    onVBlank: () => remake?.onVBlank(),
+    onFrameStart: () => remake?.onFrameStart(),
   });
   await game.init();
   remake = new RemakeLayer(game, layouts);
+  let pendingBattle = testBattle();
   status.textContent = '';
   let last = performance.now();
   let owed = 0;
@@ -146,6 +175,12 @@ async function main() {
     last = now;
     try {
       while (owed >= FRAME_MS) {
+        // The game waits while the remake layer loads what a battle needs.
+        if (!remake.ready()) {
+          owed = 0;
+          break;
+        }
+        if (pendingBattle && (game.exports().RemakeTestBattle as (...a: number[]) => number)(...pendingBattle)) pendingBattle = null;
         game.setKeys(keys());
         const before = game.vblanks();
         if (!game.frame()) {
