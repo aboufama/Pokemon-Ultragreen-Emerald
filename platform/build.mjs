@@ -6,6 +6,8 @@
 //   node platform/build.mjs --no-make    skip the decomp's own build
 //   node platform/build.mjs --only src/main.c    compile one game file and stop
 //   node platform/build.mjs --jobs 8
+//   node platform/build.mjs --profile    build/wasm-profile/: every game function
+//                                        reports its time (platform/tools/profile.mjs)
 //
 // Stages:
 //  1. The decomp's own build (`make modern DINFO=1`): its tools, its generated
@@ -39,8 +41,6 @@ import { addCpuTime } from './tools/cpu_time.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const DECOMP = path.join(ROOT, 'decomp/pokeemerald');
-const OUT = path.join(ROOT, 'build/wasm');
-const PUBLIC = path.join(ROOT, 'public/game');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -48,6 +48,9 @@ const option = (name, fallback) => {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : fallback;
 };
+const PROFILE = flag('--profile');
+const OUT = path.join(ROOT, PROFILE ? 'build/wasm-profile' : 'build/wasm');
+const PUBLIC = path.join(ROOT, 'public/game');
 const JOBS = Number(option('--jobs', Math.max(1, os.cpus().length)));
 
 /**
@@ -182,12 +185,12 @@ async function compileGameFile(rel, source) {
   const { text, count: structs } = apcsLayout(pp.stdout.toString('latin1'));
   const pre = await run(path.join(DECOMP, 'tools/preproc/preproc'), ['-i', '-g', 'build/assets', rel, 'charmap.txt'], { input: Buffer.from(text, 'latin1') });
   if (pre.code !== 0) return { rel, error: pre.stderr };
-  const key = createHash('sha1').update(pre.stdout).update(TOOLS_HASH).update(CFLAGS.join(' ')).digest('hex');
+  const key = createHash('sha1').update(pre.stdout).update(TOOLS_HASH).update(CFLAGS.join(' ')).update(PROFILE ? 'profile' : '').digest('hex');
   if (cache[rel]?.key === key && fs.existsSync(obj)) return { rel, cached: true, ...cache[rel] };
   const ll = await run('clang', [...CFLAGS, '-S', '-emit-llvm', '-x', 'c', '-', '-o', '-'], { input: pre.stdout });
   if (ll.code !== 0) return { rel, error: ll.stderr };
   // The game's code takes time (tools/cpu_time.mjs); the platform's drivers set theirs themselves.
-  const timed = rel.startsWith('platform/') ? { ir: ll.stdout.toString('latin1'), blocks: 0 } : addCpuTime(ll.stdout.toString('latin1'));
+  const timed = rel.startsWith('platform/') ? { ir: ll.stdout.toString('latin1'), blocks: 0 } : addCpuTime(ll.stdout.toString('latin1'), { profile: PROFILE });
   const hooked = hookVolatileIo(timed.ir);
   const irFile = obj.replace(/\.o$/, '.ll');
   fs.writeFileSync(irFile, hooked.ir, 'latin1');
@@ -301,6 +304,10 @@ function link(objects) {
   const out = path.join(OUT, 'pokeemerald.wasm');
   const o = spawnSync('wasm-opt', [linked, '--fpcast-emu', '-O2', '-g', '--strip-dwarf', '-o', out], { encoding: 'utf8' });
   if (o.status !== 0) throw new Error(`wasm-opt failed:\n${o.stderr}`);
+  if (PROFILE) {
+    console.log(`link: ${path.relative(ROOT, out)} (profile build)`);
+    return;
+  }
   fs.mkdirSync(PUBLIC, { recursive: true });
   fs.copyFileSync(out, path.join(PUBLIC, 'pokeemerald.wasm'));
   const mb = (f) => (fs.statSync(f).size / 1e6).toFixed(1);
