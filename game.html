@@ -3,42 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <title>Pokémon Ultragreen Emerald</title>
   <style>
-    html, body { margin: 0; height: 100%; background: #0d0f0e; color: #cfd8d2; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
-    #app { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; }
-    #screen { image-rendering: pixelated; image-rendering: crisp-edges; background: #000; box-shadow: 0 0 0 1px #222, 0 12px 40px rgba(0, 0, 0, 0.6); }
-    #status { min-height: 1.4em; opacity: 0.7; }
-    #keys { opacity: 0.45; font-size: 12px; }
-    body.touch #keys { display: none; }
-    #pad { display: none; width: 100%; max-width: 520px; justify-content: space-between; align-items: center; padding: 0 16px 16px; box-sizing: border-box; }
-    body.touch #pad { display: flex; }
-    .dpad { position: relative; width: 150px; height: 150px; }
-    .dpad button { position: absolute; width: 50px; height: 50px; }
-    .dpad [data-key=UP] { left: 50px; top: 0; } .dpad [data-key=DOWN] { left: 50px; bottom: 0; }
-    .dpad [data-key=LEFT] { left: 0; top: 50px; } .dpad [data-key=RIGHT] { right: 0; top: 50px; }
-    .ab { position: relative; width: 150px; height: 120px; }
-    .ab [data-key=A] { position: absolute; right: 0; top: 0; width: 64px; height: 64px; border-radius: 50%; }
-    .ab [data-key=B] { position: absolute; left: 10px; bottom: 0; width: 64px; height: 64px; border-radius: 50%; }
-    .mid { display: flex; flex-direction: column; gap: 10px; }
-    .shoulders { position: fixed; top: 12px; left: 12px; right: 12px; display: none; justify-content: space-between; }
-    body.touch .shoulders { display: flex; }
-    #pad button, .shoulders button { background: #26302b; color: #cfd8d2; border: 1px solid #3a4a41; border-radius: 10px; font: 600 13px system-ui; touch-action: none; }
-    #pad button.down, .shoulders button.down { background: #3f5a4b; }
+    /* The page is the handheld (src/ui/handheld.ts lays it out): the GBA
+       screen, and the GBA buttons on touch screens. */
+    #status { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center;
+      font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: #a9abc0; pointer-events: none; }
+    #status:empty { display: none; }
   </style>
 </head>
 <body>
-  <div id="app">
-    <canvas id="screen" width="240" height="160"></canvas>
-    <div id="status">Loading…</div>
-    <div id="keys">Arrows move · X is A · Z is B · Enter is Start · Backspace is Select · A and S are L and R</div>
-    <div id="pad">
-      <div class="dpad"><button data-key="UP">▲</button><button data-key="LEFT">◀</button><button data-key="RIGHT">▶</button><button data-key="DOWN">▼</button></div>
-      <div class="mid"><button data-key="SELECT">SELECT</button><button data-key="START">START</button></div>
-      <div class="ab"><button data-key="B">B</button><button data-key="A">A</button></div>
-    </div>
-    <div class="shoulders"><button data-key="L">L</button><button data-key="R">R</button></div>
-  </div>
+  <div id="app"></div>
   <script type="module" src="/src/game/main.ts"></script>
 </body>
 </html>

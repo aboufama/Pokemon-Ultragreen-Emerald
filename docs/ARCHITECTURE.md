@@ -196,21 +196,39 @@ frame) and the loading battlers' sprites are hidden, so no 2D Pokémon shows
 for a moment.
 
 The remake reads the game's structs and constants by name: the build writes
-their layouts and values (`CONTROLLER_*`, `B_POSITION_*`,
+their layouts and values (`CONTROLLER_*`, `B_POSITION_*`, `B_OUTCOME_*`,
 `BATTLE_ENVIRONMENT_*`, `BATTLE_TYPE_*`: `REMAKE_CONSTANTS` in
 `platform/build.mjs`) to `public/game/remake_state.json`, so `src/remake`
 and the tools repeat none of the game's numbers.
 
 **Test battles.** `platform/game/remake_test.c` starts a wild battle from
-anywhere, as the game starts one, and starts it over when it ends: the game
-page's `?battle=BLAZIKEN:50,SWAMPERT:50,GRASS` (the player's Pokémon, the wild
-one, the place) and an input script's `"battle"`
-(`platform/host/test_battle.mjs`), so the remake's battles can be looked at
-without playing up to one. `platform/tests/battle.json` is one:
-`platform/tools/run.mjs` runs it headless (the game's own 2D battle) and
-`tools/remake/run.mjs` in the browser with the remake layer (the page's
+anywhere, as the game starts one (the battle music, then the battle), and
+starts it over when it ends, or, asked for once, stays over and says how it
+ended (`B_OUTCOME_*`): the game page's
+`?battle=BLAZIKEN:50:BLAZE_KICK/SLASH,SWAMPERT:50,GRASS` (the player's
+Pokémon, the wild one, their levels and moves, the place) and an input
+script's `"battle"` (`platform/host/test_battle.mjs`), so the remake's
+battles can be looked at without playing up to one. `platform/tests/battle.json`
+is one: `platform/tools/run.mjs` runs it headless (the game's own 2D battle)
+and `tools/remake/run.mjs` in the browser with the remake layer (the page's
 `?manual=1`: frame by frame, a blank save, a fixed clock), frame for frame
-the same battle, so the two can be set side by side.
+the same battle, so the two can be set side by side. A page that draws its
+own transition holds the battle while it plays, its music already playing,
+as `Task_BattleStart` waits for the field's transition
+(`RemakeTestBattleTransition`).
+
+**The game page** (`game.html`, `src/game/main.ts`) opens on a start screen
+drawn as the game's main menu draws itself (`src/menus/start.ts`, from
+`main_menu.c`), shown while the game downloads: PLAY THE GAME runs the game
+from power-on; DEMO BATTLES (`src/game/demo.ts`) sets a wild battle up in the
+battle playtest's menus (the Pokémon, drawn in 3D, at level 50, the moves, the
+place, whose arena shows live) and plays it in the game as a test battle, the
+remake's transition over the arena and the game's own music through it, then
+offers another. The page is laid out as a handheld (`src/ui/handheld.ts`, as
+the playtest): the screen across a phone held upright with the GBA buttons
+under it (L and R at their corners), or between the D-pad and A/B held
+sideways; one keymap for the game and its menus (`GAME_KEYS`,
+`src/battle/input.ts`).
 
 ## Content milestones
 

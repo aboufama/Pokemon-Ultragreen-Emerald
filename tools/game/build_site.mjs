@@ -12,6 +12,10 @@
 //     assets/pokemon/<slug>/, assets/gba/pokemon/<slug>/
 //                          the 3D Pokémon the remake layer draws: every species
 //                          with a 3D profile (src/pokemon/registry.ts)
+//     assets/gba/menu/, assets/gba/fonts/, assets/sound/
+//                          the page's own menus (its start screen, the demo
+//                          battles' setup): their graphics, fonts, music and
+//                          sounds
 //     libs/draco/          the models' decoder
 //     battle/              the earlier battle playtest (tools/demo/build_demo.mjs),
 //                          as it was (left out with --no-demo)
@@ -66,6 +70,7 @@ for (const slug of species) {
   await cp(join(ROOT, 'public/assets/pokemon', slug), join(SITE, 'assets/pokemon', slug), { recursive: true });
   await cp(join(ROOT, 'public/assets/gba/pokemon', slug), join(SITE, 'assets/gba/pokemon', slug), { recursive: true });
 }
+for (const dir of ['gba/menu', 'gba/fonts', 'sound']) await cp(join(ROOT, 'public/assets', dir), join(SITE, 'assets', dir), { recursive: true });
 // No Jekyll on GitHub Pages: serve the files as they are.
 await writeFile(join(SITE, '.nojekyll'), '');
 

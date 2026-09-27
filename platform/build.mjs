@@ -376,6 +376,7 @@ const REMAKE_CONSTANTS = [
   ['battle_controllers.h', 'CONTROLLER_'],
   ['constants/battle.h', 'BATTLE_ENVIRONMENT_'],
   ['constants/battle.h', 'BATTLE_TYPE_'],
+  ['constants/battle.h', 'B_OUTCOME_'],
   ['constants/battle.h', 'B_POSITION_'],
   ['constants/battle.h', 'B_SIDE_'],
   ['remake_state.h', 'REMAKE_'],

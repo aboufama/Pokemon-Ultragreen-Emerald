@@ -33,9 +33,10 @@ const wav = opt('--wav');
 fs.mkdirSync(out, { recursive: true });
 
 const inputs = new Map((script.inputs ?? []).map(([f, k]) => [f, keysFrom(k)]));
+const json = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
 let battle = script.battle
-  ? testBattleArgs(script.battle, JSON.parse(fs.readFileSync(path.join(ROOT, 'src/data/generated/species.json'), 'utf8')),
-    JSON.parse(fs.readFileSync(path.join(ROOT, 'public/game/remake_state.json'), 'utf8')).constants)
+  ? testBattleArgs(script.battle, { species: json('src/data/generated/species.json'), moves: json('src/data/generated/moves.json') },
+    json('public/game/remake_state.json').constants)
   : null;
 const shots = new Set(script.shots ?? []);
 const logs = [];

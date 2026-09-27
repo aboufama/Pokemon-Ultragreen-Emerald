@@ -2,9 +2,13 @@
 // Check the built site (tools/game/build_site.mjs) before it is published:
 // serve build/site under the repository's path, as GitHub Pages does, and
 //
-//   - boot the compiled game on the front page, and play a test battle with
-//     the remake layer (?manual=1&battle=...): no file missing, no page error,
-//     and the frame has the 3D arena and battlers in it;
+//   - open the front page on its start screen and choose PLAY THE GAME: the
+//     compiled game boots and runs;
+//   - choose DEMO BATTLES: set a battle up in its menus (Treecko against a
+//     wild Wurmple in the grass), battle it in the game drawn in 3D, run from
+//     it, and get the question of another battle;
+//   - play a test battle with the remake layer (?manual=1&battle=...): the
+//     frame has the 3D arena and battlers in it;
 //   - play the opening as a new player does (platform/tests/opening.json,
 //     from power-on through Birch's battle to a wild battle in Route 101's
 //     grass): it ends in that wild battle, drawn in 3D;
@@ -58,16 +62,111 @@ const field = (struct, name) => info.structs[struct].fields[name][0];
 const arenaActive = field('RemakeLayers', 'backgrounds') + field('RemakeBackground', 'active');
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 
-// The front page as a player opens it: it boots and runs.
-{
+/** The front page on its start screen (a new player's: nothing saved), and its keys. */
+async function frontPage(name) {
   const page = await browser.newPage();
-  page.on('response', (r) => r.status() >= 400 && problems.push(`game: ${r.status()} ${r.url().replace(base, '')}`));
-  page.on('pageerror', (e) => problems.push(`game: ${e.message}`));
+  page.on('response', (r) => r.status() >= 400 && problems.push(`${name}: ${r.status()} ${r.url().replace(base, '')}`));
+  page.on('pageerror', (e) => problems.push(`${name}: ${e.message}`));
   await page.goto(base, { waitUntil: 'load' });
-  const booted = await page.waitForFunction(() => document.getElementById('status')?.textContent === '', null, { timeout: 60000 }).then(() => true, () => false);
-  if (!booted) problems.push(`game: never started (${await page.textContent('#status')})`);
-  await page.waitForTimeout(3000);
-  console.log(`${booted ? 'ok  ' : 'FAIL'}  the game boots`);
+  const step = () => page.evaluate(() => window.__page?.step() ?? '');
+  const started = await page.waitForFunction(() => window.__page?.step() === 'start' && document.getElementById('status')?.textContent === '', null, { timeout: 90000 }).then(() => true, () => false);
+  if (!started) problems.push(`${name}: no start screen (${await page.textContent('#status').catch(() => '')})`);
+  // It takes the keys once it has faded in, as the game's main menu does.
+  await page.waitForTimeout(1500);
+  /** A key pressed as a player does, then time for the screen to answer. */
+  const press = async (key, wait = 300) => {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(90);
+    await page.keyboard.up(key);
+    await page.waitForTimeout(wait);
+  };
+  /** Wait for the page to reach a screen; false if it doesn't in time. */
+  const reach = async (want, timeout = 60000) => {
+    const t = Date.now();
+    while ((await step()) !== want) {
+      if (Date.now() - t > timeout) return false;
+      await page.waitForTimeout(200);
+    }
+    return true;
+  };
+  return { page, started, step, press, reach };
+}
+
+/** The game's picture layers: whether the arena is drawn in 3D. */
+const arenaDrawn = (page) => page.evaluate((at) => {
+  const g = window.__page.game();
+  return new DataView(g.memory().buffer).getUint32(g.exports().PlatformRemakeLayers() + at, true) === 1;
+}, arenaActive);
+
+// PLAY THE GAME: the compiled game boots and runs.
+{
+  const { page, started, press } = await frontPage('game');
+  let ok = false;
+  if (started) {
+    await press('KeyX', 1500);
+    // The start screen shows while the game downloads: it may still be coming.
+    await page.waitForFunction(() => window.__page.step() === 'game' && window.__page.game(), null, { timeout: 90000 }).catch(() => undefined);
+    const at = await page.evaluate(() => window.__page.game()?.vblanks() ?? 0);
+    await page.waitForTimeout(3000);
+    const later = await page.evaluate(() => window.__page.game()?.vblanks() ?? 0);
+    ok = (await page.evaluate(() => window.__page.step())) === 'game' && later > at + 30;
+    if (!ok) problems.push(`game: PLAY THE GAME didn't run the game (VBlank ${at} then ${later})`);
+  }
+  console.log(`${ok ? 'ok  ' : 'FAIL'}  the start screen, and the game boots from PLAY THE GAME`);
+  await page.close();
+}
+
+// DEMO BATTLES: the setup in the page's menus, the battle in the game in 3D,
+// run from it, and the question of another.
+{
+  const { page, started, press, reach, step } = await frontPage('demo');
+  const fail = async (what) => problems.push(`demo: ${what} (at ${await step()})`);
+  let ok = false;
+  if (started) {
+    await press('ArrowDown');
+    await press('KeyX', 1000);
+    // Your Pokémon: the first in the list (Treecko), YES.
+    if (!(await reach('you'))) await fail('no choice of your POKéMON');
+    await page.waitForTimeout(2500);
+    await press('KeyX', 1500);
+    await press('KeyX', 1000);
+    // The wild one: Wurmple, the last in the list (slower than Treecko, so running always works), YES.
+    if (!(await reach('foe'))) await fail('no choice of the wild POKéMON');
+    await page.waitForTimeout(2500);
+    for (let i = 0; i < 8; i++) await press('ArrowDown', 120);
+    await press('KeyX', 1500);
+    await press('KeyX', 1000);
+    // The moves as they are: DONE.
+    if (!(await reach('moves'))) await fail('no moves screen');
+    await page.waitForTimeout(1000);
+    for (let i = 0; i < 5; i++) await press('ArrowDown', 120);
+    await press('KeyX', 1000);
+    // The place: Route 101's grass.
+    if (!(await reach('place'))) await fail('no choice of the place');
+    await page.waitForTimeout(3000);
+    await press('KeyX', 300);
+    if (!(await reach('battle', 30000))) await fail('the battle never started');
+    // The battle in the game: its arena in 3D; then RUN, over and over
+    // until it takes: RIGHT and DOWN put the action menu's cursor on RUN
+    // from anywhere and A chooses it, or they do nothing and A moves the
+    // battle's text on.
+    let arena = false;
+    for (let i = 0; i < 60 && !arena; i++) {
+      await page.waitForTimeout(500);
+      arena = await arenaDrawn(page);
+    }
+    if (!arena) await fail('the battle has no 3D arena');
+    const t = Date.now();
+    while ((await step()) === 'battle' && Date.now() - t < 120000) {
+      await press('ArrowRight', 150);
+      await press('ArrowDown', 150);
+      await press('KeyX', 1200);
+    }
+    const after = await reach('after', 30000);
+    if (!after) await fail('running from the battle never ended it');
+    ok = arena && after;
+  }
+  console.log(`${ok ? 'ok  ' : 'FAIL'}  demo battles: the setup, a battle in 3D in the game, and another offered`);
   await page.close();
 }
 
