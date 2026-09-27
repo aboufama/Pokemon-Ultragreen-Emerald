@@ -16,7 +16,14 @@ script (as run.mjs and reference.py run it), frame by frame:
       ROM's, byte by byte in order (mGBA's write watchpoints).
   (d) the sound: both runs' audio (mGBA's through its bindings, at the same
       65536 Hz) written to WAV files, and compared: the level, the spectrum
-      over time (32 bands, 60 Hz - 16 kHz), the waveform once aligned.
+      over time (32 bands, 60 Hz - 16 kHz), the waveform once aligned. The
+      waveform is checked on DirectSound alone (both runs again with the GB
+      channels silenced): the mixer's bytes played at the timer's rate. A GB
+      channel's waveform depends on when, to the cycle, each of its register
+      writes lands (a square's duty step goes on from where the last write
+      left it), and the time model is not exact to the cycle: its phase
+      drifts from mGBA's, so the whole sound's waveform is reported, not
+      checked.
 
 A frame that differs from the ROM's same frame is also compared with the
 ROM's frames up to --slack before and after (a timing shift, as
@@ -53,10 +60,13 @@ KEYS = {'A': 0, 'B': 1, 'SELECT': 2, 'START': 3, 'RIGHT': 4, 'LEFT': 5, 'UP': 6,
 RATE = 65536
 # The sound's gain here (10-bit DAC value x 64) and mGBA's (x 48).
 GAIN_OURS, GAIN_MGBA = 64, 48
-# (d)'s thresholds: the level within 5%, the bands' correlation, the waveform's.
+# (d)'s thresholds: the level within 5%, the bands' correlation, DirectSound's
+# waveform's.
 LEVEL_RATIO = (0.95, 1.05)
 MIN_BAND_CORR = 0.95
-MIN_WAVE_CORR = 0.90
+MIN_WAVE_CORR = 0.95
+# The GB channels (bits 0-3 of sound_state.mjs's --mute, mGBA's forceDisableCh).
+GB_CHANNELS = 0x0F
 
 # ---------------------------------------------------------------- the structures
 
@@ -383,39 +393,77 @@ def run_rom(args, script, rom_sized):
     return records, frame_writes, np.concatenate(sound).reshape(-1, 2) if sound else np.zeros((0, 2), np.int16)
 
 
-def run_rom_cached(args, script, rom_sized, out):
-    """run_rom, kept in the output directory (rom.pkl) for the next check with
-    the same ROM, script, frames and variables: the ROM's side never changes
-    while the compiled game's does, and it is the slow one (mGBA with
-    watchpoints)."""
+def rom_sound(args, script, mute):
+    """The ROM's audio alone, with some of its sources silenced (mute: bits
+    0-3 the GB channels, 4-5 DirectSound A and B)."""
+    mgba.log.silence()
+    core = mgba.core.load_path(args.rom)
+    core.reset()
+    core.set_audio_buffer_size(0x8000)
+    audio = core.get_audio_channels()
+    audio.set_rate(RATE)
+    a = core._native.audio
+    for i in range(4):
+        a.psg.forceDisableCh[i] = bool(mute & (1 << i))
+    a.forceDisableChA = bool(mute & 0x10)
+    a.forceDisableChB = bool(mute & 0x20)
+    inputs = {f: keys_from(k) for f, k in script.get('inputs', [])}
+    keys, sound = [], []
+    for f in range(1, (args.frames or script['frames']) + args.slack + 1):
+        if f in inputs:
+            keys = inputs[f]
+        core.clear_keys(*KEYS.values())
+        if keys:
+            core.set_keys(*keys)
+        core.run_frame()
+        n = audio.available
+        if n:
+            buf = ffi.new('short[]', 2 * n)
+            n = audio.read_into(buf, n)
+            sound.append(np.frombuffer(ffi.buffer(buf, 4 * n), dtype=np.int16).copy())
+    return np.concatenate(sound).reshape(-1, 2) if sound else np.zeros((0, 2), np.int16)
+
+
+def cached(args, script, out, name, extra, run):
+    """run(), kept in the output directory (NAME.pkl) for the next check with
+    the same ROM, script and frames (and extra): the ROM's side never changes
+    while the compiled game's does, and it is the slow one."""
     key = hashlib.sha1()
     with open(args.rom, 'rb') as f:
         key.update(f.read())
     key.update(json.dumps(script, sort_keys=True).encode())
-    key.update(repr((args.frames, args.slack, [(n, s, rom_sized[n][0]) for n, s, _ in REGIONS])).encode())
+    key.update(repr((args.frames, args.slack, extra)).encode())
     key = key.hexdigest()
-    path = os.path.join(out, 'rom.pkl')
+    path = os.path.join(out, name + '.pkl')
     if not args.fresh and os.path.exists(path):
         with open(path, 'rb') as f:
-            cached = pickle.load(f)
-        if cached.get('key') == key:
-            return cached['run']
-    run = run_rom(args, script, rom_sized)
+            kept = pickle.load(f)
+        if kept.get('key') == key:
+            return kept['run']
+    result = run()
     with open(path, 'wb') as f:
-        pickle.dump({'key': key, 'run': run}, f)
-    return run
+        pickle.dump({'key': key, 'run': result}, f)
+    return result
+
+
+def run_rom_cached(args, script, rom_sized, out):
+    """run_rom, kept in the output directory (rom.pkl): mGBA with watchpoints,
+    the slowest part (and for the same variables' places)."""
+    return cached(args, script, out, 'rom', [(n, s, rom_sized[n][0]) for n, s, _ in REGIONS],
+                  lambda: run_rom(args, script, rom_sized))
 
 # ---------------------------------------------------------------- the compiled game
 
 
-def run_ours(args, script_path, out):
+def run_ours(args, script_path, out, mute=0):
     regions = os.path.join(out, 'regions.json')
     with open(regions, 'w') as f:
         json.dump([[name, size] for name, size, _ in REGIONS], f)
-    state = os.path.join(out, 'state.bin')
-    wav = os.path.join(out, 'ours.wav')
+    state = os.path.join(out, f'state{"-muted" if mute else ""}.bin')
+    wav = os.path.join(out, f'ours{f"-mute{mute}" if mute else ""}.wav')
     cmd = ['node', os.path.join(ROOT, 'platform/tools/sound_state.mjs'), '--script', script_path,
-           '--regions', regions, '--out', state, '--wav', wav, '--wasm', args.wasm, '--map', args.map]
+           '--regions', regions, '--out', state, '--wav', wav, '--wasm', args.wasm, '--map', args.map,
+           '--mute', str(mute)]
     if args.frames:
         cmd += ['--frames', str(args.frames)]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
@@ -681,9 +729,12 @@ def main():
 
     start = args.audio_from or script.get('music', 1)
     d = compare_audio(ref[2], ours[2], start, args.slack)
-    ok = LEVEL_RATIO[0] <= d['level'] <= LEVEL_RATIO[1] and d['bands'] >= MIN_BAND_CORR and d['wave'] >= MIN_WAVE_CORR
+    direct = compare_audio(cached(args, script, out, 'rom-directsound', GB_CHANNELS, lambda: rom_sound(args, script, GB_CHANNELS)),
+                           run_ours(args, os.path.abspath(args.script), out, GB_CHANNELS)[2], start, args.slack)
+    ok = LEVEL_RATIO[0] <= d['level'] <= LEVEL_RATIO[1] and d['bands'] >= MIN_BAND_CORR and direct['wave'] >= MIN_WAVE_CORR
     print(f'(d) sound from frame {start} ({d["seconds"]:.1f} s): level {d["level"]:.3f} of mGBA\'s, '
-          f'bands correlate {d["bands"]:.3f}, waveform {d["wave"]:.3f} (ours moved {d["lag"]:+d} samples to line up); '
+          f'bands correlate {d["bands"]:.3f}, waveform of DirectSound alone {direct["wave"]:.3f}, '
+          f'of the whole {d["wave"]:.3f} (ours moved {d["lag"]:+d} samples to line up); '
           f'{os.path.join(out, "ours.wav")} and rom.wav')
     failed |= not ok
     print('the sound matches the ROM' if not failed else 'the sound differs from the ROM')

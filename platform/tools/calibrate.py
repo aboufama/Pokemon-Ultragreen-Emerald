@@ -12,7 +12,10 @@ measured, and the interrupts it was interrupted by), and corrects the model
 for the functions where they differ: their blocks cost `factor` times more
 (platform/tools/cpu_time.json, which the build reads; rebuild after).
 
-    python3 platform/tools/calibrate.py --script platform/tests/title.json [--functions 400]
+    python3 platform/tools/calibrate.py --script platform/tests/title.json [--script S2[:FRAMES] ...] [--functions 400]
+
+(with several scripts, the measurements add up; S:FRAMES runs only the
+first frames of S).
 
 The functions measured are those with the most time of their own on the
 compiled game (the ROM's breakpoints are checked one by one), less those the
@@ -21,9 +24,12 @@ calls and the other kept them (clang puts AllocSpriteTiles(0) inside
 ResetSpriteData), those calls count as the caller's time on both sides: the
 calls are counted by caller and callee on both. A function's own time includes
 the platform's work it does (BIOS calls, DMA, the sound engine), which is
-timed as the GBA's already: only its own code's part is corrected, and only
-where it is a fair part of the function's time (in LoadOam, a BIOS copy with
-a few instructions around it, the difference is the copy's, not the code's).
+timed as the GBA's already: only its own code's part is corrected. Where the
+code is a small part of the function's time (a BIOS copy or a DMA with a few
+instructions around it) only a modest correction is taken: LoadOam's
+instructions around its copy take twice the model's time on the GBA (the copy
+itself is the BIOS's to the cycle), while a large difference there is the
+platform's (an LZ77 decompression's), not the code's.
 The platform's stand-ins for the GBA's code (the drivers, the sound engine's
 assembly half) are measured on both sides too, so that they count in neither
 their callers' own time; they are not corrected.
@@ -52,6 +58,8 @@ KEYS = {'A': 0, 'B': 1, 'SELECT': 2, 'START': 3, 'RIGHT': 4, 'LEFT': 5, 'UP': 6,
 # here), and busy waits on the hardware.
 SKIP = {'AgbMain', 'WaitForVBlank', 'SampleFreqSet'}
 PAIR_KEYS = ('calls', 'cycles', 'code', 'self', 'selfCode')
+# The corrections taken where the code is a small part of a function's time.
+SMALL_SHARE = (0.5, 2.5)
 
 
 def profile(script, wasm, counted=None):
@@ -81,6 +89,16 @@ def profile(script, wasm, counted=None):
             for k in PAIR_KEYS:
                 t[k] += r[k]
     return rows, pairs
+
+
+def add_up(into, table):
+    """Add a measurement to another: {key: {field: n}} (a row's `count`, the
+    functions sharing its name, is the same in both)."""
+    for key, row in table.items():
+        t = into.setdefault(key, dict.fromkeys(row, 0))
+        for k, v in row.items():
+            t[k] = max(t.get(k, 0), v) if k == 'count' else t.get(k, 0) + v
+    return into
 
 
 def wasm_files(map_path, where='src'):
@@ -257,16 +275,27 @@ def rom_profile(script, functions, frames, interrupt_return):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--script', required=True)
+    ap.add_argument('--script', required=True, action='append', help='an input script, PATH or PATH:FRAMES (several: they add up)')
     ap.add_argument('--functions', type=int, default=400, help='how many functions to measure')
     ap.add_argument('--wasm', default=os.path.join(ROOT, 'build/wasm-profile/pokeemerald.wasm'))
     ap.add_argument('--map', default=os.path.join(ROOT, 'build/wasm-profile/pokeemerald.map'))
     ap.add_argument('--dry-run', action='store_true', help='report, but leave cpu_time.json as it is')
     ap.add_argument('--measured', help='use these measurements (build/calibrate/measured.json) instead of measuring')
     args = ap.parse_args()
-    with open(args.script) as f:
-        script = json.load(f)
-    script_path = os.path.abspath(args.script)
+    scripts = []
+    for spec in args.script:
+        # (PATH:FRAMES: its first frames only, from a copy that says so)
+        path, _, frames = spec.partition(':')
+        with open(path) as f:
+            script = json.load(f)
+        path = os.path.abspath(path)
+        if frames:
+            script['frames'] = min(script['frames'], int(frames))
+            path = os.path.join(ROOT, 'build/calibrate', f'{os.path.splitext(os.path.basename(path))[0]}-{frames}.json')
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as f:
+                json.dump(script, f)
+        scripts.append((path, script))
     measured = os.path.join(ROOT, 'build/calibrate/measured.json')
 
     files = wasm_files(args.map)
@@ -280,7 +309,9 @@ def main():
         rom = rom_functions()
         # The functions with the most time of their own here, that the ROM has
         # (not inlined there) and that one name names.
-        ours, _ = profile(script_path, args.wasm)
+        ours = {}
+        for path, _ in scripts:
+            add_up(ours, profile(path, args.wasm)[0])
         usable = [n for n, r in ours.items() if n in rom and n not in SKIP and len(files.get(n, ())) == 1 and r['count'] == 1]
         chosen = sorted(usable, key=lambda n: -ours[n]['self'])[:args.functions]
         # The platform's stand-ins for the GBA's code (platform/game: the
@@ -293,8 +324,15 @@ def main():
                          and len(stand_ins.get(n, ())) == 1 and r['count'] == 1)
         print(f'{len(ours)} functions ran here; measuring the {len(chosen)} with the most time of their own'
               ' and the platform\'s stand-ins for the GBA\'s')
-        ours, ours_pairs = profile(script_path, args.wasm, counted=chosen)
-        theirs, rom_pairs, handlers = rom_profile(script, {n: rom[n] for n in chosen}, script['frames'], interrupt_return())
+        ours, ours_pairs, theirs, rom_pairs, handlers = {}, {}, {}, {}, set()
+        for path, script in scripts:
+            o, op = profile(path, args.wasm, counted=chosen)
+            t, tp, h = rom_profile(script, {n: rom[n] for n in chosen}, script['frames'], interrupt_return())
+            add_up(ours, o)
+            add_up(ours_pairs, op)
+            add_up(theirs, t)
+            add_up(rom_pairs, tp)
+            handlers |= h
         with open(measured, 'w') as f:
             json.dump({'chosen': chosen, 'ours': ours, 'rom': theirs, 'handlers': sorted(handlers),
                        'ours_pairs': {'>'.join(k): v for k, v in ours_pairs.items()},
@@ -312,9 +350,9 @@ def main():
             continue
         # Per call, as the two runs may call it a different number of times.
         own, gba, code = o['self'] / o['calls'], t['self'] / t['calls'], o['code'] / o['calls']
-        if code < own / 5:
-            continue
         correction = (code + gba - own) / code
+        if code < own / 5 and not SMALL_SHARE[0] <= correction <= SMALL_SHARE[1]:
+            continue
         # (a loop the ROM's compiler turned into a memset call runs ten
         # times faster there: the correction can be large, not absurd)
         if not 0.1 <= correction <= 10 or abs(o['calls'] - t['calls']) > 0.05 * t['calls']:

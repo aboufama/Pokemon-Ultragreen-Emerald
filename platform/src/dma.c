@@ -84,9 +84,10 @@ u32 PlatformRegion(u32 addr)
 
 // The time a transfer takes on the GBA: 2 cycles a unit, plus its read's and
 // its write's wait states, which depend on where they are (the first unit's
-// non-sequential, the rest sequential), as mGBA counts them: EWRAM's, the
-// 16-bit bus of the palettes and VRAM, the cartridge's as WAITCNT sets them
-// (WS0).
+// non-sequential, the rest sequential), and 2 more at the end unless it is
+// all in the cartridge, as mGBA counts them: EWRAM's, the 16-bit bus of the
+// palettes and VRAM, the cartridge's as WAITCNT sets them (WS0). (mGBA also
+// starts a transfer 3 cycles after it is due, the CPU running meanwhile.)
 static u32 WaitStates(u32 region, int wide, int sequential)
 {
     static const u8 sRomN[4] = { 4, 3, 2, 8 }, sRomS[2] = { 2, 1 };
@@ -114,7 +115,7 @@ static u32 TransferCycles(u32 src, u32 dst, u32 count, int wide)
     u32 from = PlatformRegion(src), to = PlatformRegion(dst);
     u32 first = 2 + WaitStates(from, wide, 0) + WaitStates(to, wide, 0);
     u32 next = 2 + WaitStates(from, wide, 1) + WaitStates(to, wide, 1);
-    return first + (count - 1) * next;
+    return first + (count - 1) * next + (from < 8 || to < 8 ? 2 : 0);
 }
 
 static void Transfer(int ch)
