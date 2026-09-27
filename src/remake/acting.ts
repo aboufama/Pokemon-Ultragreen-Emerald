@@ -54,6 +54,11 @@ const MOVES_BY_ID = new Map<number, MoveData>(Object.values(MOVES).map((m) => [m
 const HOLD_FRAMES_MAX = 150;
 /** Frames a multi-hit move's attacker waits at the foe for its next hit before going home. */
 const WAIT_AT_FOE = 150;
+/** ?actlog=1: log the clips the acting asks for (for tools checking the game's events reach them). */
+const LOG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('actlog');
+const log = (what: string) => {
+  if (LOG) console.log(`[acting] ${what}`);
+};
 
 /** The situation clip for a status condition's animation (B_ANIM_STATUS_*). */
 const STATUS_CLIPS: Record<string, string> = {
@@ -155,6 +160,7 @@ export class Acting {
   /** Attackers holding where a multi-hit move's hit left them, waiting for the next: for how many frames, and whether that is away from home. */
   private readonly waiting = new Map<number, { frames: number; away: boolean }>();
   private bodyOf: (battler: number) => Battler3D | null = () => null;
+  private readonly loggedIdle = new Set<string>();
   private readonly k: Record<string, number>;
   private readonly MOVE_ANIM: number;
   private readonly STATUS_ANIM: number;
@@ -230,7 +236,12 @@ export class Acting {
       if (!body || !b.present) return;
       const asleep = (b.status1 & this.k.STATUS1_SLEEP) !== 0;
       const worn = b.maxHp > 0 && b.hp > 0 && b.hp * 4 <= b.maxHp;
-      body.setIdle(asleep ? 'idle_asleep' : worn ? 'idle_tired' : 'idle');
+      const idle = asleep ? 'idle_asleep' : worn ? 'idle_tired' : 'idle';
+      if (LOG && body.idleClip !== idle && (idle === 'idle' || body.profile.clips[idle] || !this.loggedIdle.has(`${i}${idle}`))) {
+        this.loggedIdle.add(`${i}${idle}`);
+        log(`idle ${i} ${idle}`);
+      }
+      body.setIdle(idle);
       body.frozen = (b.status1 & this.k.STATUS1_FREEZE) !== 0 && !this.fainting.has(i);
     });
 
@@ -321,6 +332,7 @@ export class Acting {
     // A blow from before is done with.
     this.struck.delete(state.animTarget);
     const clip = this.moveClip(attacker, state.animAttacker, move, state);
+    log(`move ${state.animAttacker} ${move.const} ${clip}`);
     // Not waiting any more: this hit carries on from where the last left it.
     this.waiting.delete(state.animAttacker);
     const events = attacker.profile.clips[clip]?.events ?? [];
@@ -441,6 +453,7 @@ export class Acting {
 
   /** A battler plays a situation's clip, if it has one and isn't busy (a move, a faint, waiting at a foe). */
   private situation(battler: number, clip: string, bodyOf: (battler: number) => Battler3D | null): void {
+    log(`situation ${battler} ${clip}`);
     const body = bodyOf(battler);
     if (!body || this.fainting.has(battler) || this.performing.has(battler) || this.waiting.has(battler)) return;
     if (body.profile.clips[clip] && body.animator.currentClip !== clip) void body.perform(clip);

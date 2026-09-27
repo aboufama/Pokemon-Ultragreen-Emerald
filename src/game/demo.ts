@@ -15,7 +15,7 @@
 
 import { MOVES, SPECIES } from '../data';
 import { getSpeciesProfile, profiledSpecies } from '../pokemon/registry';
-import { movePool, moveKey, randomMoveset } from '../battle/moveset';
+import { allMoves, moveKey, randomMoveset } from '../battle/moveset';
 import { bagBackdrop, displayName } from '../menus/bag';
 import { chooseSpecies } from '../menus/species';
 import { editMoves } from '../menus/moves';
@@ -98,11 +98,14 @@ export async function demoBattles(c: DemoConsole): Promise<void> {
     .sort((a, b) => SPECIES[a].nationalDex - SPECIES[b].nationalDex);
   const showcase: Record<string, string[]> = {};
   await Promise.all(roster.map(async (s) => (showcase[s] = ((await getSpeciesProfile(s)).showcaseMoves ?? []).map((m) => m.replace(/^MOVE_/, '')))));
+  // Every move each can know (the compiled game plays them all, and each has its own animation).
+  const pool = (slug: string) => allMoves(slug);
+  const random = (slug: string) => randomMoveset(slug, LEVEL, Math.random, pool(slug));
   const knows = (slug: string, moves: string[] | undefined) => {
-    const pool = new Set(movePool(slug, LEVEL).map(moveKey));
-    return !!moves?.length && moves.every((m) => pool.has(m) || showcase[slug]?.includes(m));
+    const known = new Set(pool(slug).map(moveKey));
+    return !!moves?.length && moves.every((m) => known.has(m) || showcase[slug]?.includes(m));
   };
-  const firstMoves = (slug: string) => (showcase[slug]?.length === 4 ? showcase[slug] : randomMoveset(slug, LEVEL));
+  const firstMoves = (slug: string) => (showcase[slug]?.length === 4 ? showcase[slug] : random(slug));
   const valid = (s: string | undefined) => (s && roster.includes(s) ? s : null);
   // The game's numbers for a battle (SPECIES_*, MOVE_*).
   const speciesId = (slug: string) => SPECIES[slug].id;
@@ -162,7 +165,7 @@ export async function demoBattles(c: DemoConsole): Promise<void> {
     } else if (c.step === 'moves') {
       m.fadeAmount = 16;
       void m.fadeTo(0);
-      const r = await editMoves(m, { slug: you, level: LEVEL, moves, foe: { slug: foe, moves: foeMoves ?? randomMoveset(foe, LEVEL) } });
+      const r = await editMoves(m, { slug: you, level: LEVEL, moves, foe: { slug: foe, moves: foeMoves ?? random(foe) }, pool: (s) => pool(s) });
       await m.fadeTo(16);
       if (!r) {
         c.step = 'foe';
@@ -174,7 +177,7 @@ export async function demoBattles(c: DemoConsole): Promise<void> {
     } else if (c.step === 'place') {
       m.fadeAmount = 16;
       void m.fadeTo(0);
-      const wildMoves = foeMoves ?? randomMoveset(foe, LEVEL);
+      const wildMoves = foeMoves ?? random(foe);
       // The battle starts with the transition: the game's battle music
       // plays through it, the battle waiting for it to end.
       let started = false;

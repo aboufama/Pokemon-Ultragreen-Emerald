@@ -62,6 +62,8 @@ export interface MovesOptions {
   moves: string[];
   /** The wild Pokémon, whose moves SELECT opens. */
   foe?: { slug: string; moves: string[] };
+  /** The moves it can be given (default: those it can know at its level that the playtest's engine plays). */
+  pool?: (slug: string, level: number) => MoveData[];
 }
 
 /** Resolves the moves (and the foe's when edited), or null when B backs out. */
@@ -107,17 +109,17 @@ export async function editMoves(m: MenuScreen, o: MovesOptions): Promise<MovesRe
       cursor = index;
       if (button === 'START' || index === list.length - 1) return { moves, foeMoves };
       if (button === 'SELECT' && o.foe) {
-        const foe = await editMoves(m, { slug: o.foe.slug, level: o.level, moves: foeMoves ?? o.foe.moves });
+        const foe = await editMoves(m, { slug: o.foe.slug, level: o.level, moves: foeMoves ?? o.foe.moves, pool: o.pool });
         if (foe) foeMoves = foe.moves;
         continue;
       }
       if (index === list.length - 2) {
-        moves = randomMoveset(o.slug, o.level);
+        moves = randomMoveset(o.slug, o.level, Math.random, (o.pool ?? movePool)(o.slug, o.level));
         continue;
       }
       // Replace a move from the list of every move it can know.
       listView = true;
-      const pool = movePool(o.slug, o.level);
+      const pool = (o.pool ?? movePool)(o.slug, o.level);
       const poolItems: ListItem[] = pool.map((mv) => ({
         label: mv.name,
         onHover: () => {

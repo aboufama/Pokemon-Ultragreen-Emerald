@@ -158,6 +158,10 @@ def main(decomp: Path, out_dir: Path) -> None:
         w, h = (int(x) for x in re.match(r"MON_COORDS_SIZE\((\d+),\s*(\d+)\)", f["size"]).groups())
         return {"width": w, "height": h, "yOffset": int(f["y_offset"])}
 
+    # Egg moves (egg_moves.h), listed under a family's first form: egg_moves(TREECKO, MOVE_A, ...).
+    egg_src = C.read(decomp / "src/data/pokemon/egg_moves.h")
+    egg_moves = {f"SPECIES_{name}": re.findall(r"(MOVE_\w+)", body) for name, body in re.findall(r"egg_moves\((\w+),(.*?)\)", egg_src, re.S)}
+
     # Evolutions (gEvolutionTable): [{method, param, into}] per species.
     evo_table = C.parse_designated_table(C.read(decomp / "src/data/pokemon/evolution.h"), "gEvolutionTable")
 
@@ -218,6 +222,7 @@ def main(decomp: Path, out_dir: Path) -> None:
                 for e in learnsets_by_sym.get(learn_ptrs.get(const, ""), [])
             ],
             "teachable": teachable(const),
+            "eggMoves": egg_moves.get(const, []),
             "evolutions": evolutions(const),
             "category": categories.get(f"NATIONAL_DEX_{dex_name}", "") if dex_name else "",
         }

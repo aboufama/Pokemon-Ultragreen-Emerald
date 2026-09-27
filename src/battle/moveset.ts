@@ -14,6 +14,27 @@ export function movePool(slug: string, level: number): MoveData[] {
   return [...new Set(consts)].map((c) => MOVES[c]).filter((m): m is MoveData => !!m && isSupportedMove(m));
 }
 
+/**
+ * Every move `slug` can know in Emerald, whatever its level: its level-up
+ * moves and its pre-evolutions' (a Pokémon keeps what it learned before
+ * evolving), their TMs, HMs and tutor moves, and its family's egg moves, in
+ * that order. (The compiled game plays them all; tools/gauntlet/brief.mjs
+ * lists the same movepool, which every species has a clip for.)
+ */
+export function allMoves(slug: string): MoveData[] {
+  const from: Record<string, string> = {};
+  for (const [s, d] of Object.entries(SPECIES)) for (const e of d.evolutions ?? []) from[e.into] ??= s;
+  const family = [slug];
+  for (let s = from[slug]; s; s = from[s]) family.push(s);
+  const sp = family.map((s) => SPECIES[s]).filter(Boolean);
+  const consts = [
+    ...sp.flatMap((s) => s.learnset.map((l) => l.move)),
+    ...sp.flatMap((s) => s.teachable ?? []),
+    ...(sp.at(-1)?.eggMoves ?? []),
+  ];
+  return [...new Set(consts)].map((c) => MOVES[c]).filter((m): m is MoveData => !!m);
+}
+
 /** Rough power for comparing moves: multi-hit moves by their usual hits, fixed and computed ones by what they do at level 50. */
 export function effectivePower(m: MoveData): number {
   switch (m.effect) {
@@ -36,8 +57,7 @@ export const moveKey = (m: MoveData): string => m.const.replace(/^MOVE_/, '');
  * type, an attack of another type, and the rest mostly attacks (stronger ones
  * more often) with at most one status move.
  */
-export function randomMoveset(slug: string, level: number, random: () => number = Math.random): string[] {
-  const pool = movePool(slug, level);
+export function randomMoveset(slug: string, level: number, random: () => number = Math.random, pool: MoveData[] = movePool(slug, level)): string[] {
   const types = SPECIES[slug]?.types ?? [];
   const chosen: MoveData[] = [];
   const take = (list: MoveData[], weight: (m: MoveData) => number = () => 1) => {
