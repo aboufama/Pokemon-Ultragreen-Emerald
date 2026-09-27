@@ -31,13 +31,18 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     },
     emitters: {
       wings: { bones: ['wingBL', 'wingBR'], about: 'tiny yellow wing tufts at the sides of its chest (it has no arms or hands)' },
+      // It has no hands: it seizes with its beak (Seismic Toss carries the foe there).
+      hands: { bones: ['jaw'], about: 'its beak, which it seizes with (it has no arms or hands)' },
     },
     emitterFor: {
       // Swift's stars (and the rocks it calls) are flung with a flap of the wing tufts.
       throw: 'wings',
-      // Mud-Slap is scooped and flicked with a foot; Toxic is spat from the beak.
-      fling: 'feet',
+      // Mud-Slap is pecked up and flicked from the beak (its feet kick the
+      // sand of Sand-Attack); Toxic is spat and Hidden Power's orbs fly from
+      // the beak too.
+      fling: 'mouth',
       powder: 'mouth',
+      orb: 'mouth',
     },
     // Loose parts on springs: the crest's three plumes (long, a little
     // springy; stiffer and it would not sway, looser and from our side it
@@ -69,30 +74,62 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       wingAL: 0.06, wingBL: 0.06, wingCL: 0.065, wingAR: 0.06, wingBR: 0.06, wingCR: 0.065,
       tail2: 0.08,
     },
+    // Every move it can know has a clip of its own, named after it.
     moveClips: {},
-    // Clips by move motif (src/battle3d/motifs.ts). peck, tackle, burrow,
-    // breath, throw, fling, sound, kick_sand, shield, weather, heal, charm
-    // and afterimage have clips of their own name; these motifs are performed
-    // by the category clips. Where two motifs share a clip the level-up one
-    // is listed last (tools/gauntlet/check.mjs records one motif per clip).
-    // Seismic Toss (toss) plays physical_strong: with no arms it cannot grab.
+    // Moves outside its movepool that Mimic or Mirror Move call play its
+    // closest clip for their motif (src/battle3d/motifs.ts).
     motifClips: {
-      // No arms: its kicks are talon rakes, its punches and slams the whole
-      // round body thrown head first.
-      kick: 'physical_weak',
-      strike: 'physical_weak',
-      punch: 'physical_strong',
-      slam: 'physical_strong',
-      tackle_strong: 'physical_strong',
-      // The big belly-fire blast serves Fire Blast, Overheat and Hidden Power.
-      orb: 'special_strong',
-      burst: 'special_strong',
-      spit_strong: 'special_strong',
-      spit: 'special_weak',
-      buff: 'status_self',
-      glare: 'status_target',
-      powder: 'status_target',
-      roar: 'status_target',
+      // No hands: a strike is its talon rake, a punch its whole body thrown head first.
+      strike: 'scratch',
+      punch: 'mega_punch',
+      kick: 'mega_kick',
+      bite: 'peck',
+      tackle: 'quick_attack',
+      tackle_strong: 'double_edge',
+      slam: 'body_slam',
+      // Iron Tail: a leap and a swoop down onto the foe; Wing Attack: a slap of a wing tuft.
+      tail: 'aerial_ace',
+      wing: 'smelling_salt',
+      peck: 'peck',
+      // Horn Attack: its crown as the horn.
+      horn: 'rock_smash',
+      // Rapid Spin, Rollout, Flame Wheel: a streak at the foe crown first.
+      spin: 'quick_attack',
+      // Bind, Wrap: set against the foe and shoving.
+      grapple: 'strength',
+      // Vine Whip: the beak whipped across the foe.
+      vine: 'cut',
+      toss: 'seismic_toss',
+      burrow: 'dig',
+      breath: 'flamethrower',
+      spit: 'ember',
+      spit_strong: 'fire_blast',
+      beam: 'flamethrower',
+      jet: 'flamethrower',
+      throw: 'swift',
+      wave: 'rock_slide',
+      // Earthquake: the stamp that shakes the ground.
+      quake: 'rock_tomb',
+      burst: 'overheat',
+      erupt: 'rock_slide',
+      storm: 'fire_spin',
+      bolt: 'hidden_power',
+      mind: 'hidden_power',
+      orb: 'hidden_power',
+      drain: 'hidden_power',
+      sound: 'growl',
+      fling: 'mud_slap',
+      roar: 'growl',
+      glare: 'mimic',
+      kick_sand: 'sand_attack',
+      powder: 'toxic',
+      buff: 'focus_energy',
+      shield: 'protect',
+      heal: 'rest',
+      weather: 'sunny_day',
+      charm: 'attract',
+      afterimage: 'double_team',
+      flash: 'growl',
     },
     // The beak comes as two alternate meshes: the open one (with the inside
     // of the mouth) follows the jaw both shut and open; the closed one would

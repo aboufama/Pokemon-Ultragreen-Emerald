@@ -29,26 +29,66 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['ankleFxL'], damping: 0.25, elasticity: 0.18, maxDrift: 0.35 },
       { bones: ['ankleFxR'], damping: 0.25, elasticity: 0.18, maxDrift: 0.35 },
     ],
-    moveClips: {
-      MOVE_LOW_KICK: 'physical_weak_kick',
-    },
-    // Mud-Slap is flicked with a foot.
-    emitterFor: { fling: 'feet' },
-    // Clips by move motif (src/battle3d/motifs.ts). Blaziken's clips keep
-    // their category names; this maps the motifs they perform.
+    // Every move it can know has a clip of its own, named after it.
+    moveClips: {},
+    // Where its effects leave the body: fire from the beak (the default
+    // mouth; Toxic is spewed from it too), mud slapped from a claw (the
+    // default hands), Swift's stars flung from a claw, Hidden Power's orbs
+    // pushed from the palms.
+    emitterFor: { throw: 'hands', orb: 'hands', powder: 'mouth' },
+    // Moves outside its movepool that Mimic or Mirror Move call play its
+    // closest clip for their motif (src/battle3d/motifs.ts).
     motifClips: {
-      // Category clips that depict a motif: Slash is a claw strike, the beak
-      // stream serves beams, the spat ember serves thrown orbs.
-      strike: 'physical_weak',
-      beam: 'special_strong',
-      orb: 'special_weak',
-      kick: 'physical_weak_kick',
-      kick_strong: 'physical_strong',
-      kick_sand: 'status_target_kick',
-      breath: 'special_strong',
-      spit: 'special_weak',
-      buff: 'status_self',
-      roar: 'status_target',
+      strike: 'slash',
+      punch: 'mega_punch',
+      kick: 'mega_kick',
+      bite: 'peck',
+      tackle: 'quick_attack',
+      tackle_strong: 'double_edge',
+      slam: 'body_slam',
+      // Iron Tail, Wing Attack: a leap and a sweep down onto the foe.
+      tail: 'aerial_ace',
+      wing: 'aerial_ace',
+      peck: 'peck',
+      horn: 'peck',
+      // Rapid Spin, Rollout, Flame Wheel: its whirling spin kick.
+      spin: 'blaze_kick',
+      // Bind, Wrap: seizing and shoving with both hands.
+      grapple: 'strength',
+      vine: 'fury_cutter',
+      toss: 'seismic_toss',
+      burrow: 'dig',
+      breath: 'flamethrower',
+      spit: 'ember',
+      spit_strong: 'fire_blast',
+      beam: 'hyper_beam',
+      jet: 'flamethrower',
+      throw: 'swift',
+      // Surf: a heave up and a push down at the foe.
+      wave: 'rock_slide',
+      quake: 'earthquake',
+      burst: 'overheat',
+      // Thunder, Frenzy Plant: a fist driven into the ground calls it up on the foe.
+      erupt: 'rock_tomb',
+      storm: 'fire_spin',
+      bolt: 'hidden_power',
+      mind: 'hidden_power',
+      orb: 'hidden_power',
+      drain: 'hidden_power',
+      // Hyper Voice, Uproar: a bellow at the foe.
+      sound: 'roar',
+      fling: 'mud_slap',
+      roar: 'roar',
+      glare: 'growl',
+      kick_sand: 'sand_attack',
+      powder: 'toxic',
+      buff: 'bulk_up',
+      shield: 'protect',
+      heal: 'rest',
+      weather: 'sunny_day',
+      charm: 'attract',
+      afterimage: 'double_team',
+      flash: 'roar',
     },
     brief: {
       bodyPlan: 'biped',
