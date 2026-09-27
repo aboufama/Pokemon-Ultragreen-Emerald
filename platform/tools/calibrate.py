@@ -22,8 +22,15 @@ ResetSpriteData), those calls count as the caller's time on both sides: the
 calls are counted by caller and callee on both. A function's own time includes
 the platform's work it does (BIOS calls, DMA, the sound engine), which is
 timed as the GBA's already: only its own code's part is corrected, and only
-where it is most of the function's time (in LoadOam, a BIOS copy with a few
-instructions around it, the difference is the copy's, not the code's).
+where it is a fair part of the function's time (in LoadOam, a BIOS copy with
+a few instructions around it, the difference is the copy's, not the code's).
+The platform's stand-ins for the GBA's code (the drivers, the sound engine's
+assembly half) are measured on both sides too, so that they count in neither
+their callers' own time; they are not corrected.
+
+    python3 platform/tools/calibrate.py --script S --measured build/calibrate/measured.json
+
+corrects again from the last measurements (after changing these rules).
 """
 
 import argparse
@@ -76,12 +83,13 @@ def profile(script, wasm, counted=None):
     return rows, pairs
 
 
-def wasm_files(map_path):
-    """Function name -> the game's source files that define one (the wasm map)."""
+def wasm_files(map_path, where='src'):
+    """Function name -> the source files that define one (the wasm map): the
+    game's (src), or the platform's (platform)."""
     files = {}
     with open(map_path) as f:
         for line in f:
-            m = re.search(r'/obj/(src/\S+?)\.o:\((\w+)\)$', line.strip())
+            m = re.search(r'/obj/(' + where + r'/\S+?)\.o:\((\w+)\)$', line.strip())
             if m:
                 files.setdefault(m.group(2), set()).add(m.group(1) + '.c')
     return files
@@ -275,7 +283,16 @@ def main():
         ours, _ = profile(script_path, args.wasm)
         usable = [n for n, r in ours.items() if n in rom and n not in SKIP and len(files.get(n, ())) == 1 and r['count'] == 1]
         chosen = sorted(usable, key=lambda n: -ours[n]['self'])[:args.functions]
-        print(f'{len(ours)} functions ran here; measuring the {len(chosen)} with the most time of their own')
+        # The platform's stand-ins for the GBA's code (platform/game: the
+        # drivers, the sound engine's assembly half) are timed as the GBA's
+        # already: measured on both sides too, so that their callers' own
+        # time is their code's alone, but not corrected.
+        stand_ins = {n: f for n, f in wasm_files(args.map, 'platform').items()
+                     if all(x.startswith('platform/game/') for x in f)}
+        chosen += sorted(n for n, r in ours.items() if n in rom and n not in SKIP and n not in chosen
+                         and len(stand_ins.get(n, ())) == 1 and r['count'] == 1)
+        print(f'{len(ours)} functions ran here; measuring the {len(chosen)} with the most time of their own'
+              ' and the platform\'s stand-ins for the GBA\'s')
         ours, ours_pairs = profile(script_path, args.wasm, counted=chosen)
         theirs, rom_pairs, handlers = rom_profile(script, {n: rom[n] for n in chosen}, script['frames'], interrupt_return())
         with open(measured, 'w') as f:
@@ -291,11 +308,11 @@ def main():
     changed = []
     for name in chosen:
         o, t = ours[name], theirs[name]
-        if not o['calls'] or not t['calls'] or o['code'] < 2000:
+        if name not in files or not o['calls'] or not t['calls'] or o['code'] < 2000:
             continue
         # Per call, as the two runs may call it a different number of times.
         own, gba, code = o['self'] / o['calls'], t['self'] / t['calls'], o['code'] / o['calls']
-        if code < own / 2:
+        if code < own / 5:
             continue
         correction = (code + gba - own) / code
         # (a loop the ROM's compiler turned into a memset call runs ten
