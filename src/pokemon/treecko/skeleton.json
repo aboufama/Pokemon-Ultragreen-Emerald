@@ -1,0 +1,75 @@
+{
+  "about": "Treecko's skeleton for tools/models/rig_static.mjs. The upstream model (Pokemon-3D-api 252.glb, a Sketchfab export) ships without one. Positions are in the upstream file's units (height 4.98, +Z forward, +X its left, T-pose). The layout follows the 3DS rigs of the finished species: Hips and Spine1 are sibling roots at the pelvis (legs and tail under Hips; torso, arms, neck, head and jaw under Spine1).",
+  "joints": [
+    { "name": "Hips", "parent": null, "pos": [0, 1.3, 0.08], "end": [0, 1.08, 0.08] },
+    { "name": "LThigh", "parent": "Hips", "pos": [0.28, 1.22, 0.05] },
+    { "name": "LLeg", "parent": "LThigh", "pos": [0.3, 0.76, 0.04] },
+    { "name": "LFoot", "parent": "LLeg", "pos": [0.31, 0.32, 0.01] },
+    { "name": "LToe", "parent": "LFoot", "pos": [0.34, 0.1, 0.48], "end": [0.36, 0.06, 0.98] },
+    { "name": "RThigh", "parent": "Hips", "pos": [-0.28, 1.22, 0.05] },
+    { "name": "RLeg", "parent": "RThigh", "pos": [-0.3, 0.76, 0.04] },
+    { "name": "RFoot", "parent": "RLeg", "pos": [-0.31, 0.32, 0.01] },
+    { "name": "RToe", "parent": "RFoot", "pos": [-0.34, 0.1, 0.48], "end": [-0.36, 0.06, 0.98] },
+    { "name": "Tail1", "parent": "Hips", "pos": [0, 1.42, -0.26] },
+    { "name": "Tail2", "parent": "Tail1", "pos": [0, 1.12, -0.8] },
+    { "name": "Tail3", "parent": "Tail2", "pos": [0, 0.9, -1.38] },
+    { "name": "Tail4", "parent": "Tail3", "pos": [0, 0.75, -1.92] },
+    { "name": "Tail5", "parent": "Tail4", "pos": [0, 0.68, -2.4], "end": [0, 0.7, -2.88] },
+    { "name": "Spine1", "parent": null, "pos": [0, 1.3, 0.08] },
+    { "name": "Spine2", "parent": "Spine1", "pos": [0, 1.8, 0.1] },
+    { "name": "Neck", "parent": "Spine2", "pos": [0, 2.62, 0.08] },
+    { "name": "Head", "parent": "Neck", "pos": [0, 2.9, 0.02], "end": [0, 4.55, 0.15] },
+    { "name": "Jaw", "parent": "Head", "pos": [0, 3.2, 0.06], "end": [0, 3.05, 0.86] },
+    { "name": "LShoulder", "parent": "Spine2", "pos": [0.1, 2.6, 0.08] },
+    { "name": "LArm", "parent": "LShoulder", "pos": [0.36, 2.6, 0.09] },
+    { "name": "LForeArm", "parent": "LArm", "pos": [1.0, 2.6, 0.09] },
+    { "name": "LHand", "parent": "LForeArm", "pos": [1.48, 2.58, 0.11], "end": [1.95, 2.58, 0.11] },
+    { "name": "LFingerA", "parent": "LHand", "pos": [2.0, 2.57, 0.3], "end": [2.32, 2.56, 0.52] },
+    { "name": "LFingerB", "parent": "LHand", "pos": [2.05, 2.57, 0.11], "end": [2.46, 2.56, 0.12] },
+    { "name": "LFingerC", "parent": "LHand", "pos": [2.0, 2.57, -0.08], "end": [2.28, 2.56, -0.28] },
+    { "name": "RShoulder", "parent": "Spine2", "pos": [-0.1, 2.6, 0.08] },
+    { "name": "RArm", "parent": "RShoulder", "pos": [-0.36, 2.6, 0.09] },
+    { "name": "RForeArm", "parent": "RArm", "pos": [-1.0, 2.6, 0.09] },
+    { "name": "RHand", "parent": "RForeArm", "pos": [-1.48, 2.58, 0.11], "end": [-1.95, 2.58, 0.11] },
+    { "name": "RFingerA", "parent": "RHand", "pos": [-2.0, 2.57, 0.3], "end": [-2.32, 2.56, 0.52] },
+    { "name": "RFingerB", "parent": "RHand", "pos": [-2.05, 2.57, 0.11], "end": [-2.46, 2.56, 0.12] },
+    { "name": "RFingerC", "parent": "RHand", "pos": [-2.0, 2.57, -0.08], "end": [-2.28, 2.56, -0.28] }
+  ],
+  "heat": 8,
+  "segments": {
+    "Hips": [[0, 1.08, 0.1], [0, 1.3, 0.1]],
+    "Spine1": [[0, 1.3, 0.1], [0, 1.8, 0.1]],
+    "Head": [[0, 3.05, 0.05], [0, 4.55, 0.15]]
+  },
+  "regions": [
+    { "name": "head", "box": { "y": [2.95, 9] }, "bones": ["Head", "Neck"] },
+    { "name": "arm L", "box": { "x": [0.5, 9], "y": [2.3, 2.95] }, "bones": ["LArm", "LForeArm", "LHand", "LFingerA", "LFingerB", "LFingerC"] },
+    { "name": "arm R", "box": { "x": [-9, -0.5], "y": [2.3, 2.95] }, "bones": ["RArm", "RForeArm", "RHand", "RFingerA", "RFingerB", "RFingerC"] },
+    { "name": "shoulder L", "box": { "x": [0.28, 0.5], "y": [2.38, 2.95] }, "bones": ["Spine2", "LShoulder", "LArm", "Neck"] },
+    { "name": "shoulder R", "box": { "x": [-0.5, -0.28], "y": [2.38, 2.95] }, "bones": ["Spine2", "RShoulder", "RArm", "Neck"] },
+    { "name": "neck", "box": { "y": [2.5, 2.95] }, "bones": ["Spine2", "Neck", "Head"] },
+    { "name": "tail", "box": { "z": [-9, -0.28], "y": [-1, 1.75] }, "bones": ["Hips", "Tail1", "Tail2", "Tail3", "Tail4", "Tail5"] },
+    { "name": "leg L", "box": { "x": [0, 9], "y": [-1, 1.12] }, "bones": ["LThigh", "LLeg", "LFoot", "LToe"] },
+    { "name": "leg R", "box": { "x": [-9, 0], "y": [-1, 1.12] }, "bones": ["RThigh", "RLeg", "RFoot", "RToe"] },
+    { "name": "pelvis", "box": { "y": [-1, 1.62] }, "bones": ["Hips", "Spine1", "LThigh", "RThigh", "Tail1"] },
+    { "name": "torso", "box": {}, "bones": ["Spine1", "Spine2", "Neck"] }
+  ],
+  "jaw": {
+    "bone": "Jaw",
+    "about": "The mouth is a closed pocket behind the lips (texture rect below). Its floor (faces turned up) and the lower lip go with the jaw, the palate and upper lip with the head. Outside, the skin below the lip line (from the corners to the lower lip) goes with the jaw, fading out behind the hinge and down the throat; the snout's overhang in front of the lower lip stays with the head.",
+    "pocketUv": [0.38, 0.68, 0.52, 1.0],
+    "line": [[0.19, 3.18], [0.9, 3.08]],
+    "band": 0.03,
+    "front": 0.93,
+    "back": [0.02, 0.24],
+    "throat": [2.7, 2.9],
+    "sides": 0.7
+  },
+  "meshes": {
+    "Object_1": { "follow": "nearest", "about": "the eyes: skinned like the body at the sockets they fill" }
+  },
+  "names": {
+    "Material__368": "Treecko_Body",
+    "Material__367": "Treecko_Eye"
+  }
+}
