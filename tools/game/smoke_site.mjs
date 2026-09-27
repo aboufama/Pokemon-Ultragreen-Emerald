@@ -145,25 +145,29 @@ const arenaDrawn = (page) => page.evaluate((at) => {
     if (!(await reach('place'))) await fail('no choice of the place');
     await page.waitForTimeout(3000);
     await press('KeyX', 300);
-    if (!(await reach('battle', 30000))) await fail('the battle never started');
+    if (!(await reach('battle', 120000))) await fail('the battle never started');
     // The battle in the game: its arena in 3D; then RUN, over and over
     // until it takes: RIGHT and DOWN put the action menu's cursor on RUN
     // from anywhere and A chooses it, or they do nothing and A moves the
-    // battle's text on.
+    // battle's text on. The battle gets a minute of the game's time (the
+    // browser here draws the 3D in software: the game runs slower than on a
+    // phone), and ten of the clock's at most.
     let arena = false;
-    for (let i = 0; i < 60 && !arena; i++) {
+    const t = Date.now();
+    while (!arena && Date.now() - t < 180000) {
       await page.waitForTimeout(500);
       arena = await arenaDrawn(page);
     }
     if (!arena) await fail('the battle has no 3D arena');
-    const t = Date.now();
-    while ((await step()) === 'battle' && Date.now() - t < 120000) {
+    const vblanks = () => page.evaluate(() => window.__page.game().vblanks());
+    const from = await vblanks();
+    while ((await step()) === 'battle' && (await vblanks()) - from < 3600 && Date.now() - t < 600000) {
       await press('ArrowRight', 150);
       await press('ArrowDown', 150);
       await press('KeyX', 1200);
     }
-    const after = await reach('after', 30000);
-    if (!after) await fail('running from the battle never ended it');
+    const after = await reach('after', 60000);
+    if (!after) await fail(`running from the battle never ended it (${(await vblanks()) - from} of the game's frames, ${Math.round((Date.now() - t) / 1000)} s)`);
     ok = arena && after;
   }
   console.log(`${ok ? 'ok  ' : 'FAIL'}  demo battles: the setup, a battle in 3D in the game, and another offered`);
