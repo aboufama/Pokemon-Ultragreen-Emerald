@@ -721,12 +721,13 @@ async function emitFx(attacker: Battler3D, target: Battler3D, move: MoveData, mo
   const to = hitPoint(target, 0.6);
   const { sheet: sprite, at } = statusSprite(move.name);
   if (at === 'feet' || motif === 'kick_sand') {
-    // Sand-Attack, Mud-Slap: clumps kicked up from the foot, arcing at the foe.
-    const foot = attacker.inst.rig.node('footR') ? 'footR' : 'hips';
+    // Sand-Attack, Mud-Slap: clumps flung up from what the species kicks or
+    // scoops with (the first point of its emitter for the motif: a forepaw;
+    // the right foot by default), arcing at the foe.
     const clumps: Promise<void>[] = [];
     for (let i = 0; i < 5; i++) {
       clumps.push(new Promise((resolve) => vfx.after(i * 0.05, () => {
-        const from = towardCamera(attacker, bonePoint(attacker, foot), 0.1);
+        const from = emitterPoints(attacker, 'kick_sand', move)[0] ?? towardCamera(attacker, bonePoint(attacker, 'hips'), 0.1);
         void vfx.projectile(sprite, from, to.clone().add(new THREE.Vector3(0, (i - 2) * 0.04, 0)), 0.42, { px: 12 + (i % 3) * 4, fps: 12, arc: attacker.height * (0.35 + i * 0.04) }).then(resolve);
       })));
     }
