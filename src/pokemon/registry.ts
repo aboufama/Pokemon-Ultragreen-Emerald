@@ -11,6 +11,7 @@ type ProfileFactory = (palettes: { normal: SpeciesProfile['palette']; shiny: Spe
 // In national dex order.
 const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
   sceptile: async () => (await import('./sceptile')).createProfile,
+  torchic: async () => (await import('./torchic')).createProfile,
   blaziken: async () => (await import('./blaziken')).createProfile,
   mudkip: async () => (await import('./mudkip')).createProfile,
   swampert: async () => (await import('./swampert')).createProfile,
