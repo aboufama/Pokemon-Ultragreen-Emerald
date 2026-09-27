@@ -314,6 +314,47 @@ function link(objects) {
   console.log(`link: ${path.relative(ROOT, out)} ${mb(out)} MB (debug ${mb(linked)} MB), copied to public/game/`);
 }
 
+// ---------------------------------------------------------------- stage 6
+
+/**
+ * The layouts of the structs the browser reads from the game's memory
+ * (platform/include/remake_state.h): every field's offset and size as clang
+ * lays them out, written next to the module (remake_state.json), so the
+ * browser reads fields by name and never keeps a copy of the offsets.
+ */
+function structLayouts() {
+  const header = path.join(HERE, 'include/remake_state.h');
+  const text = fs.readFileSync(header, 'utf8');
+  const probes = [];
+  const types = {};
+  for (const m of text.matchAll(/struct (\w+) \{([^}]*)\};/g)) {
+    const [, name, body] = m;
+    probes.push(`int size__${name} = sizeof(struct ${name});`);
+    for (const f of body.matchAll(/^\s*[\w ]+?\s+(\w+)(\[\w+\])?(?:,\s*(\w+))*;/gm)) {
+      const decl = f[0].replace(/\/\/.*$/, '').trim().replace(/;$/, '');
+      const type = /^(?:const\s+)?((?:struct\s+)?\w+)/.exec(decl)[1];
+      const names = decl.replace(/^(const\s+)?(struct\s+)?\w+\s+/, '').split(',').map((n) => n.trim().replace(/\[.*$/, ''));
+      for (const field of names) {
+        (types[name] ??= {})[field] = type;
+        probes.push(`int off__${name}__${field} = __builtin_offsetof(struct ${name}, ${field});`);
+        probes.push(`int len__${name}__${field} = sizeof(((struct ${name} *)0)->${field});`);
+      }
+    }
+  }
+  const probe = path.join(OUT, 'remake_state_probe.c');
+  fs.writeFileSync(probe, `#include "remake_state.h"\n${probes.join('\n')}\n`);
+  const r = spawnSync('clang', ['--target=wasm32-unknown-unknown', '-O2', '-S', '-o', '-', '-I', path.join(HERE, 'include'), probe], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`struct layout probe failed:\n${r.stderr}`);
+  const layouts = {};
+  for (const m of r.stdout.matchAll(/^(size|off|len)__(\w+?)(?:__(\w+))?:\n\s+\.int32\s+(-?\d+)/gm)) {
+    const [, kind, struct, field, value] = m;
+    const l = (layouts[struct] ??= { size: 0, fields: {} });
+    if (kind === 'size') l.size = Number(value);
+    else (l.fields[field] ??= [0, 0, types[struct][field]])[kind === 'off' ? 0 : 1] = Number(value);
+  }
+  return layouts;
+}
+
 // ----------------------------------------------------------------
 
 async function main() {
@@ -325,6 +366,10 @@ async function main() {
   const platform = await compilePlatform();
   const data = await convertData([...game, ...platform]);
   link([...game, ...platform, ...data]);
+  if (!PROFILE) {
+    fs.writeFileSync(path.join(PUBLIC, 'remake_state.json'), JSON.stringify(structLayouts(), null, 1));
+    console.log('layouts: public/game/remake_state.json');
+  }
 }
 
 main().catch((e) => {
