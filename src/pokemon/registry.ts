@@ -9,6 +9,7 @@ export const MOMENT_CLIPS = ['idle', 'intro', 'hit', 'faint'] as const;
 type ProfileFactory = (palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }) => Promise<SpeciesProfile>;
 
 const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
+  poochyena: async () => (await import('./poochyena')).createProfile,
   sceptile: async () => (await import('./sceptile')).createProfile,
   blaziken: async () => (await import('./blaziken')).createProfile,
   swampert: async () => (await import('./swampert')).createProfile,
