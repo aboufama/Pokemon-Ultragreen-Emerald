@@ -116,9 +116,10 @@ Battles are the game's battles, with these substitutions:
 | the battle background (BG3), while it shows the place's own | the painted 3D arena for the battle's environment, faded as the game fades BG3's palette | `gBattleEnvironment`; the hooks where the game draws its main background or a move's (`platform/patches/battle_bg.patch`, `battle_anim.patch`) |
 | a move's motion of the attacker (lunge, shake, spin) | the same motion on the 3D body (it follows the sprite), and the move's clip acted in place (no travel, no leaps: `Battler3D.inPlace`) | the move animation starting (`RemakeBattleAnimation`: its table and index) |
 | a hit (the sprite blinks) | the body flinches (`hit`) as it blinks | the engine's command to the battler's controller (`RemakeBattlerCommand`, `platform/patches/battle_controllers.patch`) |
-| the faint's slide down | the curl over and shrink (`faint`); the slide is not followed | the same, `CONTROLLER_FAINTANIMATION` |
+| the faint's slide down | the curl over and shrink (`faint`) where the body stood: its picture is drawn free of the sprite (which slides away and is freed) until the body has shrunk away | the same, `CONTROLLER_FAINTANIMATION` |
 | a send-out, a switch-in | the body strikes its pose (`intro`) as it shows | the same, `CONTROLLER_INTROTRAINERBALLTHROW`, `CONTROLLER_SWITCHINANIM` |
 | copies of the battler's sprite (afterimages, a stat change's window) | the same 3D picture at each copy's place, in its mode | the copies share the sprite's tiles; the PPU moves the picture by the difference of their centres |
+| a move animation's copy of a battler in BG1 or BG2 (`monbg`: Tackle's target; the sprite over it or hidden) | the 3D picture in the copy's place, moved with the background's scroll, in the copy's palette | the hook where the game draws a battler into a background (`MoveBattlerSpriteToBG`) and where it clears the background or gives it other pictures (`platform/patches/battle_anim.patch`, `battle_anim_mons.patch`) |
 
 A species without a 3D model, a battle position without a place on the stage
 (doubles' second positions, for now) and a place without an arena are drawn
@@ -149,7 +150,13 @@ the frame's lines then use:
   drawn. So every palette effect of the game (the wild Pokémon's silhouette
   in the intro, the ball's color on a send-out, a hit's flash, a fade to
   black) colors the 3D body exactly as it colors the sprite, and a shiny
-  Pokémon is shiny.
+  Pokémon is shiny. A fainting body's picture is **free**: it shows where it
+  is, behind the entries of its priority and in its sprite's palette, while
+  the sprite's own entries show nothing, and it outlasts the sprite.
+- a battler's copy in BG1 or BG2, in place of that background's pixels: the
+  same picture, its indices in the copy's background palette (which the game
+  keeps in step with the sprite's), moved to where the background's scroll
+  puts the copy.
 
 The arena is drawn with a margin around the screen (`REMAKE_BG_MARGIN`,
 within the margin the arenas are painted with), so when the game scrolls BG3

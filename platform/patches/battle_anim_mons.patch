@@ -1,0 +1,52 @@
+battle_anim_mons.c: the remake layer learns when a battler's copy leaves a
+background.
+
+A move animation's copy of a battler in BG1 or BG2 (MoveBattlerSpriteToBG,
+battle_anim.patch) lasts until the background is cleared (ClearBattleAnimBg,
+through clearmonbg's ResetBattleAnimBg) or given other tiles or another map
+(AnimLoadCompressedBgGfx, InitAnimBgTilemapBuffer); each of these tells the
+remake layer the background holds no battler.
+
+--- a/src/battle_anim_mons.c
++++ b/src/battle_anim_mons.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_WASM
++#include "remake_state.h"
++#endif
+ #include "battle.h"
+ #include "battle_anim.h"
+ #include "bg.h"
+@@ -986,6 +989,10 @@
+ void ClearBattleAnimBg(u32 bgId)
+ {
+     struct BattleAnimBgData bgAnimData;
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: whatever copy of a battler the background held is gone.
++    RemakeBattlerCopy(bgId, REMAKE_NO_BATTLER, 0);
++#endif
+ 
+     GetBattleAnimBgData(&bgAnimData, bgId);
+     CpuFill32(0, bgAnimData.bgTiles, 0x2000);
+@@ -996,6 +1003,10 @@
+ 
+ void AnimLoadCompressedBgGfx(u32 bgId, const u32 *src, u32 tilesOffset)
+ {
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: whatever copy of a battler the background held is gone.
++    RemakeBattlerCopy(bgId, REMAKE_NO_BATTLER, 0);
++#endif
+     CpuFill32(0, gBattleAnimBgTileBuffer, 0x2000);
+     LZDecompressWram(src, gBattleAnimBgTileBuffer);
+     LoadBgTiles(bgId, gBattleAnimBgTileBuffer, 0x2000, tilesOffset);
+@@ -1003,6 +1014,10 @@
+ 
+ static void InitAnimBgTilemapBuffer(u32 bgId, const void *src)
+ {
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: whatever copy of a battler the background held is gone.
++    RemakeBattlerCopy(bgId, REMAKE_NO_BATTLER, 0);
++#endif
+     FillBgTilemapBufferRect(bgId, 0, 0, 0, 32, 64, 17);
+     CopyToBgTilemapBuffer(bgId, src, 0, 0);
+ }

@@ -36,6 +36,15 @@ EXPORT(PlatformRemakeLayers) struct RemakeLayers *PlatformRemakeLayers(void)
     return &sRemake;
 }
 
+/** The remake layer's picture standing in for background `bg` this frame, if any. */
+static const struct RemakeBackground *RemakeBackgroundOf(int bg)
+{
+    for (int i = 0; i < REMAKE_LAYER_BACKGROUNDS; i++)
+        if (sRemake.backgrounds[i].active && sRemake.backgrounds[i].bg == (u32)bg)
+            return &sRemake.backgrounds[i];
+    return 0;
+}
+
 static s32 SignExtend28(u32 v)
 {
     return (s32)(v << 4) >> 4;
@@ -219,7 +228,8 @@ static void Sprites(u32 line, int bitmapMode)
             if (sRemake.sprites[r].active && sRemake.sprites[r].tileNum == rtile)
                 remake = &sRemake.sprites[r];
         if (remake) {
-            if ((a0 >> 14) == 3)
+            // A free picture shows once, after the entries (below).
+            if ((a0 >> 14) == 3 || remake->free)
                 continue;
             s32 bw = sObjSize[a0 >> 14][a1 >> 14][0], bh = sObjSize[a0 >> 14][a1 >> 14][1];
             if (affine && (a0 & 0x200)) {
@@ -341,6 +351,25 @@ static void Sprites(u32 line, int bitmapMode)
             }
         }
     }
+    // The remake layer's free pictures (a fainting body: its sprite slides
+    // away or is gone): where they are, after every entry, so an entry of
+    // the same priority shows in front.
+    for (int r = 0; r < REMAKE_SPRITES; r++) {
+        const struct RemakeSprite *f = &sRemake.sprites[r];
+        if (!f->active || !f->free || line >= SCREEN_H)
+            continue;
+        const u16 *src = &f->pixels[line * SCREEN_W];
+        int indexed = f->format == REMAKE_FORMAT_INDEX;
+        u32 prio = f->priority & 3, base = (f->palette & 15) * 16;
+        for (int sx = 0; sx < SCREEN_W; sx++) {
+            u16 c = src[sx];
+            if (!(c & LAYER_OPAQUE) || (indexed && !(c & 15)) || prio >= sObjPrio[sx])
+                continue;
+            sObj[sx] = indexed ? ObjPal(base + (c & 15)) : c & 0x7FFF;
+            sObjPrio[sx] = (u8)prio;
+            sObjSemi[sx] = 0;
+        }
+    }
 }
 
 // ---------------------------------------------------------------- composing
@@ -411,16 +440,24 @@ void PlatformPpuLine(u32 line)
             bgOn[bg] = valid && (dispcnt & (0x100 << bg));
             if (!bgOn[bg])
                 continue;
-            if (sRemake.background.active && sRemake.background.bg == (u32)bg) {
-                const struct RemakeBackground *r = &sRemake.background;
+            const struct RemakeBackground *r = RemakeBackgroundOf(bg);
+            if (r) {
                 s32 px = r->panX, py = r->panY;
                 if (px < -REMAKE_BG_MARGIN) px = -REMAKE_BG_MARGIN;
                 if (px > REMAKE_BG_MARGIN) px = REMAKE_BG_MARGIN;
                 if (py < -REMAKE_BG_MARGIN) py = -REMAKE_BG_MARGIN;
                 if (py > REMAKE_BG_MARGIN) py = REMAKE_BG_MARGIN;
                 const u16 *src = &r->pixels[(line + REMAKE_BG_MARGIN + py) * REMAKE_BG_WIDTH + REMAKE_BG_MARGIN + px];
-                for (int x = 0; x < SCREEN_W; x++)
-                    sBg[bg][x] = (src[x] & LAYER_OPAQUE) ? (src[x] & 0x7FFF) : TRANSPARENT;
+                // Color indices take the background palette, as a 4bpp map's tiles would.
+                int indexed = r->format == REMAKE_FORMAT_INDEX;
+                u32 base = (r->palette & 15) * 16;
+                for (int x = 0; x < SCREEN_W; x++) {
+                    u16 c = src[x];
+                    if (!(c & LAYER_OPAQUE) || (indexed && !(c & 15)))
+                        sBg[bg][x] = TRANSPARENT;
+                    else
+                        sBg[bg][x] = indexed ? BgPal(base + (c & 15)) : c & 0x7FFF;
+                }
                 continue;
             }
             if (mode == 0 || (mode == 1 && bg < 2))

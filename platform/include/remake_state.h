@@ -50,6 +50,7 @@ enum {
 // DrawMainBattleBackground draws it) or a move's (BG_* of a move animation's
 // fadetobg or changebg).
 #define REMAKE_BG_MAIN 0xFFFF
+#define REMAKE_NO_BATTLER 0xFF
 
 struct RemakeState {
     uint32_t inBattle;
@@ -63,6 +64,9 @@ struct RemakeState {
     uint16_t animId;        // its index in that table
     uint8_t animAttacker, animTarget;
     uint16_t background;    // REMAKE_BG_MAIN, or the move background shown
+    uint8_t copyBattler[2]; // the battler whose sprite a move animation drew into BG1, BG2 (MoveBattlerSpriteToBG:
+                            // the copy moves as the background scrolls), or REMAKE_NO_BATTLER
+    uint8_t copyPalette[2]; // the background palette the copy is drawn in
     uint32_t plttUnfaded;   // gPlttBufferUnfaded and gPlttBufferFaded (addresses): fades and tints
     uint32_t plttFaded;
     struct RemakeBattler battlers[REMAKE_BATTLERS];
@@ -75,6 +79,12 @@ struct RemakeState {
 // picture has something.
 #define REMAKE_OPAQUE 0x8000u
 #define REMAKE_LAYER_SPRITES 4
+// The backgrounds' pictures: the battle's arena (BG3), and a battler's copy
+// in BG1 and in BG2 (RemakeState.copyBattler).
+#define REMAKE_LAYER_BACKGROUNDS 3
+// A tile no OAM entry draws (tile numbers are 10 bits): a free sprite
+// picture whose sprite is gone stands in for no entry.
+#define REMAKE_NO_TILE 0xFFFFu
 #define REMAKE_PIXELS (240 * 160)
 // The background's picture has a margin around the screen, so the game can
 // shake the background (a uniform scroll: RemakeBackground.panX/Y) up to it.
@@ -86,14 +96,16 @@ struct RemakeState {
 // What a picture's pixels hold (below REMAKE_OPAQUE).
 enum {
     REMAKE_FORMAT_COLOR,    // the GBA's color
-    REMAKE_FORMAT_INDEX,    // a color index in the palette of the sprite it stands in for, as its tiles
-                            // hold: the palette the hardware has when the line is drawn (the game's fades
-                            // and tints) colors it
+    REMAKE_FORMAT_INDEX,    // a color index in the palette of the sprite it stands in for (a free
+                            // picture's or a background's: `palette`), as its tiles hold: the palette the
+                            // hardware has when the line is drawn (the game's fades and tints) colors it
 };
 
 struct RemakeBackground {
     uint32_t active;        // the picture replaces the background's pixels
-    uint32_t bg;            // which background (3: the battle's)
+    uint32_t bg;            // which background (3: the battle's; 1, 2: a battler's copy)
+    uint32_t format;        // REMAKE_FORMAT_*
+    uint32_t palette;       // an index's 16-color background palette
     int32_t panX, panY;     // the screen shows the picture moved by this (-margin..margin): the background's scroll
     uint16_t pixels[REMAKE_BG_PIXELS];  // the screen at (REMAKE_BG_MARGIN, REMAKE_BG_MARGIN)
 };
@@ -104,11 +116,16 @@ struct RemakeSprite {
     uint32_t format;        // REMAKE_FORMAT_*
     int32_t centerX;        // the centre of the entry the picture was drawn for: another entry
     int32_t centerY;        // shows it moved by the difference of their centres
+    uint32_t free;          // the picture shows where it is, once, whatever the entries do (they show
+                            // nothing; the sprite may be gone): a fainting body, while its sprite slides
+                            // away. It is drawn at `priority`, behind the entries of that priority
+    uint32_t priority;
+    uint32_t palette;       // a free picture's 16-color sprite palette
     uint16_t pixels[REMAKE_PIXELS];
 };
 
 struct RemakeLayers {
-    struct RemakeBackground background;
+    struct RemakeBackground backgrounds[REMAKE_LAYER_BACKGROUNDS];
     struct RemakeSprite sprites[REMAKE_LAYER_SPRITES];
 };
 
@@ -118,5 +135,8 @@ void RemakeBattleAnimation(const uint8_t *const animsTable[], uint16_t tableId, 
 void RemakeBattleBackground(uint16_t background);
 // (platform/patches/battle_controllers.patch) the battle engine gives a battler's controller a command.
 void RemakeBattlerCommand(uint8_t battler, uint8_t command);
+// (platform/patches/battle_anim.patch, battle_anim_mons.patch) a move animation draws a battler's
+// sprite into BG1 or BG2 in `palette`; the background is cleared or given other pictures (REMAKE_NO_BATTLER).
+void RemakeBattlerCopy(uint8_t bg, uint8_t battler, uint8_t palette);
 
 #endif // GUARD_REMAKE_STATE_H

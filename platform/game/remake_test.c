@@ -11,13 +11,30 @@
 #include "load_save.h"
 #include "main.h"
 #include "pokemon.h"
+#include "string_util.h"
 #include "constants/battle.h"
+#include "constants/characters.h"
 
 #define ENVIRONMENT_OF_MAP 0xFF
 
 static u16 sSpecies[2];
 static u8 sLevel[2];
 static u8 sEnvironment = ENVIRONMENT_OF_MAP;
+
+// A test battle can start before a new game has named the player (the save
+// blocks are blank). The battle's texts print the name ("PLAYER is out of
+// usable POKéMON!"), and a name without its EOS runs on over everything
+// after it, so the player gets one, as the naming screen would give.
+static const u8 sTestPlayerName[] = _("PLAYER");
+
+static bool32 HasName(const u8 *name)
+{
+    s32 i;
+    for (i = 0; i <= PLAYER_NAME_LENGTH; i++)
+        if (name[i] == EOS)
+            return i > 0;
+    return FALSE;
+}
 
 static void CB2_TestBattle(void);
 
@@ -59,6 +76,8 @@ __attribute__((export_name("RemakeTestBattle"))) bool32 RemakeTestBattle(u16 pla
     sSpecies[1] = wildSpecies;
     sLevel[1] = wildLevel;
     sEnvironment = environment;
+    if (!HasName(gSaveBlock2Ptr->playerName))
+        StringCopy(gSaveBlock2Ptr->playerName, sTestPlayerName);
     StartTestBattle();
     return TRUE;
 }

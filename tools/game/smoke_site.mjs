@@ -51,6 +51,11 @@ if (!existsSync(join(SITE, 'game'))) {
 }
 
 const problems = [];
+// The game's struct layouts and constants (platform/build.mjs), to read its memory by name.
+const info = JSON.parse(await readFile(join(SITE, 'game/remake_state.json'), 'utf8'));
+const field = (struct, name) => info.structs[struct].fields[name][0];
+// The arena's picture is the first background picture (src/remake/layer.ts).
+const arenaActive = field('RemakeLayers', 'backgrounds') + field('RemakeBackground', 'active');
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 
 // The front page as a player opens it: it boots and runs.
@@ -75,12 +80,11 @@ const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--ena
   await page.waitForFunction(() => 'runTo' in (window.__game ?? {}), null, { timeout: 60000 });
   // Run to the move menu (A through the send-out), then read the PPU's pictures.
   for (const [frame, keys] of [[700, 0], [704, 1], [900, 0], [904, 1], [1000, 0]]) await page.evaluate(([n, k]) => window.__game.runTo(n, k), [frame, keys]);
-  const drawn = await page.evaluate(() => {
+  const drawn = await page.evaluate((at) => {
     const g = window.__game.game;
     const view = new DataView(g.memory().buffer);
-    const layers = g.exports().PlatformRemakeLayers();
-    return { arena: view.getUint32(layers, true) === 1 };
-  });
+    return { arena: view.getUint32(g.exports().PlatformRemakeLayers() + at, true) === 1 };
+  }, arenaActive);
   const ok = drawn.arena;
   if (!ok) problems.push('battle: the remake layer drew no arena');
   console.log(`${ok ? 'ok  ' : 'FAIL'}  a test battle in 3D`);
@@ -92,7 +96,6 @@ const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--ena
 const openingScript = join(ROOT, 'platform/tests/opening.json');
 if (existsSync(openingScript)) {
   const script = JSON.parse(await readFile(openingScript, 'utf8'));
-  const info = JSON.parse(await readFile(join(SITE, 'game/remake_state.json'), 'utf8'));
   const page = await browser.newPage();
   page.on('response', (r) => r.status() >= 400 && problems.push(`opening: ${r.status()} ${r.url().replace(base, '')}`));
   page.on('pageerror', (e) => problems.push(`opening: ${e.message}`));
@@ -100,8 +103,7 @@ if (existsSync(openingScript)) {
   await page.waitForFunction(() => 'runTo' in (window.__game ?? {}), null, { timeout: 60000 });
   await page.evaluate((list) => window.__game.play(list), script.inputs.map(([f, k]) => [f, keysFrom(k)]));
   await page.evaluate((n) => window.__game.runTo(n), script.frames);
-  const field = (struct, name) => info.structs[struct].fields[name][0];
-  const end = await page.evaluate(([at, battler, species, grass, trainer]) => {
+  const end = await page.evaluate(([at, battler, species, grass, trainer, arenaAt]) => {
     const g = window.__game.game;
     const view = new DataView(g.memory().buffer);
     const state = g.exports().RemakeState();
@@ -111,7 +113,7 @@ if (existsSync(openingScript)) {
       wild: (u32(at.typeFlags) & trainer) === 0,
       grass: grass.includes(u32(at.environment)),
       foe: view.getUint16(state + at.battlers + battler + species, true),
-      arena: view.getUint32(g.exports().PlatformRemakeLayers(), true) === 1,
+      arena: view.getUint32(g.exports().PlatformRemakeLayers() + arenaAt, true) === 1,
     };
   }, [
     Object.fromEntries(['inBattle', 'battleScreen', 'typeFlags', 'environment', 'battlers'].map((n) => [n, field('RemakeState', n)])),
@@ -119,6 +121,7 @@ if (existsSync(openingScript)) {
     field('RemakeBattler', 'species'),
     [info.constants.BATTLE_ENVIRONMENT_GRASS, info.constants.BATTLE_ENVIRONMENT_LONG_GRASS],
     info.constants.BATTLE_TYPE_TRAINER,
+    arenaActive,
   ]);
   const foe = Object.values(speciesTable).find((s) => s.id === end.foe)?.slug ?? `species ${end.foe}`;
   const ok = end.battle && end.wild && end.grass && end.arena;

@@ -17,7 +17,12 @@
 //     is scaled, turned and stretched as the sprite's affine transform draws
 //     it, shows when the sprite shows, and its pixels are the sprite's
 //     palette indices, so the game's own fades, tints and flashes color it.
-//     It acts in place on the game's events (acting.ts).
+//     It acts in place on the game's events (acting.ts). A fainting body is
+//     drawn where it is, free of its sprite, which slides away and is freed
+//     while the body curls over and shrinks away;
+//   - a battler a move animation copies into BG1 or BG2 (the game draws its
+//     sprite there and scrolls the background with it: Tackle's target) in
+//     place of the copy, so no 2D Pokémon shows around the body.
 //
 // ?remake=0 turns it off.
 
@@ -42,6 +47,10 @@ const OAM = 0x07000000;
 const REG_BG3CNT = 0x0e;
 const REG_BG3HOFS = 0x1c;
 const REG_BG3VOFS = 0x1e;
+/** BGnCNT, BGnHOFS, BGnVOFS of background n. */
+const regBgCnt = (bg: number) => 0x08 + bg * 2;
+const regBgHofs = (bg: number) => 0x10 + bg * 4;
+const regBgVofs = (bg: number) => 0x12 + bg * 4;
 
 /** The arena for each battle environment the remake has one for; the others keep the game's background. */
 const ARENAS: Record<string, string> = {
@@ -120,6 +129,12 @@ function signedScroll(v: number, size: number): number {
   return m >= size / 2 ? m - size : m;
 }
 
+/** Where a point of a background's map (`v` along a map of `size`, the scroll taken off) is on the screen: a little left of or above it when it wraps. */
+function onScreen(v: number, size: number): number {
+  const m = ((v % size) + size) % size;
+  return m > size - 64 ? m - size : m;
+}
+
 /**
  * A palette fade as the game makes one (BlendPalette: each channel moves
  * coeff/16 of the way to the target, in 5-bit steps) that turns `from`
@@ -165,6 +180,23 @@ interface Body {
   sprite: THREE.Group;
   loading: Promise<void> | null;
   failed: boolean;
+  /** Where its body is drawn on the screen this frame (the centre it stands at). */
+  center: [number, number];
+  /** Its sprite as last seen showing its Pokémon: a fainting body's picture keeps its priority and palette once the sprite is gone. */
+  seen: { priority: number; palette: number } | null;
+}
+
+/** What a body's picture stands in for this frame. */
+interface BodyPicture {
+  body: Body;
+  /**
+   * Its sprite: the entries drawing `tileNum` show the picture moved as they
+   * are, or, `free`, show nothing while the picture shows where it is (a
+   * faint: the sprite slides away and is freed, `tileNum` REMAKE_NO_TILE).
+   */
+  sprite: { tileNum: number; free: { priority: number; palette: number } | null } | null;
+  /** Its copy in BG1 or BG2: the picture shows there, in the copy's palette, moved to the copy (`pan`). */
+  copy: { bg: number; palette: number; pan: [number, number] } | null;
 }
 
 function pageMode(): 'off' | 'on' {
@@ -187,7 +219,10 @@ export class RemakeLayer {
   private readonly arenaRgba: Uint8Array;
   private readonly layouts: StructLayouts;
   private readonly OPAQUE: number;
+  private readonly FORMAT_COLOR: number;
   private readonly FORMAT_INDEX: number;
+  private readonly NO_TILE: number;
+  private readonly NO_BATTLER: number;
   private readonly BG_MAIN: number;
   private readonly MARGIN: number;
   private readonly BG_WIDTH: number;
@@ -205,7 +240,10 @@ export class RemakeLayer {
   constructor(private readonly game: Game, info: GameInfo) {
     this.layouts = info.structs;
     this.OPAQUE = constant(info, 'REMAKE_OPAQUE');
+    this.FORMAT_COLOR = constant(info, 'REMAKE_FORMAT_COLOR');
     this.FORMAT_INDEX = constant(info, 'REMAKE_FORMAT_INDEX');
+    this.NO_TILE = constant(info, 'REMAKE_NO_TILE');
+    this.NO_BATTLER = constant(info, 'REMAKE_NO_BATTLER');
     this.BG_MAIN = constant(info, 'REMAKE_BG_MAIN');
     this.MARGIN = constant(info, 'REMAKE_BG_MARGIN');
     this.BG_WIDTH = constant(info, 'REMAKE_BG_WIDTH');
@@ -241,16 +279,17 @@ export class RemakeLayer {
   private clearPictures(): void {
     const view = this.view();
     const layers = this.layers();
-    view.setUint32(layers.struct('background', 'RemakeBackground').address + this.field('RemakeBackground', 'active'), 0, true);
-    const count = this.layouts.RemakeLayers.fields.sprites[1] / this.layouts.RemakeSprite.size;
-    for (let i = 0; i < count; i++) view.setUint32(layers.struct('sprites', 'RemakeSprite', i).address + this.field('RemakeSprite', 'active'), 0, true);
+    for (const [field, type] of [['backgrounds', 'RemakeBackground'], ['sprites', 'RemakeSprite']]) {
+      const count = this.layouts.RemakeLayers.fields[field][1] / this.layouts[type].size;
+      for (let i = 0; i < count; i++) view.setUint32(layers.struct(field, type, i).address + this.field(type, 'active'), 0, true);
+    }
   }
 
   /** A frame is about to be drawn: prepare its pictures. */
   onFrameStart(): void {
     if (this.mode === 'off') return;
     this.clearPictures();
-    const state = readBattleState(this.layouts, this.game.memory(), (this.game.exports().RemakeState as () => number)());
+    const state = readBattleState(this.layouts, this.game.memory(), (this.game.exports().RemakeState as () => number)(), this.NO_BATTLER);
     if (!state.inBattle) {
       this.endBattle();
       return;
@@ -260,8 +299,8 @@ export class RemakeLayer {
     const arena = state.background === this.BG_MAIN ? this.arenas.get(state.environment) ?? null : null;
     if (arena && arena !== this.arena && !this.arenaLoading) this.loadArena(arena);
     const scroll = this.backgroundScroll(this.view());
-    const shown = this.placeBodies(state, scroll);
-    const showing = new Set([...shown.values()].map((b) => b.battlerId));
+    const pictures = this.placeBodies(state, scroll);
+    const showing = new Set(pictures.map((p) => p.body.battlerId));
     this.acting.update(state, (i) => this.bodies.get(i)?.battler ?? null, (i) => showing.has(i));
     if (!this.ready()) {
       // The page holds the game on this frame until everything is loaded:
@@ -279,7 +318,7 @@ export class RemakeLayer {
     }
     if (!this.drawPictures) return;
     if (arena && arena === this.arena) this.renderArena(state, scroll.pan);
-    if (shown.size) this.renderBodies(shown);
+    if (pictures.length) this.renderBodies(pictures);
   }
 
   private hideLoading(state: BattleState): void {
@@ -291,6 +330,7 @@ export class RemakeLayer {
       const sprite = layers.struct('sprites', 'RemakeSprite', n++);
       new Uint16Array(view.buffer, sprite.address + this.field('RemakeSprite', 'pixels'), WIDTH * HEIGHT).fill(0);
       view.setUint32(sprite.address + this.field('RemakeSprite', 'tileNum'), b.tileNum, true);
+      view.setUint32(sprite.address + this.field('RemakeSprite', 'free'), 0, true);
       view.setUint32(sprite.address + this.field('RemakeSprite', 'active'), 1, true);
     });
   }
@@ -342,12 +382,12 @@ export class RemakeLayer {
 
   /**
    * Bodies for the battlers the remake has models for (loading the ones it
-   * lacks), placed where their sprites are this frame. Returns the ones to
-   * draw, by the tile their sprite shows.
+   * lacks), placed where their sprites (or their copies in a background)
+   * are this frame. Returns what each one's picture stands in for.
    */
-  private placeBodies(state: BattleState, scroll: ReturnType<RemakeLayer['backgroundScroll']>): Map<number, Body> {
+  private placeBodies(state: BattleState, scroll: ReturnType<RemakeLayer['backgroundScroll']>): BodyPicture[] {
     const view = this.view();
-    const shown = new Map<number, Body>();
+    const pictures: BodyPicture[] = [];
     state.battlers.forEach((b, i) => {
       const slot = this.slots.get(b.position);
       const slug = SLUGS.get(b.species);
@@ -361,28 +401,63 @@ export class RemakeLayer {
         body = undefined;
       }
       if (!body) body = this.addBody(i, b.species, slot, slug);
-      // A trainer's picture (the intro) or the substitute doll keeps the game's sprite.
-      if (!body.battler || b.behindSubstitute || !b.showsPokemon) return;
-      // The body shows where the sprite does, and only when it does. (A
-      // fainting body stays where it was and shrinks away by itself: the
-      // sprite's slide down is not followed.)
-      const sprite = oamSprite(view, b.tileNum, [b.x + b.x2, b.y + b.y2]);
-      const fainting = this.acting.isFainting(i);
-      if (!fainting) body.battler.visible = !!sprite;
-      if (!sprite) return;
-      if (!fainting) {
-        // Riding the background: its scroll at the sprite's row, less what
-        // the arena itself shows of it (a shake).
-        const row = Math.max(0, Math.min(HEIGHT - 1, Math.round(sprite.y)));
-        body.battler.screenOffset = [sprite.x - b.homeX + scroll.x[row] - scroll.pan[0], sprite.y - b.homeY + scroll.y[row] - scroll.pan[1]];
-        const [a, bb, c, d] = sprite.map;
-        body.battler.spriteScale = Math.sqrt(Math.abs(a * d - bb * c));
-        body.sprite.userData.map = sprite.map;
-        body.sprite.userData.center = [sprite.x, sprite.y];
+      if (!body.battler || b.behindSubstitute) return;
+      if (b.showsPokemon) body.seen = { priority: b.priority, palette: b.paletteNum };
+      // A fainting body stays where it was and curls over and shrinks away
+      // by itself (then hides): drawn where it is, while its sprite slides
+      // away (its entries show nothing) and after the game frees it.
+      if (this.acting.isFainting(i)) {
+        if (body.seen && body.battler.visible) {
+          pictures.push({ body, sprite: { tileNum: b.showsPokemon ? b.tileNum : this.NO_TILE, free: body.seen }, copy: null });
+        }
+        return;
       }
-      shown.set(b.tileNum, body);
+      // A trainer's picture (the intro) keeps the game's sprite.
+      if (!b.showsPokemon) return;
+      // The body shows where the sprite does, or where a move animation's
+      // copy of it is (the sprite hidden or over it), and only then.
+      const sprite = oamSprite(view, b.tileNum, [b.x + b.x2, b.y + b.y2]);
+      const copy = this.copyOf(i, state);
+      const at: [number, number] | null = sprite ? [sprite.x, sprite.y] : copy?.center ?? null;
+      body.battler.visible = !!at;
+      if (!at) return;
+      // Riding the background: its scroll at the body's row, less what the
+      // arena itself shows of it (a shake).
+      const row = Math.max(0, Math.min(HEIGHT - 1, Math.round(at[1])));
+      body.battler.screenOffset = [at[0] - b.homeX + scroll.x[row] - scroll.pan[0], at[1] - b.homeY + scroll.y[row] - scroll.pan[1]];
+      const map = sprite?.map ?? [1, 0, 0, 1];
+      body.battler.spriteScale = Math.sqrt(Math.abs(map[0] * map[3] - map[1] * map[2]));
+      body.sprite.userData.map = map;
+      body.center = at;
+      pictures.push({
+        body,
+        sprite: sprite ? { tileNum: b.tileNum, free: null } : null,
+        copy: copy ? { bg: copy.bg, palette: copy.palette, pan: [at[0] - copy.center[0], at[1] - copy.center[1]] } : null,
+      });
     });
-    return shown;
+    return pictures;
+  }
+
+  /**
+   * A battler's copy in BG1 or BG2 while an animation runs (the game drew its
+   * sprite at the top left of the background's map and scrolls the
+   * background to move it): the background, its palette and the copy's
+   * centre on the screen, if the background shows.
+   */
+  private copyOf(battler: number, state: BattleState): { bg: number; palette: number; center: [number, number] } | null {
+    if (!state.animActive) return null;
+    const k = state.copies.findIndex((c) => c.battler === battler);
+    if (k < 0) return null;
+    const bg = k + 1;
+    const view = this.view();
+    if (!(view.getUint16(IO, true) & (0x100 << bg))) return null;
+    const cnt = view.getUint16(IO + regBgCnt(bg), true);
+    const width = cnt & 0x4000 ? 512 : 256, height = cnt & 0x8000 ? 512 : 256;
+    const predict = this.game.exports().PlatformPredictLines as (off: number) => number;
+    const lines = (off: number) => new Uint16Array(this.game.memory().buffer, predict(off), HEIGHT);
+    const cy = onScreen(32 - lines(regBgVofs(bg))[0], height);
+    const cx = onScreen(32 - lines(regBgHofs(bg))[Math.max(0, Math.min(HEIGHT - 1, cy))], width);
+    return { bg, palette: state.copies[k].palette, center: [cx, cy] };
   }
 
   private addBody(battler: number, species: number, slot: SlotName, slug: string): Body {
@@ -392,8 +467,7 @@ export class RemakeLayer {
     sprite.matrixAutoUpdate = false;
     stage.slots[slot].add(sprite);
     sprite.userData.map = [1, 0, 0, 1];
-    sprite.userData.center = [0, 0];
-    const body: Body = { battlerId: battler, species, slot, battler: null, sprite, loading: null, failed: false };
+    const body: Body = { battlerId: battler, species, slot, battler: null, sprite, loading: null, failed: false, center: [0, 0], seen: null };
     body.loading = Battler3D.create(stage, slot, slug).then(
       (b3d) => {
         body.loading = null;
@@ -496,7 +570,7 @@ export class RemakeLayer {
     const view = this.view();
     const fade = this.backgroundFade(view, state);
     const layers = this.layers();
-    const bg = layers.struct('background', 'RemakeBackground');
+    const bg = layers.struct('backgrounds', 'RemakeBackground', 0);
     const W = this.BG_WIDTH, H = this.BG_HEIGHT, OPAQUE = this.OPAQUE;
     const out = new Uint16Array(view.buffer, bg.address + this.field('RemakeBackground', 'pixels'), W * H);
     const [tr, tg, tb] = fade.target, k = fade.coeff;
@@ -516,6 +590,7 @@ export class RemakeLayer {
     view.setInt32(bg.address + this.field('RemakeBackground', 'panX'), pan[0], true);
     view.setInt32(bg.address + this.field('RemakeBackground', 'panY'), pan[1], true);
     view.setUint32(bg.address + this.field('RemakeBackground', 'bg'), 3, true);
+    view.setUint32(bg.address + this.field('RemakeBackground', 'format'), this.FORMAT_COLOR, true);
     view.setUint32(bg.address + this.field('RemakeBackground', 'active'), 1, true);
   }
 
@@ -539,29 +614,58 @@ export class RemakeLayer {
     return estimateBlend(unfaded, faded);
   }
 
-  /** The bodies alone: each one's pixels, as its sprite's palette indices, stand in for its sprite. */
-  private renderBodies(shown: Map<number, Body>): void {
+  /**
+   * The bodies alone: each one's pixels, as its sprite's palette indices,
+   * stand in for its sprite (or show where it is, free) and for its copy in a
+   * background (BG1 and BG2 take backgrounds 1 and 2; the arena is 0).
+   */
+  private renderBodies(pictures: BodyPicture[]): void {
     this.renderPass('bodies');
     const view = this.view();
     const layers = this.layers();
+    const M = this.MARGIN, W = this.BG_WIDTH;
     let n = 0;
-    for (const [tileNum, body] of shown) {
-      const sprite = layers.struct('sprites', 'RemakeSprite', n++);
-      const out = new Uint16Array(view.buffer, sprite.address + this.field('RemakeSprite', 'pixels'), WIDTH * HEIGHT);
+    for (const { body, sprite, copy } of pictures) {
       const id = SLOT_PIXEL_ID[body.slot];
-      for (let y = 0; y < HEIGHT; y++) {
-        const src = (HEIGHT - 1 - y) * WIDTH * 4;
-        for (let x = 0; x < WIDTH; x++) {
-          const i = src + x * 4;
-          out[y * WIDTH + x] = this.rgba[i + 3] === id ? this.OPAQUE | this.rgba[i] : 0;
+      if (sprite) {
+        const pic = layers.struct('sprites', 'RemakeSprite', n++);
+        const out = new Uint16Array(view.buffer, pic.address + this.field('RemakeSprite', 'pixels'), WIDTH * HEIGHT);
+        for (let y = 0; y < HEIGHT; y++) {
+          const src = (HEIGHT - 1 - y) * WIDTH * 4;
+          for (let x = 0; x < WIDTH; x++) {
+            const i = src + x * 4;
+            out[y * WIDTH + x] = this.rgba[i + 3] === id ? this.OPAQUE | this.rgba[i] : 0;
+          }
         }
+        const set = (field: string, v: number) => view.setUint32(pic.address + this.field('RemakeSprite', field), v, true);
+        set('tileNum', sprite.tileNum);
+        set('format', this.FORMAT_INDEX);
+        view.setInt32(pic.address + this.field('RemakeSprite', 'centerX'), body.center[0], true);
+        view.setInt32(pic.address + this.field('RemakeSprite', 'centerY'), body.center[1], true);
+        set('free', sprite.free ? 1 : 0);
+        set('priority', sprite.free?.priority ?? 0);
+        set('palette', sprite.free?.palette ?? 0);
+        set('active', 1);
       }
-      const [cx, cy] = body.sprite.userData.center as [number, number];
-      view.setUint32(sprite.address + this.field('RemakeSprite', 'tileNum'), tileNum, true);
-      view.setUint32(sprite.address + this.field('RemakeSprite', 'format'), this.FORMAT_INDEX, true);
-      view.setInt32(sprite.address + this.field('RemakeSprite', 'centerX'), cx, true);
-      view.setInt32(sprite.address + this.field('RemakeSprite', 'centerY'), cy, true);
-      view.setUint32(sprite.address + this.field('RemakeSprite', 'active'), 1, true);
+      if (copy) {
+        const pic = layers.struct('backgrounds', 'RemakeBackground', copy.bg);
+        const out = new Uint16Array(view.buffer, pic.address + this.field('RemakeBackground', 'pixels'), this.BG_WIDTH * this.BG_HEIGHT);
+        out.fill(0);
+        for (let y = 0; y < HEIGHT; y++) {
+          const src = (HEIGHT - 1 - y) * WIDTH * 4;
+          for (let x = 0; x < WIDTH; x++) {
+            const i = src + x * 4;
+            if (this.rgba[i + 3] === id) out[(y + M) * W + x + M] = this.OPAQUE | this.rgba[i];
+          }
+        }
+        const set = (field: string, v: number) => view.setUint32(pic.address + this.field('RemakeBackground', field), v, true);
+        set('bg', copy.bg);
+        set('format', this.FORMAT_INDEX);
+        set('palette', copy.palette);
+        view.setInt32(pic.address + this.field('RemakeBackground', 'panX'), copy.pan[0], true);
+        view.setInt32(pic.address + this.field('RemakeBackground', 'panY'), copy.pan[1], true);
+        set('active', 1);
+      }
     }
   }
 }

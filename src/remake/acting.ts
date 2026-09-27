@@ -5,8 +5,9 @@
 //
 //   a move's animation starts          the attacker plays the move's clip (director.ts clipFor)
 //   the engine tells a battler it is hit  it flinches ('hit'), as its sprite blinks
-//   ... that it faints                   it curls over and shrinks away ('faint'); the sprite's
-//                                        slide down is not followed
+//   ... that it faints                   it curls over and shrinks away ('faint') where it stood:
+//                                        the sprite's slide down is not followed (layer.ts draws
+//                                        it free of the sprite), until a Pokémon comes out again
 //   ... to come out of its ball          when it shows, it strikes its pose ('intro')
 //   a wild Pokémon's healthbox comes      it cries: 'intro' (once per appearance)
 
@@ -77,13 +78,15 @@ export class Acting {
         if (b.command === this.FAINT) {
           this.fainting.add(i);
           if (body) void body.play('faint');
-        } else {
+        } else if (this.COME_OUT.includes(b.command)) {
+          // A Pokémon comes out in its place: the faint is over. (The
+          // engine's other commands to a fainted battler, its data, don't
+          // end it.)
           this.fainting.delete(i);
-          if (b.command === this.HIT && body) void body.perform('hit');
-          if (this.COME_OUT.includes(b.command)) {
-            this.comingOut.add(i);
-            this.introduced.delete(i);
-          }
+          this.comingOut.add(i);
+          this.introduced.delete(i);
+        } else if (b.command === this.HIT && body && !this.fainting.has(i)) {
+          void body.perform('hit');
         }
       }
       // Its entrance: out of its ball as it shows, or (a wild one, already

@@ -103,13 +103,18 @@ export interface BattleState {
   animTarget: number;
   /** REMAKE_BG_MAIN (the place's), or the move background (BG_*) BG3 shows. */
   background: number;
+  /**
+   * BG1 and BG2 (in that order): the battler whose sprite a move animation
+   * drew into it (null: none) and the background palette of its copy.
+   */
+  copies: { battler: number | null; palette: number }[];
   plttUnfaded: number;
   plttFaded: number;
   battlers: BattlerState[];
 }
 
 /** The snapshot at `address` (the game's RemakeState export fills it and returns it). */
-export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memory, address: number): BattleState {
+export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memory, address: number, noBattler: number): BattleState {
   const s = new StructView(layouts, 'RemakeState', new DataView(memory.buffer), address);
   const battlers: BattlerState[] = [];
   for (let i = 0; i < 4; i++) {
@@ -158,6 +163,7 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
     animId: s.get('animId'),
     animAttacker: s.get('animAttacker'),
     animTarget: s.get('animTarget'),
+    copies: [0, 1].map((i) => ({ battler: s.get('copyBattler', i) === noBattler ? null : s.get('copyBattler', i), palette: s.get('copyPalette', i) })),
     background: s.get('background'),
     plttUnfaded: s.get('plttUnfaded'),
     plttFaded: s.get('plttFaded'),

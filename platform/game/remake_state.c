@@ -16,6 +16,8 @@
 static struct RemakeState sState = { .background = REMAKE_BG_MAIN };
 static u8 sCommand[REMAKE_BATTLERS];
 static u16 sCommandSerial[REMAKE_BATTLERS];
+static u8 sCopyBattler[2] = { REMAKE_NO_BATTLER, REMAKE_NO_BATTLER };
+static u8 sCopyPalette[2];
 
 extern const u8 *const gBattleAnims_Moves[];
 extern const u8 *const gBattleAnims_StatusConditions[];
@@ -52,6 +54,14 @@ void RemakeBattlerCommand(u8 battler, u8 command)
     sCommandSerial[battler]++;
 }
 
+void RemakeBattlerCopy(u8 bg, u8 battler, u8 palette)
+{
+    if (bg != 1 && bg != 2)
+        return;
+    sCopyBattler[bg - 1] = battler;
+    sCopyPalette[bg - 1] = palette;
+}
+
 __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void)
 {
     s32 i;
@@ -66,6 +76,14 @@ __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void
     sState.animTarget = gBattleAnimTarget;
     sState.plttUnfaded = (u32)gPlttBufferUnfaded;
     sState.plttFaded = (u32)gPlttBufferFaded;
+    // A battle's copies end with it.
+    if (!gMain.inBattle)
+        sCopyBattler[0] = sCopyBattler[1] = REMAKE_NO_BATTLER;
+    for (i = 0; i < 2; i++)
+    {
+        sState.copyBattler[i] = sCopyBattler[i];
+        sState.copyPalette[i] = sCopyPalette[i];
+    }
     for (i = 0; i < REMAKE_BATTLERS; i++)
     {
         struct RemakeBattler *b = &sState.battlers[i];

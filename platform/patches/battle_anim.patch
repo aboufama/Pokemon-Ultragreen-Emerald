@@ -1,12 +1,16 @@
-battle_anim.c: the remake layer learns which battle animation runs, and when
-a move puts up its own background.
+battle_anim.c: the remake layer learns which battle animation runs, when a
+move puts up its own background, and when a move draws a battler into a
+background.
 
 LaunchBattleAnimation starts every battle animation (a move's, a status
 condition's, the general and special ones); the remake layer's hook records
 the table and the index (the game keeps them in a static it never reads).
 LoadMoveBg puts a move's background in the battle background's place (BG3's
 map and tiles); the hook records which one, so the remake shows its arena
-only while the main background is up.
+only while the main background is up. MoveBattlerSpriteToBG draws a
+battler's sprite into BG1 or BG2 (monbg: the copy then moves as the
+background scrolls, over or instead of the sprite); the hook records which
+battler and palette, so the remake draws the battler there too.
 
 --- a/src/battle_anim.c
 +++ b/src/battle_anim.c
@@ -30,7 +34,29 @@ only while the main background is up.
      if (!IsContest())
      {
          InitPrioritiesForVisibleBattlers();
-@@ -1200,6 +1208,10 @@
+@@ -718,6 +726,10 @@
+ 
+         if (IsContest())
+             FlipBattlerBgTiles();
++#ifdef PLATFORM_WASM
++        // PLATFORM_WASM: the remake layer draws the battler in its copy's place.
++        RemakeBattlerCopy(1, battler, animBg.paletteId);
++#endif
+     }
+     else
+     {
+@@ -745,6 +757,10 @@
+         CpuCopy32(&gPlttBufferUnfaded[OBJ_PLTT_ID(battler)], (void *)(BG_PLTT + PLTT_OFFSET_4BPP(9)), PLTT_SIZE_4BPP);
+ 
+         DrawBattlerOnBg(2, 0, 0, GetBattlerPosition(battler), animBg.paletteId, animBg.bgTiles + 0x1000, animBg.bgTilemap + 0x400, animBg.tilesOffset);
++#ifdef PLATFORM_WASM
++        // PLATFORM_WASM: the remake layer draws the battler in its copy's place.
++        RemakeBattlerCopy(2, battler, animBg.paletteId);
++#endif
+     }
+ }
+ 
+@@ -1200,6 +1216,10 @@
      }
      else
      {
