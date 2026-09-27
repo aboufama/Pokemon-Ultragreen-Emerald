@@ -64,10 +64,13 @@ static u32 AccessCycles(const void *p, int wide, int read)
     }
 }
 
-static void Done(void)
+// The SWI's work is done at once and then its time passes (as mGBA's BIOS
+// does it): the BIOS runs the SWI with the caller's interrupts enabled, so
+// an interrupt that comes due meanwhile is taken then, and its handler's
+// time adds to the call's.
+static void Done(u32 cycles)
 {
-    // Interrupts wait until the SWI returns; then the hardware catches up.
-    PlatformCatchUp();
+    PlatformWaitCycles(cycles);
 }
 
 // CpuSet: 107 cycles, then a unit copied in 7 plus its read and write, or a
@@ -76,10 +79,8 @@ void CpuSet(const void *src, void *dest, u32 control)
 {
     u32 count = control & 0x1FFFFF;
     int fixed = (control >> 24) & 1, wide = (control >> 26) & 1;
-    if (fixed)
-        PlatformSpend(112 + count * (5 + AccessCycles(dest, wide, 0)));
-    else
-        PlatformSpend(107 + count * (7 + AccessCycles(src, wide, 1) + AccessCycles(dest, wide, 0)));
+    u32 cycles = fixed ? 112 + count * (5 + AccessCycles(dest, wide, 0))
+                       : 107 + count * (7 + AccessCycles(src, wide, 1) + AccessCycles(dest, wide, 0));
     if (control & (1u << 26)) {
         const u32 *s = (const u32 *)((uintptr_t)src & ~3u);
         u32 *d = (u32 *)((uintptr_t)dest & ~3u);
@@ -99,7 +100,7 @@ void CpuSet(const void *src, void *dest, u32 control)
             while (count--) *d++ = *s++;
         }
     }
-    Done();
+    Done(cycles);
 }
 
 // CpuFastSet: words, 8 a loop turn (5 cycles, 6 copying) plus their reads
@@ -107,10 +108,8 @@ void CpuSet(const void *src, void *dest, u32 control)
 void CpuFastSet(const void *src, void *dest, u32 control)
 {
     u32 count = ((control & 0x1FFFFF) + 7) & ~7u;
-    if (control & (1u << 24))
-        PlatformSpend(116 + count / 8 * 5 + count * AccessCycles(dest, 1, 0));
-    else
-        PlatformSpend(116 + count / 8 * 6 + count * (AccessCycles(src, 1, 1) + AccessCycles(dest, 1, 0)));
+    u32 cycles = control & (1u << 24) ? 116 + count / 8 * 5 + count * AccessCycles(dest, 1, 0)
+                                      : 116 + count / 8 * 6 + count * (AccessCycles(src, 1, 1) + AccessCycles(dest, 1, 0));
     const u32 *s = (const u32 *)((uintptr_t)src & ~3u);
     u32 *d = (u32 *)((uintptr_t)dest & ~3u);
     if (control & (1u << 24)) {
@@ -119,7 +118,7 @@ void CpuFastSet(const void *src, void *dest, u32 control)
     } else {
         while (count--) *d++ = *s++;
     }
-    Done();
+    Done(cycles);
 }
 
 // LZ77: the time depends on what the data holds. Measured on the ROM (in
@@ -158,8 +157,7 @@ static void LZ77UnComp(const u8 *src, u8 *dest, const struct LZ77Costs *costs)
         }
     }
     u64 cost = costs->base + (u64)literals * costs->literal + (u64)references * costs->reference + (u64)copied * costs->copied;
-    PlatformSpend((u32)((cost + 128) >> 8));
-    Done();
+    Done((u32)((cost + 128) >> 8));
 }
 
 void LZ77UnCompWram(const u32 *src, void *dest)
@@ -176,7 +174,6 @@ static void RLUnComp(const u8 *src, u8 *dest)
 {
     u32 header = src[0] | (src[1] << 8) | (src[2] << 16) | ((u32)src[3] << 24);
     u32 size = header >> 8;
-    PlatformSpend(SWI_CYCLES + size * 10);
     src += 4;
     u8 *end = dest + size;
     while (dest < end) {
@@ -190,7 +187,7 @@ static void RLUnComp(const u8 *src, u8 *dest)
             while (len-- && dest < end) *dest++ = *src++;
         }
     }
-    Done();
+    Done(SWI_CYCLES + size * 10);
 }
 
 void RLUnCompWram(const u32 *src, void *dest)
