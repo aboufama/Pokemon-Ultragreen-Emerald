@@ -39,19 +39,9 @@ const common = /* glsl */ `
 
 const colorFragment = /* glsl */ `
   ${common}
-  uniform float cloud;
-  uniform vec3 cloudTint;
-  float bayer(vec2 p) {
-    vec2 q = mod(p, 4.0);
-    float b = mod(q.x, 2.0) * 2.0 + mod(q.y, 2.0) * 3.0 - 2.0 * mod(q.x, 2.0) * mod(q.y, 2.0);
-    float c = mod(floor(q.x / 2.0), 2.0) * 2.0 + mod(floor(q.y / 2.0), 2.0) * 3.0 - 2.0 * mod(floor(q.x / 2.0), 2.0) * mod(floor(q.y / 2.0), 2.0);
-    return (b * 4.0 + c + 0.5) / 16.0;
-  }
   void main() {
     vec4 c = texel();
     if (c.a < 0.5) discard;
-    vec2 q = floor(vUv * vec2(size.x + 2.0 * margin, size.y));
-    if (cloud > bayer(q)) c.rgb *= cloudTint;
     gl_FragColor = vec4(c.rgb, 1.0);
   }
 `;
@@ -125,8 +115,6 @@ export class ArenaProp {
       phase: { value: (seed % 628) / 100 },
       time: { value: 0 },
       gust: { value: 0 },
-      cloud: { value: 0 },
-      cloudTint: { value: new THREE.Vector3(1, 1, 1) },
       id: { value: 0 },
     };
     const material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader, fragmentShader: colorFragment, side: THREE.DoubleSide });
@@ -136,11 +124,9 @@ export class ArenaProp {
     this.anchor = new THREE.Vector3(spec.x, 0, spec.z);
   }
 
-  tick(time: number, gust: number, cloud: number, tint: THREE.Vector3): void {
+  tick(time: number, gust: number): void {
     this.uniforms.time.value = time;
     this.uniforms.gust.value = gust;
-    this.uniforms.cloud.value = cloud;
-    (this.uniforms.cloudTint.value as THREE.Vector3).copy(tint);
   }
 
   dispose(): void {

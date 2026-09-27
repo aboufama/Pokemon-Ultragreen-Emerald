@@ -540,3 +540,57 @@ export function focus(img, ids, mask) {
   for (const a of [monC, monK, arenaK, nearC]) a.sort((p, q) => p - q);
   return { monChroma: pct(monK, 0.9), arenaChroma: pct(arenaK, 0.999), monContrast: pct(monC, 0.99), nearContrast: pct(nearC, 0.99) };
 }
+
+/**
+ * How solid a patch the ground's life may lay: pixels inside it (all four
+ * neighbors changed too), about an 8 x 8 patch. A shimmer, a ring or a mote
+ * lays none, a wave crest near the horizon a few; the wind bands and cloud
+ * shadows that read as ovals of light laid thousands.
+ */
+export const LIFE_PATCH = 64;
+
+/**
+ * The ground's life (src/render3d/arena/ground.ts: grass leaning, waves,
+ * glints, ripples; the motes; the props swaying) against the ground at an
+ * earlier moment: the most solid patch of changed pixels among `keep` (the
+ * shown ground, no Pokémon), `before` and `after` RGBA frames of 240 x 160.
+ * A patch of light or shade drifting over the ground (wind bands lifting the
+ * grass, cloud shadows) is solid, and reads as a pool or an oval of light;
+ * the rest of the life is thin. Returns the patch's interior pixel count,
+ * its area and box.
+ */
+export function lifePatches(before, after, keep) {
+  const W = 240, H = 160;
+  const changed = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    if (!keep[i]) continue;
+    for (let c = 0; c < 3; c++) if (Math.abs(before[i * 4 + c] - after[i * 4 + c]) >= 8) changed[i] = 1;
+  }
+  const seen = new Uint8Array(W * H);
+  let best = { interior: 0, area: 0, bbox: [0, 0, 0, 0] };
+  for (let start = 0; start < W * H; start++) {
+    if (!changed[start] || seen[start]) continue;
+    const stack = [start];
+    seen[start] = 1;
+    let interior = 0, area = 0;
+    const bbox = [W, H, 0, 0];
+    while (stack.length) {
+      const i = stack.pop();
+      const x = i % W, y = (i / W) | 0;
+      area++;
+      bbox[0] = Math.min(bbox[0], x); bbox[1] = Math.min(bbox[1], y); bbox[2] = Math.max(bbox[2], x); bbox[3] = Math.max(bbox[3], y);
+      if (x > 0 && x < W - 1 && y > 0 && y < H - 1 && changed[i - 1] && changed[i + 1] && changed[i - W] && changed[i + W]) interior++;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx;
+        if (changed[j] && !seen[j]) {
+          seen[j] = 1;
+          stack.push(j);
+        }
+      }
+    }
+    if (interior > best.interior) best = { interior, area, bbox };
+  }
+  return best;
+}

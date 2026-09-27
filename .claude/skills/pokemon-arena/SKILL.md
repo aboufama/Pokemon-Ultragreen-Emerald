@@ -143,10 +143,10 @@ atmospheric-perspective guides:
 |---|---|---|
 | ground and far view | `fill()` paints every screen pixel from its ground point (x, z, ppu); `scatter()` spreads marks evenly for their distance; `stand()` paints trees and rocks in the far view (and painted foreground framing), farthest first; `onLine()` draws crisp 1-pixel pattern lines (wave crests) at any distance; `shift()` moves a color along its ramp; `band()` picks a ramp step with a narrow dither at the step | `design.ts`, `art.ts`, `arenas.ts` |
 | geometry | a wall is traced per pixel: where the view ray meets it before the floor (the cave's back wall, a few fixed-point iterations), and at what height | `arenas.ts` |
-| materials | each painted pixel carries a material the ground shader animates per GBA pixel: `GRASS` (leans, wind bands: a clean lift, never a checkered half of the pixels), `WATER` (drifting waves, glints, rings at the feet of a Pokémon standing in its place: `BattleEnvironment.setStanding`), `BACKDROP` (far things: no ground effects), `SOLID` | `art.ts` `MAT`, `ground.ts` |
+| materials | each painted pixel carries a material the ground shader animates per GBA pixel: `GRASS` (blades lean in the wind), `WATER` (drifting waves, glints, rings at the feet of a Pokémon standing in its place: `BattleEnvironment.setStanding`), `BACKDROP` (far things: no ground effects), `SOLID` | `art.ts` `MAT`, `ground.ts` |
 | sprites | pixel art made at its on-screen size (`sprites.ts`): `tree()` (leaf clusters), `tallGrass()` (a fan of blades), `crag()` (faceted rock: sea stacks, boulders) | `sprites.ts` |
 | props | standing quads at their depth that sway row by row and hide and are hidden by the Pokémon (`ctx.props`, `props.ts`): the mechanism is there, no place uses it now | `props.ts`, `environment.ts` |
-| life | wind, gusts, motes (seeds, spray, cave dust), dust on landings, cloud shadows; ground effects: grass waves, glints on water | `ambience.ts` (`ArenaDesign.ambience`), `ground.ts` |
+| life | wind, gusts, motes (seeds, spray, cave dust), dust on landings; ground effects: grass blades leaning, waves and glints on water. Never a patch of light or shade over the ground ([No light pools](#no-light-pools)) | `ambience.ts` (`ArenaDesign.ambience`), `ground.ts` |
 | intro and fades | the intro is the window opening on the arena from the middle row (`src/battle/scene.ts` `intro()`); the arena's palette fades (ball flash, move tints) are the pixel pipeline's (`setEnvironmentBlend`). The arena never moves | `pipeline.ts`, `environment.ts`, `src/battle/scene.ts` `intro()` |
 
 ## The three places
@@ -170,7 +170,12 @@ atmospheric-perspective guides:
    right across the view at each distance), the light from the upper left on
    what stands or lies on it, detail shapes. The ground under and between the
    battlers is never lighter than the ground beside it at the same distance.
-   `check.mjs` holds it ([No light pools](#no-light-pools)).
+   The ground's life never lays a patch of light or shade over it either:
+   the user saw the ovals again in the battle itself after the painting was
+   fixed (wind bands lifting the grass in oval cells, cloud shadows cut off
+   at an ellipse round the arena), so the life is thin things only (blades
+   leaning, wave crests, glints, ripples, motes). `check.mjs` holds both
+   ([No light pools](#no-light-pools)).
 2. **Hoenn's colors.** Take ramps from the overworld tilesets (see
    [The Emerald reference](#the-emerald-reference)) and keep a pixel-art
    palette: a few ramps of 3-4 steps, hue-shifted (warm lights, cool shadows).
@@ -352,6 +357,18 @@ steps, a dark vignette at both sides, a thin platform rim, a ring of light
 edge and the tree line's scalloped shade be. Darker ground all along one side
 counts: it is half a pool.
 
+**While it lives.** The painting is still; the battle isn't. With
+`--render`, `check.mjs` ("its life lays no patch of light or shade") runs
+each arena's life for 30 s in the browser (`stage.update`, no UI) and
+compares every frame with the first on the shown ground (no Pokémon): the
+changed pixels' most solid patch, counted as the pixels inside it (all four
+neighbors changed), must stay under `LIFE_PATCH` (64, about 8 x 8;
+`screen.mjs` `lifePatches()`). Blades leaning, a ring, a mote lay none; the
+sea's wave crests near the horizon a few (14). The old wind bands laid
+1825 px on Route 101, the old cloud shadows 1163 px on the sea: they are
+gone (`ground.ts`), and the check tests itself on an oval of light and a
+dithered shadow laid over each ground.
+
 | ground | under the battle: beside (limit 33%) | most oval ringed light patch (limit 0.90) | verdict |
 |---|---|---|---|
 | water (sea) | 7% | 0.82 | passes |
@@ -431,6 +448,7 @@ outlines).
 | a pool, oval or ring of light on the ground, of any size ("the huge light ovals look like shit") | light the ground by distance: one tone right across the view at each distance, stepping darker toward the back; no lighter middle, no darker sides; show the light's direction on what stands or lies on the ground |
 | a beam of light that lands in a spot | let it fall across the wall (or what stands) and stop at its foot: where it lands on the floor it makes a spot of light |
 | "no light pools" fails | it names the region (its lift over the ground beside it, how many of its row ends have darker ground beside them, which battler's feet it holds, or how well it fills its ellipse) and where it is: find what makes the ground there lighter than beside it at the same distance and light by distance instead (`preview.mjs` prints the same figures) |
+| ovals of light drifting over the ground in battle (the painting is fine; "its life lays no patch of light or shade" fails) | a ground effect lifts or shades a broad patch (wind bands in oval cells, cloud shadows cut off at an ellipse): the ground's life is thin things only (blades, crests, glints, ripples, motes); the check names the patch's size, place and time |
 | framing made of darker ground along a side | frame with things painted into the ground (tall grass, a boulder): darker ground all along one side is half a pool |
 | a tone edge that runs toward the back (a runway, darker sides) | a tone edge at constant world x converges to the vanishing point, and darker ground at the sides makes a pool of light: run tone edges across the view, by distance |
 | a stripe that breaks into dashes far off | too thin: 2-3 px there, low wobble |

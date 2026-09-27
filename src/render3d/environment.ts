@@ -36,7 +36,6 @@ export class BattleEnvironment {
   readonly design: (typeof ARENAS)[string];
   private readonly ground: ArenaGround;
   private readonly props: ArenaProp[];
-  private readonly cloudTint = new THREE.Vector3(1, 1, 1);
 
   private constructor(readonly name: string, private readonly pipeline: PixelPipeline, ground: ArenaGround, props: ArenaProp[], design: (typeof ARENAS)[string], private readonly feet: [THREE.Vector3, THREE.Vector3]) {
     this.design = design;
@@ -67,12 +66,10 @@ export class BattleEnvironment {
   }
 
   /** Ground effects of the environment's ambience (see src/render3d/ambience.ts). */
-  setGroundEffects(fx: { grassWaves?: boolean; clouds?: number; glints?: boolean }): void {
+  setGroundEffects(fx: { grassLean?: boolean; glints?: boolean }): void {
     const u = this.ground.material.uniforms;
-    u.grassWaves.value = fx.grassWaves ? 1 : 0;
-    u.clouds.value = fx.clouds ?? 0;
+    u.grassLean.value = fx.grassLean ? 1 : 0;
     u.glints.value = fx.glints ? 1 : 0;
-    this.cloudTint.set(1 - u.clouds.value, 1 - u.clouds.value * 0.85, 1 - u.clouds.value * 0.6);
     // Nobody stands on the spots until a battler says so (setStanding).
     this.feet.forEach((f, i) => (u.feet.value as THREE.Vector4[])[i].set(f.x, f.z, 0, i * 0.47));
   }
@@ -86,44 +83,12 @@ export class BattleEnvironment {
     (this.ground.material.uniforms.feet.value as THREE.Vector4[])[spot].z = standing ? (this.design.ripples ?? 0) : 0;
   }
 
-  /** The arena floor: center (x, z) and radius, where ground effects are strongest. */
-  setArena(center: THREE.Vector3, radius: number): void {
-    this.ground.material.uniforms.arena.value.set(center.x, center.z, radius);
-  }
-
-  /** Advance the arena's life: time, gust (0..1), wind drift (world units). */
-  tick(time: number, gust: number, windDrift: THREE.Vector2): void {
+  /** Advance the arena's life: time, gust (0..1). */
+  tick(time: number, gust: number): void {
     const u = this.ground.material.uniforms;
     u.time.value = time;
     u.gust.value = gust;
-    u.windOffset.value.copy(windDrift);
-    for (const p of this.props) p.tick(time, gust, this.cloudShadeAt(p.anchor) * 0.9, this.cloudTint);
-  }
-
-  /**
-   * How shaded a ground point is by the drifting clouds (0 = sun, 1 = full
-   * shadow), matching the ground shader's pattern, to dim what stands in it.
-   */
-  cloudShadeAt(p: THREE.Vector3): number {
-    const u = this.ground.material.uniforms;
-    if (!u.clouds.value) return 0;
-    const hash = (x: number, y: number) => {
-      const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-      return v - Math.floor(v);
-    };
-    const noise = (x: number, y: number) => {
-      const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
-      const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
-      const a = hash(ix, iy), b = hash(ix + 1, iy), c = hash(ix, iy + 1), d = hash(ix + 1, iy + 1);
-      return (a + (b - a) * ux) + ((c + (d - c) * ux) - (a + (b - a) * ux)) * uy;
-    };
-    const w = u.windOffset.value as THREE.Vector2;
-    const n = noise(p.x * 0.11 + w.x, p.z * 0.11 + w.y) * 0.7 + noise(p.x * 0.3 + w.x * 1.7, p.z * 0.3 + w.y * 1.7) * 0.3;
-    const t = Math.min(1, Math.max(0, (n - 0.56) / 0.04));
-    const a = u.arena.value as THREE.Vector3;
-    const d = Math.hypot(p.x - a.x, p.z - a.y);
-    const near = 1 - Math.min(1, Math.max(0, (d - a.z * 0.8) / (a.z * 0.6)));
-    return t * t * (3 - 2 * t) * near;
+    for (const p of this.props) p.tick(time, gust);
   }
 
   /** The camera the arena is painted for (the resting battle camera). */

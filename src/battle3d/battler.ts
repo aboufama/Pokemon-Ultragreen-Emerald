@@ -90,7 +90,6 @@ export class Battler3D {
   /** Height above the ground last frame (world units), for landing dust. */
   private lastLift = 0;
   private liftSpeed = 0;
-  private shade = 1;
   /** A palette flash on hits (type color), fading out. */
   private flash: { color: RGB; amount: number; left: number; total: number } | null = null;
   private eyeMap: THREE.Texture | null = null;
@@ -583,15 +582,6 @@ export class Battler3D {
       ambience.puff(at, Math.min(1.5, -this.liftSpeed / (1.5 * H)), H);
     }
     this.lastLift = lift;
-
-    // Standing in a cloud's shadow dims the body a little.
-    const env = this.stage.environment;
-    if (env) {
-      const at = new THREE.Vector3().setFromMatrixPosition(root.matrixWorld);
-      const target = 1 - 0.14 * env.cloudShadeAt(at);
-      this.shade += (target - this.shade) * Math.min(1, dt * 3);
-      this.inst.toon.uniforms.shade.value = this.shade;
-    }
 
     // Hit flash (type color), like Emerald's palette blends on the target.
     if (this.flash) {

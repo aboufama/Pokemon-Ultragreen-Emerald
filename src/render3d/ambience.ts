@@ -2,7 +2,8 @@
 // the Pokémon's loose parts and the arena's tall grass, reeds and kelp),
 // drifting motes (seeds, sand, ash, dust, bubbles), dust kicked up on
 // landings, and per-arena ground effects handled by the arena's ground
-// shader (grass rippling in the wind, drifting cloud shadows, water glints).
+// shader (grass blades leaning in the wind, water glints). Nothing lays a
+// patch of light or shade over the ground (src/render3d/arena/ground.ts).
 //
 // Particles are pixel squares (THREE.Points sized in GBA pixels), rendered
 // as environment pixels: never palette-snapped or outlined, and they don't
@@ -20,17 +21,16 @@ export interface AmbienceStyle {
   /** Colors of dust kicked up on landings and stomps. */
   dust: RGB[];
   /** Ground shader effects. */
-  grassWaves?: boolean;
-  clouds?: number;
+  grassLean?: boolean;
   glints?: boolean;
 }
 
 const OUTDOOR_DUST: RGB[] = [[232, 240, 208], [200, 224, 176], [248, 248, 232]];
 
 export const AMBIENCE: Record<string, AmbienceStyle> = {
-  grass: { wind: 0.25, gusts: 0.6, grassWaves: true, clouds: 0.08, dust: OUTDOOR_DUST, motes: { count: 26, colors: [[248, 248, 224], [232, 248, 200], [255, 255, 255]], size: [1, 1], rise: 0.04, drift: 1 } },
+  grass: { wind: 0.25, gusts: 0.6, grassLean: true, dust: OUTDOOR_DUST, motes: { count: 26, colors: [[248, 248, 224], [232, 248, 200], [255, 255, 255]], size: [1, 1], rise: 0.04, drift: 1 } },
   cave: { wind: 0.05, gusts: 0.2, dust: [[176, 152, 112], [152, 128, 96], [200, 176, 136]], motes: { count: 22, colors: [[200, 184, 152], [168, 152, 128]], size: [1, 1], rise: -0.02, drift: 0.25 } },
-  water: { wind: 0.35, gusts: 0.6, glints: true, clouds: 0.08, dust: [[232, 248, 255], [200, 232, 248], [255, 255, 255]], motes: { count: 12, colors: [[255, 255, 255], [224, 240, 255]], size: [1, 1], rise: 0.05, drift: 1 } },
+  water: { wind: 0.35, gusts: 0.6, glints: true, dust: [[232, 248, 255], [200, 232, 248], [255, 255, 255]], motes: { count: 12, colors: [[255, 255, 255], [224, 240, 255]], size: [1, 1], rise: 0.05, drift: 1 } },
 };
 
 const vertexShader = /* glsl */ `

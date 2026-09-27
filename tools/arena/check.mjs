@@ -25,7 +25,11 @@
 //     fail the test);
 //   - with --render: in the battle view, the Pokémon (Blaziken, Sceptile,
 //     Swampert) are the most saturated and the highest-contrast things on
-//     screen.
+//     screen; and the ground's life (half a minute of it) lays no patch of
+//     light or shade over the ground: no wind bands lifting the grass, no
+//     cloud shadows, nothing that reads as a pool or an oval of light while
+//     the battle goes on (its measure is itself checked on an oval of light
+//     and a dithered shadow laid over the ground).
 // Exits non-zero if any check fails.
 
 import { execSync } from 'node:child_process';
@@ -34,7 +38,7 @@ import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { importTs } from '../gauntlet/tsimport.mjs';
 import { ROOT } from '../gauntlet/species.mjs';
-import { battleFeet, calm, compose, focus, lightPools, propsShowing, shownMask, sparse } from './screen.mjs';
+import { LIFE_PATCH, battleFeet, calm, compose, focus, lifePatches, lightPools, propsShowing, shownMask, sparse } from './screen.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, all) => (a.startsWith('--') ? [a.slice(2), all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? true : all[i + 1]] : null)).filter(Boolean));
 const results = [];
@@ -316,10 +320,48 @@ if (args.render) {
       if (!(f.arenaChroma < f.monChroma && f.nearContrast < f.monContrast)) focused = false;
       figures.push(`${p} vs ${e}: chroma ${f.arenaChroma} < ${f.monChroma}, contrast ${f.nearContrast.toFixed(0)} < ${f.monContrast.toFixed(0)}`);
     }
+    // The ground as it lives: half a minute of its life, no patch of light or shade.
+    await page.goto(`${base}?mode=stage&env=${name}&player=blaziken&enemy=swampert&scale=1&ui=0`);
+    await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
+    const life = await page.evaluate(() => {
+      const stage = window.preview.stage;
+      const grab = () => {
+        stage.render();
+        const c = document.createElement('canvas');
+        c.width = 240;
+        c.height = 160;
+        const g = c.getContext('2d');
+        g.drawImage(stage.canvas, 0, 0, 240, 160);
+        return Array.from(g.getImageData(0, 0, 240, 160).data);
+      };
+      const ids = Array.from(stage.pipeline.renderIdMask(stage.scene, stage.camera, 240, 160));
+      const frames = [grab()];
+      for (let k = 0; k < 24; k++) {
+        stage.update(1.25);
+        frames.push(grab());
+      }
+      return { frames, ids };
+    });
+    const keep = mask.map((m, i) => m && life.ids[i] === 0);
+    let worst = { interior: 0, area: 0, bbox: [0, 0, 0, 0], at: 0 };
+    for (let k = 1; k < life.frames.length; k++) {
+      const p = lifePatches(life.frames[0], life.frames[k], keep);
+      if (p.interior > worst.interior) worst = { ...p, at: k * 1.25 };
+    }
+    // The measure itself: an oval of light (one 5-bit step up, as the old wind bands) and a dithered shadow laid over this ground.
+    const laid = (fn) => life.frames[0].map((v, j) => (j % 4 === 3 ? v : fn(j >> 2, v)));
+    const oval = laid((i, v) => (((i % 240) - 120) ** 2 / 50 ** 2 + (((i / 240) | 0) - 60) ** 2 / 18 ** 2 < 1 ? Math.min(255, v + 8) : v));
+    const shade = laid((i, v) => {
+      const d = (i % 240) + ((i / 240) | 0);
+      return d < 130 || (d < 150 && d % 2 === 0) ? Math.max(0, v - 16) : v;
+    });
+    const selfTest = lifePatches(life.frames[0], oval, keep).interior > LIFE_PATCH && lifePatches(life.frames[0], shade, keep).interior > LIFE_PATCH;
     page.off('pageerror', onError);
     page.off('console', onConsole);
     gate(`${name}: renders in a battle`, errors.length === 0, errors.slice(0, 2).join(' | ') || `build/arenas/${name}.png`);
     gate(`${name}: the Pokémon are the focus`, focused, figures.join('; '));
+    gate(`${name}: its life lays no patch of light or shade`, worst.interior <= LIFE_PATCH && selfTest,
+      !selfTest ? 'the measure no longer sees an oval of light or a dithered shadow laid over the ground' : `the most solid patch the ground's life changed in 30 s: ${worst.interior} px inside it (<= ${LIFE_PATCH})${worst.interior ? `, ${worst.area} px at ${worst.bbox.join(',')} after ${worst.at} s` : ''}`);
   }
   await browser.close();
 }

@@ -61,7 +61,6 @@ export class BattleStage {
   /** Wind, motes and dust of the current environment (see ambience.ts). */
   ambience: Ambience | null = null;
   private time = 0;
-  private readonly windDrift = new THREE.Vector2();
   readonly keyLight: THREE.DirectionalLight;
   readonly ambient: THREE.HemisphereLight;
 
@@ -129,7 +128,6 @@ export class BattleStage {
     const s = this.pipeline.settings;
     this.ambience = new Ambience(style, this.homeCamera, center, a.distanceTo(b) * 0.75, s.density * s.supersample);
     this.scene.add(this.ambience.group);
-    env.setArena(center, a.distanceTo(b) * 0.75);
     env.setGroundEffects(style);
   }
 
@@ -145,10 +143,7 @@ export class BattleStage {
     this.time += dt;
     if (!this.ambience || !this.environment) return;
     this.ambience.update(dt);
-    // Cloud shadows drift with the wind (in noise space).
-    this.windDrift.x -= this.ambience.wind.x * dt * 0.11;
-    this.windDrift.y -= this.ambience.wind.z * dt * 0.11;
-    this.environment.tick(this.time, this.ambience.gust, this.windDrift);
+    this.environment.tick(this.time, this.ambience.gust);
   }
 
   /** World units per GBA pixel at a point, seen from the resting camera. */

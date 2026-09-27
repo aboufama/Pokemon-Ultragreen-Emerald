@@ -4,9 +4,11 @@
 // it behaves like real ground.
 //
 // The ground's life is computed per GBA pixel (at the pixel's own ground
-// point) so it stays crisp: grass leaning and rippling in the wind, waves
-// drifting across water with glints and ripples at the battlers' feet, and
-// cloud shadows.
+// point) so it stays crisp: grass blades leaning in the wind, waves drifting
+// across water with glints and ripples at the battlers' feet. It never lays
+// a patch of light or shade over the ground (no wind bands lifting the grass,
+// no cloud shadows): a patch reads as a pool or an oval of light, which the
+// arenas never have (tools/arena/check.mjs measures the ground as it lives).
 
 import * as THREE from 'three';
 import { MAT, type Paint } from './art';
@@ -28,11 +30,8 @@ const fragmentShader = /* glsl */ `
   uniform mat4 invProjView;
   uniform float time;
   uniform float gust;
-  uniform vec2 windOffset;
-  uniform float grassWaves;
-  uniform float clouds;
+  uniform float grassLean;
   uniform float glints;
-  uniform vec3 arena;
   uniform vec3 waveLight;
   uniform vec3 waveDark;
   uniform float waveDensity;
@@ -103,20 +102,14 @@ const fragmentShader = /* glsl */ `
     vec4 t = painted(screen);
     int mat = materialOf(t);
     vec3 c = t.rgb;
-    float near = 1.0 - smoothstep(arena.z * 0.8, arena.z * 1.4, distance(w.xz, arena.xy));
 
-    if (mat == ${MAT.GRASS} && grassWaves > 0.0) {
+    if (mat == ${MAT.GRASS} && grassLean > 0.0) {
       // Blades lean with the wind: where it blows hard, take the pixel upwind.
       float lean = sin(time * 2.3 + screen.y * 0.9 + screen.x * 0.05) * 0.5 + gust;
       if (lean > 0.9) {
         vec4 n = painted(screen + vec2(-1.0, 0.0));
         if (materialOf(n) == ${MAT.GRASS}) c = n.rgb;
       }
-      // Wind rolling over the grass: lighter bands travelling downwind, each
-      // a clean lift (a checkered half of its pixels read as dots drifting
-      // over the pale meadow).
-      float wv = sin(w.x * 2.2 + w.z * 0.8 - time * 2.6) * sin(w.x * 0.7 - time * 0.9);
-      if (wv * (0.5 + gust) > 0.55) c = min(c * 1.04 + 0.01, 1.0);
     }
     if (mat == ${MAT.WATER}) {
       if (waveDash(screen, w, 0.9, 0.45, 0.22, 0.34, 0.0) > 0.0) c = waveLight;
@@ -137,12 +130,6 @@ const fragmentShader = /* glsl */ `
         float stp = max(0.004, length(wn.xz - w.xz));
         if (abs(dist - r) < stp * 0.75 && cyc < 0.8 && bayer(screen) < (1.0 - cyc) * 1.1) c = mix(c, waveLight, 0.75);
       }
-    }
-    if (clouds > 0.0 && mat != ${MAT.BACKDROP}) {
-      // Cloud shadows drifting with the wind across the arena, edges dithered.
-      float n = noise(w.xz * 0.11 + windOffset) * 0.7 + noise(w.xz * 0.3 + windOffset * 1.7) * 0.3;
-      float s = smoothstep(0.56, 0.6, n) * near;
-      if (s > bayer(screen)) c *= vec3(1.0 - clouds, 1.0 - clouds * 0.85, 1.0 - clouds * 0.6);
     }
     gl_FragColor = vec4(c, 1.0);
   }
@@ -178,11 +165,8 @@ export class ArenaGround {
         invProjView: { value: new THREE.Matrix4() },
         time: { value: 0 },
         gust: { value: 0 },
-        windOffset: { value: new THREE.Vector2() },
-        grassWaves: { value: 0 },
-        clouds: { value: 0 },
+        grassLean: { value: 0 },
         glints: { value: 0 },
-        arena: { value: new THREE.Vector3(0, 0, 1000) },
         waveLight: { value: rgb(look.waveLight, [240, 248, 255]) },
         waveDark: { value: rgb(look.waveDark, [40, 80, 160]) },
         waveDensity: { value: look.waveDensity ?? 0.2 },
