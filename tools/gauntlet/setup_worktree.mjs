@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Prepare a git worktree for a gauntlet run while other agents work in their
 // own: share the main checkout's node_modules (a symlink, which git ignores),
-// copy the Draco decoder into public/libs, and find a free dev-server port.
-// The decomp needs nothing: tools/gauntlet/brief.mjs reads the main checkout's.
+// copy the Draco decoder into public/libs and the compiled game into
+// public/game (its test battles: game.html?battle=), and find a free
+// dev-server port. The decomp needs nothing: tools/gauntlet/brief.mjs reads
+// the main checkout's.
 //
 //   node tools/gauntlet/setup_worktree.mjs [--port 5174]
 //
@@ -10,7 +12,7 @@
 // checkout it only reminds you to npm install.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, symlinkSync } from 'node:fs';
+import { cpSync, existsSync, symlinkSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +35,15 @@ if (!existsSync(modules)) {
   console.log(`linked node_modules -> ${join(main, 'node_modules')}`);
 }
 execFileSync(process.execPath, [join(ROOT, 'tools/prepare_libs.mjs')], { cwd: ROOT, stdio: 'inherit' });
+// The compiled game (platform/build.mjs writes it to the main checkout's
+// public/game, which git ignores).
+const game = join(main, 'public/game');
+if (existsSync(join(game, 'pokeemerald.wasm'))) {
+  cpSync(game, join(ROOT, 'public/game'), { recursive: true });
+  console.log('copied the compiled game (public/game): game.html?battle= runs here');
+} else {
+  console.log(`no compiled game in ${main}/public/game (node platform/build.mjs there): game.html's test battles need it`);
+}
 
 const free = (port) => new Promise((done) => {
   const s = createServer();
