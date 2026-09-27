@@ -96,7 +96,11 @@ hand. The remake adds two things around it:
   frames saved as PNG, its sound as a WAV file (`--wav`).
 - `reference.py`: the decomp's GBA ROM in mGBA on the same script.
 - `compare.py`: frame by frame, the GBA's 15-bit colors (`--slack` finds a
-  timing shift). The boot matches the ROM frame for frame through the intro.
+  timing shift). The boot matches the ROM frame for frame through the intro,
+  and the opening (`platform/tests/opening.json`) matches it up to the first
+  battle; from there the RNG, seeded from the naming screen's timing, can
+  differ, so battles and encounters can go another way (the script holds
+  whatever they do).
 - `timing.py`: how many cycles functions take on the ROM (the drivers' costs).
 - `sound_check.py`: the sound against the ROM's, frame by frame on an input
   script (`platform/tests/title.json`): the music players, their tracks and
