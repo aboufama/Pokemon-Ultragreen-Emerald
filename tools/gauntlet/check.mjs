@@ -236,7 +236,10 @@ if (existsSync(partsPath)) {
 // 10. Moves: showcase and motif coverage.
 const learnable = new Set(species.learnset.map((l) => l.move));
 const showcase = (profile.showcaseMoves ?? []).map((m) => (m.startsWith('MOVE_') ? m : `MOVE_${m}`));
-gate('4 showcase moves', showcase.length === 4 && showcase.every((m) => data.moves[m]), showcase.join(', '));
+// Four, or every move it can learn when it learns fewer (Wurmple: three).
+const learnsMoves = (await speciesBrief(slug)).moves;
+const showcaseCount = Math.min(4, learnsMoves.length);
+gate(`${showcaseCount} showcase moves`, showcase.length === showcaseCount && showcase.every((m) => data.moves[m]), showcase.join(', '));
 for (const m of showcase) {
   const clip = clipOf(data, profile, m);
   gate(`showcase ${m.replace('MOVE_', '')} -> ${clip}`, !!clips[clip] && !clips[clip].generic, `${data.motifOf(data.moves[m])} motif`);
@@ -245,7 +248,7 @@ for (const m of showcase) {
 // depicts plays a category clip made for another action: list them. A
 // category clip that does depict a motif says so in motifClips.
 const uncovered = { level: {}, other: {} };
-for (const m of (await speciesBrief(slug)).moves) {
+for (const m of learnsMoves) {
   const move = data.moves[m.const];
   const motif = data.motifOf(move);
   if (motif === 'other' || profile.moveClips[m.const]) continue;
