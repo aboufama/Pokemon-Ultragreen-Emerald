@@ -119,6 +119,9 @@ export class Battler3D {
     stage.slots[slot].add(this.shadow.mesh);
     this.measureFootprint();
     void this.animator.play(this.idleClip);
+    // Its front, in its stance (idle's first pose), before anything moves or scales it.
+    this.animator.update(0);
+    this.front = this.measureFront();
     // Every node the pose moves, for holding a pose on screen (stop motion).
     const nodes: THREE.Object3D[] = [];
     inst.root.traverse((o) => {
@@ -444,13 +447,53 @@ export class Battler3D {
     return box.isEmpty() ? this.appearPivot.clone() : box.getCenter(new THREE.Vector3()).sub(root.position).divideScalar(this.height);
   }
 
-  /** Distance a contact move travels so the attacker ends up in front of its target. */
+  /**
+   * Distance a contact move travels so the attacker ends up in front of its
+   * target, at striking distance: its own reach (what its clips are made
+   * for: 0.84 of its height from its middle, less its front) from the
+   * target's front. Between two of a kind that is 0.84 of their height
+   * apart; a small attacker comes closer to a big foe, a big one stays
+   * further from a small foe, so the blow lands on the foe's front either
+   * way.
+   */
   approachDistance(): number {
     if (!this.target) return 0;
     const a = this.stage.slots[this.slot].position;
     const b = this.stage.slots[this.target.slot].position;
-    const contact = 0.42 * (this.height + this.target.height);
+    const reach = (0.84 - this.frontDepth()) * this.height;
+    const contact = reach + this.target.frontDepth() * this.target.height;
     return Math.max(0, a.distanceTo(b) - contact);
+  }
+
+  private front = 0.21;
+
+  /** How far its body reaches in front of its middle in its stance, in its heights. */
+  frontDepth(): number {
+    return this.front;
+  }
+
+  /** Measured once as it is made: the posed mesh's furthest point forward, in the root's frame (a unit is its height). */
+  private measureFront(): number {
+    const root = this.inst.root;
+    // updateMatrixWorld, not updateWorldMatrix: a skinned mesh's bind inverse follows it only then.
+    root.parent?.updateWorldMatrix(true, false);
+    root.updateMatrixWorld(true);
+    const toRoot = root.matrixWorld.clone().invert();
+    const v = new THREE.Vector3();
+    let most = 0;
+    let count = 0;
+    root.traverseVisible((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry?.attributes.position) return;
+      const n = mesh.geometry.attributes.position.count;
+      for (let i = 0; i < n; i += 3) {
+        mesh.getVertexPosition(i, v);
+        v.applyMatrix4(mesh.matrixWorld).applyMatrix4(toRoot);
+        most = Math.max(most, v.z);
+        count++;
+      }
+    });
+    return count ? Math.min(0.5, Math.max(0.05, most)) : 0.21;
   }
 
   play(clip: string, opts: { fade?: number; speed?: number } = {}): Promise<void> {

@@ -54,6 +54,8 @@ declare global {
       boxMask: (side: 'player' | 'enemy') => number[];
       /** Play another clip in place (after start()'s), from where the body is; done again at its end. */
       play: (clip: string) => void;
+      /** Each body's front (heights) and how far the attacker's contact moves travel (world units). */
+      geometry: () => { front: [number, number]; heights: [number, number]; approach: number; apart: number };
       /** Perform a move in place as the battle does (its clip, effects, the foe's reaction); done again at its end. */
       perform: (move: string) => void;
       done: boolean;
@@ -80,7 +82,9 @@ const DT = 1 / 60;
 function surfacePoints(b: Battler3D, step: number): THREE.Vector3[] {
   const out: THREE.Vector3[] = [];
   const v = new THREE.Vector3();
-  b.inst.root.updateWorldMatrix(true, true);
+  // updateMatrixWorld, not updateWorldMatrix: a skinned mesh's bind inverse follows it only then.
+  b.inst.root.parent?.updateWorldMatrix(true, false);
+  b.inst.root.updateMatrixWorld(true);
   b.inst.root.traverseVisible((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh || !mesh.geometry?.attributes.position) return;
@@ -290,6 +294,10 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
       if (clip === 'hit') attacker.recoil(1);
       attacker.onEvent = recordContacts;
       void attacker.play(clip, { fade: 0.15 }).then(() => (api.done = true));
+    },
+    geometry() {
+      const a = stage.slots[attacker.slot].position, b = stage.slots[defender.slot].position;
+      return { front: [attacker.frontDepth(), defender.frontDepth()] as [number, number], heights: [attacker.height, defender.height] as [number, number], approach: attacker.approachDistance(), apart: a.distanceTo(b) };
     },
     perform(move: string) {
       api.done = false;

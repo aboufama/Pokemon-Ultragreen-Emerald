@@ -20,7 +20,8 @@
 //                               the next hit doesn't come (a long message, the
 //                               foe fainted) it goes home ('return_home')
 //   a two-turn move's first turn  its _charge variant (Solar Beam gathering
-//                               light, Fly rising out of sight, Dig burrowing)
+//                               light, Dig burrowing: it stays underground,
+//                               out of sight, until its strike bursts up)
 //   a move fails at the foe     no animation shows it: the attacker performs
 //                               the move all the same and the foe dodges it
 //                               (a miss) or shrugs it off (no effect, Protect)
@@ -401,9 +402,12 @@ export class Acting {
       }
     };
     attacker.onEvent = onEvent;
-    // A hit that stays at the foe for the next holds its last pose there.
+    // A hit that stays at the foe for the next holds its last pose there; a
+    // burrow's first turn stays underground (out of sight: its sprite is
+    // hidden) until it bursts up at its strike.
     const stays = clip.endsWith(MULTI_HIT_VARIANTS.first) || clip.endsWith(MULTI_HIT_VARIANTS.next);
-    void attacker.perform(clip, { hold: stays }).then(() => {
+    const buried = clip.endsWith(CHARGE_VARIANT) && (attacker.profile.clips[clip]?.events ?? []).some((e) => e.name === 'dig');
+    void attacker.perform(clip, { hold: stays || buried }).then(() => {
       if (attacker.onEvent === onEvent) attacker.onEvent = null;
       target?.release();
       this.driven.delete(p.target);
