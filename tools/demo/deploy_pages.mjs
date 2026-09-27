@@ -4,7 +4,10 @@
 // and push it as the only commit of the gh-pages branch, which GitHub serves
 // at https://<owner>.github.io/<repo>/.
 //
-//   node tools/demo/deploy_pages.mjs [--no-build] [--no-smoke] [--remote origin] [--branch gh-pages] [--dry]
+//   node tools/demo/deploy_pages.mjs [--playtest-only] [--no-build] [--no-smoke] [--remote origin] [--branch gh-pages] [--dry]
+//
+// --playtest-only publishes the battle playtest alone at the root, as before
+// the compiled game (build_site.mjs --playtest-only).
 //
 // Before publishing it plays the built site (tools/game/smoke_site.mjs: the
 // game boots, a battle in 3D, the playtest in every place) and stops if a
@@ -17,7 +20,7 @@
 // Build and deployment → Deploy from a branch → gh-pages, / (root).
 
 import { spawnSync } from 'node:child_process';
-import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,7 +41,7 @@ function git(cwd, ...a) {
 }
 
 if (!args['no-build']) {
-  const b = spawnSync(process.execPath, [join(ROOT, 'tools/game/build_site.mjs')], { cwd: ROOT, stdio: 'inherit' });
+  const b = spawnSync(process.execPath, [join(ROOT, 'tools/game/build_site.mjs'), ...(args['playtest-only'] ? ['--playtest-only'] : [])], { cwd: ROOT, stdio: 'inherit' });
   if (b.status !== 0) process.exit(b.status ?? 1);
 }
 if (!args['no-smoke']) {
@@ -57,7 +60,10 @@ const site = m ? `https://${m[1].toLowerCase()}.github.io/${m[2]}/` : '(not a Gi
 const dir = await mkdtemp(join(tmpdir(), 'pages-'));
 try {
   await cp(join(ROOT, 'build/site'), dir, { recursive: true });
-  await writeFile(join(dir, 'README.md'), `The built site, published by tools/demo/deploy_pages.mjs from ${source}${dirty}.\nPlay the game at ${site} (the earlier battle playtest: ${site}battle/)\n`);
+  const playtestOnly = !(await stat(join(ROOT, 'build/site/game')).catch(() => null));
+  await writeFile(join(dir, 'README.md'), playtestOnly
+    ? `The battle playtest, published by tools/demo/deploy_pages.mjs from ${source}${dirty}.\nPlay it at ${site}\n`
+    : `The built site, published by tools/demo/deploy_pages.mjs from ${source}${dirty}.\nPlay the game at ${site} (the earlier battle playtest: ${site}battle/)\n`);
   git(dir, 'init', '-q', '-b', branch);
   git(dir, 'config', 'user.name', name);
   git(dir, 'config', 'user.email', email);

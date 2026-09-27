@@ -38,6 +38,13 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}${prefix}`;
 
+// The battle playtest alone (build_site.mjs --playtest-only): its own smoke test.
+if (!existsSync(join(SITE, 'game'))) {
+  server.close();
+  const s = spawnSync(process.execPath, [join(ROOT, 'tools/demo/smoke_pages.mjs'), '--site', 'build/site', '--prefix', prefix], { cwd: ROOT, stdio: 'inherit' });
+  process.exit(s.status ?? 1);
+}
+
 const problems = [];
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 

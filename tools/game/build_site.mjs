@@ -2,7 +2,7 @@
 // Build the published site (GitHub Pages; tools/demo/deploy_pages.mjs
 // publishes it):
 //
-//   node tools/game/build_site.mjs [--no-demo]
+//   node tools/game/build_site.mjs [--no-demo | --playtest-only]
 //
 //   build/site/            the front page: the compiled Emerald with its remake
 //                          layer (game.html, src/game/main.ts)
@@ -16,6 +16,9 @@
 //     battle/              the earlier battle playtest (tools/demo/build_demo.mjs),
 //                          as it was (left out with --no-demo)
 //
+// With --playtest-only the site is the battle playtest alone, at the root, as
+// it was published before the compiled game (until the game's opening plays).
+//
 // tools/game/smoke_site.mjs checks the result before it is published.
 
 import { spawnSync } from 'node:child_process';
@@ -27,6 +30,15 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SITE = join(ROOT, 'build/site');
 const argv = process.argv.slice(2);
+
+if (argv.includes('--playtest-only')) {
+  const demo = spawnSync(process.execPath, [join(ROOT, 'tools/demo/build_demo.mjs')], { cwd: ROOT, stdio: 'inherit' });
+  if (demo.status !== 0) process.exit(demo.status ?? 1);
+  await rm(SITE, { recursive: true, force: true });
+  await cp(join(ROOT, 'build/demo/pages'), SITE, { recursive: true });
+  console.log('site: build/site (the battle playtest alone)');
+  process.exit(0);
+}
 
 for (const f of ['public/game/pokeemerald.wasm', 'public/game/remake_state.json']) {
   if (!existsSync(join(ROOT, f))) {
