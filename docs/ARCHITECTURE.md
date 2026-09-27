@@ -95,7 +95,9 @@ hand. The remake adds two things around it:
 - `timing.py`: how many cycles functions take on the ROM (the drivers' costs).
 - `layouts.py`: every struct's layout against the GBA build's.
 - `tools/remake/run.mjs`: `run.mjs`'s scripts in the browser, with the remake
-  layer (the 3D battles), frames saved as PNG.
+  layer (the 3D battles), frames saved as PNG. The page presses a script's
+  keys at the VBlanks it names, as `run.mjs` does, so its frames are the
+  headless run's (outside the 3D pictures).
 - `tools/remake/soak.mjs`: battle after battle with the remake layer; fails
   on a page error or memory that keeps growing.
 

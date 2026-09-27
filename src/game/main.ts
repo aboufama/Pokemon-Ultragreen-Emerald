@@ -12,6 +12,8 @@
 // ?manual=1 is for tools (tools/remake/run.mjs): the game runs only when
 // told, frame by frame (window.__game), from a blank save, and with
 // ?time=2026,1,1,4,10,0,0 on a fixed clock, so a run is the same every time.
+// An input script's keys change at the VBlanks it names, as in the headless
+// runner (platform/tools/run.mjs), so a script plays the same in both.
 
 import { loadGame, KEYS, GameHalt, WIDTH, HEIGHT, type Game } from '../../platform/host/game.mjs';
 import speciesTable from '../data/generated/species.json';
@@ -144,12 +146,14 @@ async function main() {
   // The remake layer draws the battles in 3D (src/remake): at the start of
   // each frame it prepares the frame's pictures.
   let remake: RemakeLayer | null = null;
+  let onVBlank: ((count: number) => void) | null = null;
   const game = await loadGame(module, {
     flash: manual ? undefined : loadSave(),
     rtcOffset: manual ? 0 : Number(localStorage.getItem(RTC_KEY) ?? 0) || 0,
     time: clock ? () => clock : undefined,
     log: (t) => console.log(`[game] ${t}`),
     onFrameStart: () => remake?.onFrameStart(),
+    onVBlank: (count) => onVBlank?.(count),
   });
   await game.init();
   const layer = new RemakeLayer(game, info);
@@ -157,14 +161,18 @@ async function main() {
   const battle = params.get('battle');
   let pendingBattle = battle ? testBattleArgs(battle, speciesTable, info.constants) : null;
   const image = new ImageData(WIDTH, HEIGHT);
-  const show = () => {
-    image.data.set(game.frameRGBA());
+  const show = (rgba: Uint8ClampedArray = game.frameRGBA()) => {
+    image.data.set(rgba);
     ctx.putImageData(image, 0, 0);
   };
-  /** One iteration of the game's loop with `held` keys: false after a soft reset (the GBA started over). */
-  const step = async (held: number): Promise<boolean> => {
+  /**
+   * One iteration of the game's loop, `held` keys (KEYS bits) pressed, or
+   * the keys as they are (null): false after a soft reset (the GBA started
+   * over).
+   */
+  const step = async (held: number | null): Promise<boolean> => {
     if (pendingBattle && startTestBattle(game, pendingBattle)) pendingBattle = null;
-    game.setKeys(held);
+    if (held !== null) game.setKeys(held);
     if (!game.frame()) {
       await game.init();
       return false;
@@ -175,18 +183,43 @@ async function main() {
   status.textContent = '';
 
   if (manual) {
+    // An input script's keys, by the frame they are held from: set at the
+    // VBlank before it (so the game reads them in that frame), as
+    // platform/tools/run.mjs does.
+    const schedule = new Map<number, number>();
+    // The frame at the VBlank runTo stops at, as it was then (a game frame
+    // can span two VBlanks when the GBA would lag).
+    let stopAt = 0;
+    let stopFrame: Uint8ClampedArray | null = null;
+    onVBlank = (count) => {
+      if (count === stopAt) stopFrame = game.frameRGBA().slice();
+      const keys = schedule.get(count + 1);
+      if (keys !== undefined) game.setKeys(keys);
+    };
     (window as unknown as { __game: unknown }).__game = {
-      /** Run with `held` keys (KEYS bits) until `vblanks` VBlanks since power-on; the canvas shows the last frame. */
-      async runTo(vblanks: number, held: number): Promise<number> {
+      /** An input script's keys: [frame, KEYS bits] pairs, each held from its frame until the next. */
+      play(inputs: [number, number][]) {
+        schedule.clear();
+        for (const [frame, keys] of inputs) schedule.set(frame, keys);
+        game.setKeys(schedule.get(1) ?? 0);
+      },
+      /**
+       * Run until `vblanks` VBlanks since power-on, the script's keys pressed
+       * (or `held` keys from now on); the canvas shows the frame at that VBlank.
+       */
+      async runTo(vblanks: number, held?: number): Promise<number> {
+        if (held !== undefined) game.setKeys(held);
+        stopAt = vblanks;
+        stopFrame = null;
         while (game.vblanks() < vblanks) {
           // The game waits while the remake layer loads what a battle needs.
           while (!layer.ready()) await new Promise((r) => setTimeout(r, 20));
           // Only the frame shown gets the remake's pictures.
           layer.drawPictures = game.vblanks() + 1 >= vblanks;
-          await step(held);
+          await step(null);
         }
         layer.drawPictures = true;
-        show();
+        show(stopFrame ?? undefined);
         return game.vblanks();
       },
       vblanks: () => game.vblanks(),
