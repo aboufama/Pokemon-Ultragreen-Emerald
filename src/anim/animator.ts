@@ -90,6 +90,8 @@ export class Animator {
   lastPose: Pose = {};
   /** 1 while a looping (idle) clip plays, eased toward 0 during actions. */
   private idleWeight = 1;
+  /** 1 while a finished clip's last pose is held (a multi-hit move's attacker at the foe between hits): it breathes. */
+  private holdWeight = 0;
   private readonly delay: (bone: string) => number;
 
   constructor(private readonly rig: Rig, readonly clips: Record<string, Clip>, overlap: Record<string, number> = DEFAULT_OVERLAP) {
@@ -154,6 +156,8 @@ export class Animator {
     }
     const idleTarget = cur.clip.loop ? 1 : 0;
     this.idleWeight += (idleTarget - this.idleWeight) * Math.min(1, dt * 4);
+    const holdTarget = !cur.clip.loop && cur.done ? 1 : 0;
+    this.holdWeight += (holdTarget - this.holdWeight) * Math.min(1, dt * 3);
     pose = this.proceduralLayer(pose);
     this.rig.applyPose(pose);
     this.lastPose = pose;
@@ -164,11 +168,12 @@ export class Animator {
    * Life on top of whatever plays: an asymmetric breath (quick inhale, long
    * exhale), a slow irregular weight shift with the upper body
    * counter-balancing, a fighter's bounce and a drifting gaze while idle,
-   * and small finger movements. Fades out while travelling to a target.
+   * and small finger movements. Fades out while travelling to a target, and
+   * comes back while a finished clip's pose is held there.
    */
   private proceduralLayer(pose: Pose): Pose {
     if (!this.breathing) return pose;
-    const calm = 1 - Math.min(1, Math.abs(pose.advance ?? 0) * 3);
+    const calm = Math.max(1 - Math.min(1, Math.abs(pose.advance ?? 0) * 3), this.holdWeight);
     const a = this.breathing * calm;
     if (a <= 0) return pose;
     const idle = this.idleWeight * a;

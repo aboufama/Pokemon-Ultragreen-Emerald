@@ -3,7 +3,9 @@ battle_controllers.c: the remake layer learns what each battler is told to do.
 Every command the battle engine gives a battler's controller (a hit's blink,
 a faint, a send-out, a move's animation...) passes through
 PrepareBufferDataTransfer; the remake layer's hook records the battler and
-the command, so the 3D body acts it out as the sprite does.
+the command (and a battle message's string id: the remake acts out what the
+game only says, "flinched!", "must recharge!"), so the 3D body acts it out as
+the sprite does.
 
 --- a/src/battle_controllers.c
 +++ b/src/battle_controllers.c
@@ -22,7 +24,7 @@ the command, so the 3D body acts it out as the sprite does.
 +#ifdef PLATFORM_WASM
 +    // PLATFORM_WASM: the remake layer learns what the battler is told to do.
 +    if (bufferId == B_COMM_TO_CONTROLLER)
-+        RemakeBattlerCommand(gActiveBattler, data[0]);
++        RemakeBattlerCommand(gActiveBattler, data);
 +#endif
      if (gBattleTypeFlags & BATTLE_TYPE_LINK)
      {

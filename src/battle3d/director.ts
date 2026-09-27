@@ -75,6 +75,19 @@ export function clipFor(attacker: Battler3D, move: MoveData): string {
   return categorize(move);
 }
 
+/**
+ * The clips a move plays for `hits` hits: a multi-hit move's _first, _next
+ * and _last when the species has them (the first stays at the foe, the ones
+ * between strike from there, the last goes home), else its clip once.
+ */
+export function hitClips(attacker: Battler3D, move: MoveData, hits: number): string[] {
+  const base = clipFor(attacker, move);
+  const has = (v: string) => !!attacker.profile.clips[base + v];
+  if (hits < 2 || !has('_first') || !has('_last')) return [base];
+  const between = Array.from({ length: hits - 2 }, () => (has('_next') ? '_next' : '_last'));
+  return [base + '_first', ...between.map((v) => base + v), base + '_last'];
+}
+
 /** World position of a rig bone (semantic name), falling back to the body center. */
 export function bonePoint(b: Battler3D, name: string): THREE.Vector3 {
   const node = b.inst.rig.node(name);
@@ -150,6 +163,10 @@ export function emitterPoints(b: Battler3D, motif: Motif, move?: MoveData): THRE
 export interface PerformHooks {
   /** Called for every hit that lands (multi-hit moves call it several times). */
   onHit?: (index: number) => void;
+  /** Play this clip instead of the move's (a multi-hit move's _first, _next, _last). */
+  clip?: string;
+  /** Keep the clip's last pose at its end (a hit that stays at the foe for the next). */
+  hold?: boolean;
 }
 
 function hitReaction(target: Battler3D, vfx: VfxSystem, strong: boolean, move?: MoveData): void {
@@ -378,7 +395,7 @@ function tunnelFx(b: Battler3D, move: MoveData, vfx: VfxSystem): () => void {
 }
 
 export async function performMove(attacker: Battler3D, target: Battler3D, move: MoveData, vfx: VfxSystem, hooks: PerformHooks = {}): Promise<void> {
-  const clip = clipFor(attacker, move);
+  const clip = hooks.clip ?? clipFor(attacker, move);
   const motif = motifOf(move);
   const strong = isStrong(move);
   attacker.target = target;
@@ -447,7 +464,7 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
       vfx.shake(0.02, 0.25);
     }
   };
-  await attacker.perform(clip);
+  await attacker.perform(clip, { hold: hooks.hold });
   // A clip that grabbed the foe and never threw it lets go at its end.
   target.release();
   (tunnel as (() => void) | null)?.();

@@ -20,7 +20,7 @@ import { panFor, sound } from '../audio/sound';
 import { BattleStage } from '../render3d/stage';
 import { Battler3D } from '../battle3d/battler';
 import { VfxSystem, preloadSheets } from '../battle3d/vfx';
-import { performMove } from '../battle3d/director';
+import { hitClips, performMove } from '../battle3d/director';
 import { hasProfile } from '../pokemon/registry';
 import { GbaScreen } from './screen';
 import { type Button, Input } from './input';
@@ -819,14 +819,18 @@ export class BattleScene {
     const target = this.battler(side === 'player' ? 'opponent' : 'player');
     const drains: Promise<void>[] = [];
     let landed = 0;
-    await performMove(attacker, target, move, this.vfx, {
-      onHit: () => {
-        const h = hp[landed++];
-        if (!h) return;
-        this.hitSound(h);
-        drains.push(this.drainHp(h.side, h.to));
-      },
-    });
+    const onHit = () => {
+      const h = hp[landed++];
+      if (!h) return;
+      this.hitSound(h);
+      drains.push(this.drainHp(h.side, h.to));
+    };
+    // A multi-hit move's hits one after another: in at the first, home after the last.
+    const clips = hitClips(attacker, move, hp.filter((h) => h.side !== side).length);
+    for (let i = 0; i < clips.length; i++) {
+      await performMove(attacker, target, move, this.vfx, { onHit, clip: clips.length > 1 ? clips[i] : undefined, hold: i < clips.length - 1 });
+      if (i < clips.length - 1) await Promise.all(drains);
+    }
     // Hits the clip had no impact event for drain one after another.
     for (; landed < hp.length; landed++) {
       await Promise.all(drains);

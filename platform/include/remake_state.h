@@ -35,6 +35,7 @@ struct RemakeBattler {
     uint32_t personality;
     uint16_t hp, maxHp;
     uint8_t healthboxShown; // its healthbox is on the screen (a wild Pokémon's shows as it cries)
+    uint32_t status1;       // its status condition (STATUS1_*: asleep, frozen...)
 };
 
 // Which table a battle animation comes from.
@@ -74,6 +75,9 @@ struct RemakeState {
                             // show no animation); the last one's attacker, foe, move and gMoveResultFlags
     uint16_t failMove;
     uint8_t failAttacker, failTarget, failResult, pad1;
+    uint16_t messageSerial; // counts the battle's messages (a new one when it changes); the last one's STRINGID_*
+    uint16_t messageId;     // and the battlers it was said with: the attacker and the target, the battle script's
+    uint8_t messageAttacker, messageTarget, messageScripting, messageEffect;  // battler, the effect's battler
     uint16_t background;    // REMAKE_BG_MAIN, or the move background shown
     uint8_t copyBattler[2]; // the battler whose sprite a move animation drew into BG1, BG2 (MoveBattlerSpriteToBG:
                             // the copy moves as the background scrolls), or REMAKE_NO_BATTLER
@@ -144,8 +148,9 @@ struct RemakeLayers {
 // animation starts; the battle background is drawn (REMAKE_BG_MAIN or a move's);
 void RemakeBattleAnimation(const uint8_t *const animsTable[], uint16_t tableId, uint8_t isMoveAnim);
 void RemakeBattleBackground(uint16_t background);
-// (platform/patches/battle_controllers.patch) the battle engine gives a battler's controller a command.
-void RemakeBattlerCommand(uint8_t battler, uint8_t command);
+// (platform/patches/battle_controllers.patch) the battle engine gives a battler's controller a command
+// (the message it sends it: `data`, the command first; a battle message's string id follows).
+void RemakeBattlerCommand(uint8_t battler, const uint8_t *data);
 // (platform/patches/battle_anim.patch, battle_anim_mons.patch) a move animation draws a battler's
 // sprite into BG1 or BG2 in `palette`; the background is cleared or given other pictures (REMAKE_NO_BATTLER).
 void RemakeBattlerCopy(uint8_t bg, uint8_t battler, uint8_t palette);

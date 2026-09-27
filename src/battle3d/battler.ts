@@ -89,6 +89,12 @@ export class Battler3D {
   private eyeMap: THREE.Texture | null = null;
   pose: Pose = {};
   onEvent: ((name: string) => void) | null = null;
+  /** The loop it returns to after a clip: 'idle', or a state's (asleep, worn down: setIdle). */
+  idleClip = 'idle';
+  /** Frozen solid: the body holds still (only its freeze clip moves it). */
+  frozen = false;
+  /** Counts the clips played, so a clip's end only returns to idle if nothing else started since. */
+  private playCount = 0;
   /** Carried by a toss (see grabbedBy): who holds it, and the body relative to their grip. */
   private carry: { by: Battler3D; rel: THREE.Matrix4 } | null = null;
   /** Let go after a carry: where from (slot frame), how long it flies back to its place (0: dropped where it is), lies and gets up. */
@@ -112,7 +118,7 @@ export class Battler3D {
     this.shadow = new GroundShadow(px.density * px.supersample);
     stage.slots[slot].add(this.shadow.mesh);
     this.measureFootprint();
-    void this.animator.play('idle');
+    void this.animator.play(this.idleClip);
     // Every node the pose moves, for holding a pose on screen (stop motion).
     const nodes: THREE.Object3D[] = [];
     inst.root.traverse((o) => {
@@ -449,6 +455,7 @@ export class Battler3D {
 
   play(clip: string, opts: { fade?: number; speed?: number } = {}): Promise<void> {
     const name = this.animator.has(clip) ? clip : 'idle';
+    this.playCount++;
     return this.animator.play(name, {
       ...opts,
       onEvent: (e) => {
@@ -460,10 +467,24 @@ export class Battler3D {
     });
   }
 
-  /** Play a clip, then return to idle. */
-  async perform(clip: string, opts: { fade?: number; speed?: number } = {}): Promise<void> {
+  /**
+   * Play a clip, then return to its idle loop, unless another clip started
+   * meanwhile; `hold` keeps the clip's last pose instead (breathing), until
+   * the next clip (a multi-hit move's attacker at the foe between hits).
+   */
+  async perform(clip: string, opts: { fade?: number; speed?: number; hold?: boolean } = {}): Promise<void> {
+    const started = this.playCount + 1;
     await this.play(clip, opts);
-    if (clip !== 'faint') void this.play('idle', { fade: 0.2 });
+    if (clip !== 'faint' && !opts.hold && this.playCount === started) void this.play(this.idleClip, { fade: 0.2 });
+  }
+
+  /** The loop to rest in (a state's: 'idle_asleep', 'idle_tired'; its own clip or 'idle'): played at once if it is resting now. */
+  setIdle(clip: string): void {
+    const name = this.animator.has(clip) ? clip : 'idle';
+    if (name === this.idleClip) return;
+    const resting = this.animator.currentClip === this.idleClip;
+    this.idleClip = name;
+    if (resting) void this.play(name, { fade: 0.5 });
   }
 
   blink(seconds: number): void {
@@ -516,7 +537,9 @@ export class Battler3D {
 
   update(dt: number): void {
     this.time += dt;
-    const pose = this.animator.update(dt);
+    // Frozen solid, it holds still (its freeze clip, straining in the ice, still plays).
+    const still = this.frozen && this.animator.currentClip !== 'status_freeze';
+    const pose = this.animator.update(still ? 0 : dt);
     this.pose = pose;
     // Fainting, as the 3D games show it: from the faint clip's 'shrink' the
     // body shrinks away into its middle (as the GBA shrinks a Pokémon into

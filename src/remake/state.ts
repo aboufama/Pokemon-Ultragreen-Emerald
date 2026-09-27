@@ -85,6 +85,8 @@ export interface BattlerState {
   maxHp: number;
   /** Its healthbox is on the screen (a wild Pokémon's shows as it cries). */
   healthboxShown: boolean;
+  /** Its status condition (STATUS1_*: asleep, frozen...). */
+  status1: number;
 }
 
 export interface BattleState {
@@ -118,6 +120,17 @@ export interface BattleState {
   failTarget: number;
   failMove: number;
   failResult: number;
+  /**
+   * Counts the battle's messages; the last one's STRINGID_* and the battlers
+   * it was said with (the attacker, the target, the battle script's battler,
+   * the effect's), one of which it is about.
+   */
+  messageSerial: number;
+  messageId: number;
+  messageAttacker: number;
+  messageTarget: number;
+  messageScripting: number;
+  messageEffect: number;
   /** REMAKE_BG_MAIN (the place's), or the move background (BG_*) BG3 shows. */
   background: number;
   /**
@@ -166,6 +179,7 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
       hp: b.get('hp'),
       maxHp: b.get('maxHp'),
       healthboxShown: !!b.get('healthboxShown'),
+      status1: b.get('status1'),
     });
   }
   return {
@@ -191,6 +205,12 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
     failTarget: s.get('failTarget'),
     failMove: s.get('failMove'),
     failResult: s.get('failResult'),
+    messageSerial: s.get('messageSerial'),
+    messageId: s.get('messageId'),
+    messageAttacker: s.get('messageAttacker'),
+    messageTarget: s.get('messageTarget'),
+    messageScripting: s.get('messageScripting'),
+    messageEffect: s.get('messageEffect'),
     copies: [0, 1].map((i) => ({ battler: s.get('copyBattler', i) === noBattler ? null : s.get('copyBattler', i), palette: s.get('copyPalette', i) })),
     background: s.get('background'),
     plttUnfaded: s.get('plttUnfaded'),

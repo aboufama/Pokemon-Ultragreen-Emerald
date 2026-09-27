@@ -5,6 +5,7 @@
 #include "global.h"
 #include "battle.h"
 #include "battle_anim.h"
+#include "battle_controllers.h"
 #include "battle_main.h"
 #include "data.h"
 #include "main.h"
@@ -98,12 +99,23 @@ void RemakeBattleBackground(u16 background)
     sState.background = background;
 }
 
-void RemakeBattlerCommand(u8 battler, u8 command)
+void RemakeBattlerCommand(u8 battler, const u8 *data)
 {
     if (battler >= REMAKE_BATTLERS)
         return;
-    sCommand[battler] = command;
+    sCommand[battler] = data[0];
     sCommandSerial[battler]++;
+    // A battle message (BtlController_EmitPrintString): its string id, and
+    // who it may be about (the one it is sent to is always the attacker's).
+    if (data[0] == CONTROLLER_PRINTSTRING)
+    {
+        sState.messageSerial++;
+        sState.messageId = data[2] | (data[3] << 8);
+        sState.messageAttacker = gBattlerAttacker;
+        sState.messageTarget = gBattlerTarget;
+        sState.messageScripting = gBattleScripting.battler;
+        sState.messageEffect = gEffectBattler;
+    }
 }
 
 void RemakeBattlerCopy(u8 bg, u8 battler, u8 palette)
@@ -160,6 +172,7 @@ __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void
         b->personality = gBattleMons[i].personality;
         b->hp = gBattleMons[i].hp;
         b->maxHp = gBattleMons[i].maxHP;
+        b->status1 = gBattleMons[i].status1;
         if (gHealthboxSpriteIds[i] < MAX_SPRITES)
             b->healthboxShown = gSprites[gHealthboxSpriteIds[i]].inUse && !gSprites[gHealthboxSpriteIds[i]].invisible;
         b->spriteId = gBattlerSpriteIds[i];
