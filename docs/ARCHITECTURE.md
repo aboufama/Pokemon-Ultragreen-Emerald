@@ -36,36 +36,64 @@ hand. The remake adds two things around it:
 
 ## Build (`platform/build.mjs`)
 
-1. The decomp's own tools (`make tools`) and its data build (graphics, maps
-   JSON to assembly, text through `preproc`) run as the decomp's Makefile runs
-   them.
-2. **C**: each `src/*.c` and `gflib/*.c`, preprocessed exactly as the Makefile
-   does (`cpp` then `preproc` with `charmap.txt`), compiled by clang for
-   `wasm32` (freestanding). 307 of 310 compile unchanged; `script.c` needs one
-   patch (`svc 2`), the wireless adapter and multiboot are stubbed.
-3. **Data**: each `data/*.s` (event, battle, battle animation and AI scripts,
-   maps, sound) assembled by `arm-none-eabi-as` with the decomp's macros, then
-   `platform/tools/elf2wasm.py` converts the ELF object to a WebAssembly data
-   object: the same bytes, the same symbols, every pointer a relocation
-   (function pointers typed from the build's DWARF).
-4. **Platform C** (below) and a minimal libc.
-5. `wasm-ld`: the GBA's memory map lives at its own addresses in linear memory
-   (I/O at 0x04000000, palettes 0x05000000, VRAM 0x06000000, OAM 0x07000000),
-   so the game's register and VRAM accesses work unchanged.
+1. **The decomp's own build** (`make modern DINFO=1`): its tools, its generated
+   graphics and maps, its data assembled into ARM objects, and the GBA ROM
+   with debug info (the reference the tools below compare with).
+2. **C**: each `src/*.c`, preprocessed as the Makefile does (`cpp`, then
+   `preproc` for text and `INCBIN`), then:
+   - **the GBA's struct layout** (`tools/apcs_layout.mjs`): the GBA build's
+     `-mabi=apcs-gnu` rounds every struct and union to 4 bytes, and the data
+     files and saves are laid out for it; every non-packed struct definition
+     gets `aligned(4)`. `tools/layouts.py` checks all 614 types against the
+     GBA build's debug info.
+   - compiled by clang for `wasm32` to LLVM IR;
+   - **timed** (`tools/cpu_time.mjs`): each basic block adds its instructions'
+     ARM7 cost to the platform's CPU clock;
+   - **I/O hooked** (`tools/volatile_io.mjs`): every volatile access to
+     0x04xxxxxx goes to the platform, which gives registers the hardware's
+     behavior; other memory is untouched.
+3. **Patches** (`platform/patches/*.patch`, applied to copies): the main loop
+   split into init and one iteration (`main.c`), code the GBA runs from RAM
+   or as assembly (the wireless library's callbacks and copies, multiboot's
+   cycle-counting delay, the script engine's halt), two linker constants
+   (`m4a.c`). Each patch explains itself.
+4. **Replaced**: the hardware drivers (`platform/game`, compiled like the
+   game): the flash chip and the real-time clock (each call as long as the
+   GBA driver's, measured with `tools/timing.py`), the GameCube link, and the
+   sound engine's assembly half (`m4a_1.s`, ported to C).
+5. **Data** (`tools/elf2wasm.py`): each ARM data object converted to a wasm
+   object with the same bytes (`.incbin`) and symbols, every pointer a
+   relocation, function references typed from the C objects (`tools/wasmobj.py`).
+6. **Link** (`wasm-ld`): 128 MB of memory, the GBA's I/O, palettes, VRAM and
+   OAM at their own addresses; then `wasm-opt --fpcast-emu` so a call through
+   a pointer of another type works as on the GBA (extra arguments ignored, a
+   missing result 0).
 
-## Platform layer (`platform/`)
+## Platform layer (`platform/src`)
 
 | GBA | here |
 |---|---|
-| main loop, `VBlankIntrWait` | `AgbMain` split into init and one frame, run by the browser 60 times a second |
-| interrupts | VBlank, HBlank (per line, while drawing) and timer handlers called from `gIntrTable` |
-| DMA | immediate transfers at once; HBlank DMA per line while drawing (scanline effects) |
-| BIOS | `CpuSet`, `CpuFastSet`, `LZ77UnComp*`, `RLUnComp*`, `Div`, `Sqrt`, `ArcTan2`, `BgAffineSet`, `ObjAffineSet`... in C |
-| PPU | a line renderer: modes 0-2, text and affine BGs, regular and affine OBJs, windows (WIN0/1, OBJ window), blending, mosaic |
-| sound | the m4a engine (`m4a.c` compiled; the assembly core of `m4a_1.s` replaced), mixed in an AudioWorklet |
-| save flash | browser storage |
-| real-time clock | the device's clock |
-| keypad | keyboard, touch pad, gamepad |
+| CPU time | `gPlatformCycles`: the game's basic blocks, register polls, BIOS calls, DMA and the drivers' delays move it |
+| the screen's timeline | `clock.c`: as the clock moves, each scanline starts, is drawn and reaches its HBlank, line 160 its VBlank; interrupts are delivered then, inside whatever the game is doing |
+| main loop | `AgbMainFrame` is one iteration; the platform then waits as `WaitForVBlank` does, for the VBlank handler's flag. A slow iteration spans two VBlanks: a lag frame, as on the GBA |
+| I/O registers | `io.c`: VCOUNT and DISPSTAT from the timeline, IF write-1-to-clear, timers on the clock, the power-on state the BIOS leaves (forced blank, line 126) |
+| interrupts | `io.c`: crt0.s's IntrMain (priorities, acknowledging, IE/IME while the handler runs) calling `gIntrTable` |
+| DMA | `dma.c`: latched on enable; immediate, VBlank and HBlank transfers (the scanline effects) |
+| BIOS | `bios.c`: the SWIs in C, with their cycle costs |
+| PPU | `ppu.c`: a scanline renderer: modes 0-5, text and affine backgrounds, sprites (affine, double size, mosaic, semi-transparent, window), windows, blending |
+| sound | `apu.c` and the m4a engine: the mixer's output and the four GB channels |
+| cartridge | `cartridge.c`: 128 KB flash kept in the browser, the real-time clock from the device's |
+| keypad | keyboard, touch pad, gamepad (`src/game/main.ts`) |
+
+## Tools (`platform/tools`)
+
+- `run.mjs`: the compiled game headless, on an input script (`platform/tests`),
+  frames saved as PNG.
+- `reference.py`: the decomp's GBA ROM in mGBA on the same script.
+- `compare.py`: frame by frame, the GBA's 15-bit colors (`--slack` finds a
+  timing shift). The boot matches the ROM frame for frame through the intro.
+- `timing.py`: how many cycles functions take on the ROM (the drivers' costs).
+- `layouts.py`: every struct's layout against the GBA build's.
 
 ## Remake layer (`src/remake/`)
 
@@ -81,6 +109,19 @@ Battles are the game's battles, with these substitutions:
 
 A species without a 3D model is drawn by the game (its 2D sprite): the layer
 only substitutes what it has.
+
+**How the pictures combine.** The 3D renders are layers the platform's PPU
+composes like its own, so everything the GBA does to a picture applies to
+them too: at each VBlank the remake layer reads the battle's state from the
+game's memory, renders the arena and the battlers at 240x160, and hands the
+PPU two layers for the next frame: the arena in place of BG3's pixels (with
+BG3's priority, window and blending), the battlers in place of their OBJs
+(their OAM entries are skipped; the 3D pixels take their priority, so text
+boxes, healthboxes and move effects stay above or below as the game draws
+them). The game fades and tints through palettes (fades to black or white, a
+battler flashing red); the layer reads each battler's and BG3's palette state
+(the faded palette against the unfaded one) and applies the same blend to the
+3D pixels.
 
 ## Content milestones
 
