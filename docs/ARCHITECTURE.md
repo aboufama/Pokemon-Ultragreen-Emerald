@@ -94,6 +94,11 @@ hand. The remake adds two things around it:
   timing shift). The boot matches the ROM frame for frame through the intro.
 - `timing.py`: how many cycles functions take on the ROM (the drivers' costs).
 - `layouts.py`: every struct's layout against the GBA build's.
+- `platform/tests/opening.json`: the opening played key for key, power-on
+  to a wild battle in Route 101's grass (recorded on the ROM by
+  `platform/tests/opening.py`, whose `--check` replays it with shifted timing,
+  another RNG and battles of 1-13 turns: it holds whatever the battle and the
+  grass do). The site's smoke test plays it before each deploy.
 - `tools/remake/run.mjs`: `run.mjs`'s scripts in the browser, with the remake
   layer (the 3D battles), frames saved as PNG. The page presses a script's
   keys at the VBlanks it names, as `run.mjs` does, so its frames are the
