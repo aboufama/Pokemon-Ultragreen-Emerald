@@ -78,7 +78,11 @@ export async function runPlaytest(root: HTMLElement): Promise<void> {
   const params = new URLSearchParams(location.search);
   if (params.get('sound') !== '0') sound.enable();
   const coarse = matchMedia('(pointer: coarse)').matches;
-  const roster = profiledSpecies().sort((a, b) => (SPECIES[a]?.nationalDex ?? 0) - (SPECIES[b]?.nationalDex ?? 0)).slice(0, 3);
+  // Fully evolved Pokémon at level 50 (the Hoenn starters' final forms): the
+  // earlier forms and the Route 101 Pokémon are the compiled game's.
+  const roster = profiledSpecies()
+    .filter((s) => SPECIES[s] && SPECIES[s].evolutions.length === 0)
+    .sort((a, b) => (SPECIES[a]?.nationalDex ?? 0) - (SPECIES[b]?.nationalDex ?? 0));
   const showcase: Record<string, string[]> = {};
   await Promise.all(roster.map(async (s) => (showcase[s] = ((await getSpeciesProfile(s)).showcaseMoves ?? []).map((m) => m.replace(/^MOVE_/, '')))));
   const g = await loadMenuGfx();

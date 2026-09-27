@@ -34,6 +34,8 @@ export interface SpeciesData {
   learnset: { level: number; move: string }[];
   /** TM, HM and move tutor moves (MOVE_ constants). */
   teachable: string[];
+  /** What it evolves into and how (gEvolutionTable): none for a fully evolved species. */
+  evolutions: { method: string; param: number | string; into: string }[];
   /** Pokédex category ("FOREST" for the FOREST POKéMON). */
   category: string;
 }

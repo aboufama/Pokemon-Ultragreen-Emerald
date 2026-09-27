@@ -1,7 +1,7 @@
 """Extract game data from pret/pokeemerald into JSON for the web runtime.
 
 Outputs (src/data/generated/):
-  species.json   per-species stats, types, graphics folder, sprite coords, anims, learnset
+  species.json   per-species stats, types, graphics folder, sprite coords, anims, learnset, evolutions
   moves.json     battle move data + names
   types.json     type names + effectiveness chart
   abilities.json ability names
@@ -158,6 +158,16 @@ def main(decomp: Path, out_dir: Path) -> None:
         w, h = (int(x) for x in re.match(r"MON_COORDS_SIZE\((\d+),\s*(\d+)\)", f["size"]).groups())
         return {"width": w, "height": h, "yOffset": int(f["y_offset"])}
 
+    # Evolutions (gEvolutionTable): [{method, param, into}] per species.
+    evo_table = C.parse_designated_table(C.read(decomp / "src/data/pokemon/evolution.h"), "gEvolutionTable")
+
+    def evolutions(const: str) -> list[dict]:
+        out = []
+        for m in re.finditer(r"\{\s*(EVO_\w+)\s*,\s*(\w+)\s*,\s*(SPECIES_\w+)\s*\}", evo_table.get(const, "")):
+            method, param, into = m.groups()
+            out.append({"method": method, "param": int(param) if param.isdigit() else param, "into": into[len("SPECIES_"):].lower()})
+        return out
+
     species_out: dict[str, dict] = {}
     for const, sid in sorted(species_ids.items(), key=lambda kv: kv[1]):
         if sid <= 0 or sid >= num_species or const not in info_table:
@@ -208,6 +218,7 @@ def main(decomp: Path, out_dir: Path) -> None:
                 for e in learnsets_by_sym.get(learn_ptrs.get(const, ""), [])
             ],
             "teachable": teachable(const),
+            "evolutions": evolutions(const),
             "category": categories.get(f"NATIONAL_DEX_{dex_name}", "") if dex_name else "",
         }
         species_out[slug] = entry
