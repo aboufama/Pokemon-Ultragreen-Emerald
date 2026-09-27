@@ -1,0 +1,208 @@
+{
+  "classifier": "set by hand (Jev unavailable here: no TYPESAFE_API_KEY), as the line's clips perform each move",
+  "parts": {
+    "mouth": "Its mouth or jaws: bites, breathes, spits, roars or fires from the mouth",
+    "head": "Its head, horn or crest: headbutts and rams",
+    "eyes": "Its eyes: stares, glares, hypnotizes",
+    "hands": "Its arms, hands or claws: punches, chops, slashes, grabs, throws",
+    "feet": "Its legs or feet: kicks, stomps, scoops the ground",
+    "tail": "Its tail: swings, slaps, whips",
+    "body": "The whole body at once: tackles, spins, glows, shields, dances, calls the weather",
+    "forepaw": "Its right forepaw, which digs, scoops mud and swipes",
+    "hindPaws": "Its hind paws, which kick dirt back at the foe"
+  },
+  "moves": {
+    "MOVE_TACKLE": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_HOWL": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_SAND_ATTACK": {
+      "part": "hindPaws",
+      "by": "hand"
+    },
+    "MOVE_BITE": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_ODOR_SLEUTH": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_ROAR": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_SWAGGER": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_SCARY_FACE": {
+      "part": "eyes",
+      "by": "hand"
+    },
+    "MOVE_TAKE_DOWN": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_TAUNT": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_CRUNCH": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_THIEF": {
+      "part": "forepaw",
+      "by": "hand"
+    },
+    "MOVE_TOXIC": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_HIDDEN_POWER": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_SUNNY_DAY": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_HYPER_BEAM": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_PROTECT": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_RAIN_DANCE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_FRUSTRATION": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_IRON_TAIL": {
+      "part": "tail",
+      "by": "hand"
+    },
+    "MOVE_RETURN": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_DIG": {
+      "part": "forepaw",
+      "by": "hand"
+    },
+    "MOVE_SHADOW_BALL": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_DOUBLE_TEAM": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_TORMENT": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_FACADE": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_SECRET_POWER": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_REST": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_ATTRACT": {
+      "part": "eyes",
+      "by": "hand"
+    },
+    "MOVE_SNATCH": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_STRENGTH": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_ROCK_SMASH": {
+      "part": "hands",
+      "by": "hand"
+    },
+    "MOVE_BODY_SLAM": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_DOUBLE_EDGE": {
+      "part": "head",
+      "by": "hand"
+    },
+    "MOVE_COUNTER": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_MIMIC": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_SUBSTITUTE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_PSYCH_UP": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_SNORE": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_ENDURE": {
+      "part": "body",
+      "by": "hand"
+    },
+    "MOVE_MUD_SLAP": {
+      "part": "forepaw",
+      "by": "hand"
+    },
+    "MOVE_SLEEP_TALK": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_ASTONISH": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_POISON_FANG": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_COVET": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_LEER": {
+      "part": "eyes",
+      "by": "hand"
+    },
+    "MOVE_YAWN": {
+      "part": "mouth",
+      "by": "hand"
+    },
+    "MOVE_STRUGGLE": {
+      "part": "head",
+      "by": "hand"
+    }
+  }
+}

@@ -63,13 +63,17 @@ export const RIG: RigProfile = {
   // joint), not +X like the biped skeletons: aims need to know.
   boneAxis: [0, 1, 0],
   pelvisNodes: ['Hips_028', 'Spine1_04'],
+  // Every paw is pinned where the stance puts it (plantAt, model heights:
+  // the hindquarters swung to its left carry the hind paws with them), at
+  // its bind height: the body crouches, leans, coils and rears over paws
+  // that stay put, and leaves them only to leap (plantFeet / plantFront 0).
   legs: {
-    left: { thigh: 'thighL', shin: 'shinL', foot: 'footL' },
-    right: { thigh: 'thighR', shin: 'shinR', foot: 'footR' },
+    left: { thigh: 'thighL', shin: 'shinL', foot: 'footL', plantAt: [0.289, 0.184, 0.039] },
+    right: { thigh: 'thighR', shin: 'shinR', foot: 'footR', plantAt: [0.106, 0.184, -0.18] },
   },
   // Walks on all fours: the front legs are planted too (elbows bend back).
   frontLegs: {
-    left: { thigh: 'armL', shin: 'forearmL', foot: 'handL', bend: -1 },
-    right: { thigh: 'armR', shin: 'forearmR', foot: 'handR', bend: -1 },
+    left: { thigh: 'armL', shin: 'forearmL', foot: 'handL', bend: -1, plantAt: [0.142, 0.076, 0.26] },
+    right: { thigh: 'armR', shin: 'forearmR', foot: 'handR', bend: -1, plantAt: [-0.14, 0.076, 0.26] },
   },
 };

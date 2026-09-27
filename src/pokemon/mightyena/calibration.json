@@ -1,0 +1,42 @@
+{
+  "height": 1.3084,
+  "slots": {
+    "enemy": {
+      "dx": -0.227,
+      "dz": 0,
+      "lift": 0
+    },
+    "player": {
+      "dx": -0.059,
+      "dz": -0.456,
+      "lift": 0
+    }
+  },
+  "outline": {
+    "outer": 1,
+    "inner": 7,
+    "selective": true
+  },
+  "grade": {
+    "gain": 0.9622,
+    "saturation": 1.3405,
+    "bands": [
+      0.3043,
+      0.6846000000000001,
+      0.9983000000000001
+    ]
+  },
+  "fit": {
+    "enemy": {
+      "iou": 0.5869,
+      "boxIou": 0.7989
+    },
+    "player": {
+      "iou": 0.688,
+      "boxIou": 0.7807
+    }
+  },
+  "colorFit": {
+    "loss": 0.4581
+  }
+}

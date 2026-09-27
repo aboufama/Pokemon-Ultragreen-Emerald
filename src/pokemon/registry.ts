@@ -18,6 +18,7 @@ const FACTORIES: Record<string, () => Promise<ProfileFactory>> = {
   marshtomp: async () => (await import('./marshtomp')).createProfile,
   swampert: async () => (await import('./swampert')).createProfile,
   poochyena: async () => (await import('./poochyena')).createProfile,
+  mightyena: async () => (await import('./mightyena')).createProfile,
   zigzagoon: async () => (await import('./zigzagoon')).createProfile,
   wurmple: async () => (await import('./wurmple')).createProfile,
 };
