@@ -88,6 +88,8 @@ __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void
         b->personality = gBattleMons[i].personality;
         b->hp = gBattleMons[i].hp;
         b->maxHp = gBattleMons[i].maxHP;
+        if (gHealthboxSpriteIds[i] < MAX_SPRITES)
+            b->healthboxShown = gSprites[gHealthboxSpriteIds[i]].inUse && !gSprites[gHealthboxSpriteIds[i]].invisible;
         b->spriteId = gBattlerSpriteIds[i];
         if (b->spriteId >= MAX_SPRITES)
             continue;

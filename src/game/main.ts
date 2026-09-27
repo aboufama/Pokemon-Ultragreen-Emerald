@@ -8,11 +8,16 @@
 // the game can (platform/game/remake_test.c): the player's Pokémon and the
 // wild one with their levels, and the place (BATTLE_ENVIRONMENT_*, the map's
 // by default).
+//
+// ?manual=1 is for tools (tools/remake/run.mjs): the game runs only when
+// told, frame by frame (window.__game), from a blank save, and with
+// ?time=2026,1,1,4,10,0,0 on a fixed clock, so a run is the same every time.
 
 import { loadGame, KEYS, GameHalt, WIDTH, HEIGHT, type Game } from '../../platform/host/game.mjs';
 import speciesTable from '../data/generated/species.json';
 import { RemakeLayer } from '../remake/layer';
-import { loadGameInfo, type GameInfo } from '../remake/state';
+import { loadGameInfo } from '../remake/state';
+import { startTestBattle, testBattleArgs } from '../../platform/host/test_battle.mjs';
 
 /** The GBA's refresh: 16.78 MHz / 280896 cycles a frame. */
 const FRAME_MS = 1000 / 59.7275;
@@ -128,77 +133,93 @@ function storeSave(game: Game) {
   }, 300);
 }
 
-// ---------------------------------------------------------------- test battles
-
-/** The test battle ?battle= asks for: RemakeTestBattle's arguments. */
-function testBattle(info: GameInfo): number[] | null {
-  const q = new URLSearchParams(location.search).get('battle');
-  if (!q) return null;
-  const species = new Map(Object.values(speciesTable as Record<string, { id: number; const: string }>).map((s) => [s.const, s.id]));
-  const [player, wild, place] = q.split(',');
-  const mon = (text: string) => {
-    const [name, level] = text.split(':');
-    const id = species.get(`SPECIES_${name.toUpperCase()}`);
-    if (id === undefined) throw new Error(`?battle=: no species ${name}`);
-    return [id, Number(level) || 5];
-  };
-  const env = place ? info.constants[`BATTLE_ENVIRONMENT_${place.toUpperCase()}`] : 0xff;
-  if (env === undefined) {
-    const places = Object.keys(info.constants).filter((k) => k.startsWith('BATTLE_ENVIRONMENT_')).map((k) => k.slice(19));
-    throw new Error(`?battle=: no place ${place} (${places.join(', ')})`);
-  }
-  return [...mon(player), ...mon(wild), env];
-}
-
 // ---------------------------------------------------------------- run
 
 async function main() {
+  const params = new URLSearchParams(location.search);
+  const manual = params.has('manual');
+  const clock = params.get('time')?.split(',').map(Number);
   const url = new URL('game/pokeemerald.wasm', document.baseURI);
   const [module, info] = await Promise.all([WebAssembly.compileStreaming(fetch(url)), loadGameInfo()]);
   // The remake layer draws the battles in 3D (src/remake): at the start of
   // each frame it prepares the frame's pictures.
   let remake: RemakeLayer | null = null;
   const game = await loadGame(module, {
-    flash: loadSave(),
-    rtcOffset: Number(localStorage.getItem(RTC_KEY) ?? 0) || 0,
+    flash: manual ? undefined : loadSave(),
+    rtcOffset: manual ? 0 : Number(localStorage.getItem(RTC_KEY) ?? 0) || 0,
+    time: clock ? () => clock : undefined,
     log: (t) => console.log(`[game] ${t}`),
     onFrameStart: () => remake?.onFrameStart(),
   });
   await game.init();
-  remake = new RemakeLayer(game, info);
-  let pendingBattle = testBattle(info);
+  const layer = new RemakeLayer(game, info);
+  remake = layer;
+  const battle = params.get('battle');
+  let pendingBattle = battle ? testBattleArgs(battle, speciesTable, info.constants) : null;
+  const image = new ImageData(WIDTH, HEIGHT);
+  const show = () => {
+    image.data.set(game.frameRGBA());
+    ctx.putImageData(image, 0, 0);
+  };
+  /** One iteration of the game's loop with `held` keys: false after a soft reset (the GBA started over). */
+  const step = async (held: number): Promise<boolean> => {
+    if (pendingBattle && startTestBattle(game, pendingBattle)) pendingBattle = null;
+    game.setKeys(held);
+    if (!game.frame()) {
+      await game.init();
+      return false;
+    }
+    if (!manual && game.saved()) storeSave(game);
+    return true;
+  };
   status.textContent = '';
+
+  if (manual) {
+    (window as unknown as { __game: unknown }).__game = {
+      /** Run with `held` keys (KEYS bits) until `vblanks` VBlanks since power-on; the canvas shows the last frame. */
+      async runTo(vblanks: number, held: number): Promise<number> {
+        while (game.vblanks() < vblanks) {
+          // The game waits while the remake layer loads what a battle needs.
+          while (!layer.ready()) await new Promise((r) => setTimeout(r, 20));
+          // Only the frame shown gets the remake's pictures.
+          layer.drawPictures = game.vblanks() + 1 >= vblanks;
+          await step(held);
+        }
+        layer.drawPictures = true;
+        show();
+        return game.vblanks();
+      },
+      vblanks: () => game.vblanks(),
+      /** The canvas (the last frame shown) as a PNG data URL. */
+      png: () => canvas.toDataURL('image/png'),
+    };
+    return;
+  }
+
   let last = performance.now();
   let owed = 0;
-  const image = new ImageData(WIDTH, HEIGHT);
   const tick = async (now: number) => {
     owed = Math.min(owed + (now - last), FRAME_MS * 4);
     last = now;
     try {
       while (owed >= FRAME_MS) {
         // The game waits while the remake layer loads what a battle needs.
-        if (!remake.ready()) {
+        if (!layer.ready()) {
           owed = 0;
           break;
         }
-        if (pendingBattle && (game.exports().RemakeTestBattle as (...a: number[]) => number)(...pendingBattle)) pendingBattle = null;
-        game.setKeys(keys());
         const before = game.vblanks();
-        if (!game.frame()) {
-          // A soft reset (A+B+START+SELECT): the GBA starts over.
-          await game.init();
+        if (!(await step(keys()))) {
           owed = 0;
           break;
         }
         owed -= FRAME_MS * Math.max(1, game.vblanks() - before);
-        if (game.saved()) storeSave(game);
       }
     } catch (e) {
       status.textContent = e instanceof GameHalt ? `The game stopped: ${e.message}` : `Error: ${(e as Error).message}`;
       throw e;
     }
-    image.data.set(game.frameRGBA());
-    ctx.putImageData(image, 0, 0);
+    show();
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);

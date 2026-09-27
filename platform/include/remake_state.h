@@ -34,6 +34,7 @@ struct RemakeBattler {
     uint32_t callback;      // its sprite callback (function table index): what it is doing
     uint32_t personality;
     uint16_t hp, maxHp;
+    uint8_t healthboxShown; // its healthbox is on the screen (a wild Pokémon's shows as it cries)
 };
 
 // Which table a battle animation comes from.

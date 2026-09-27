@@ -88,6 +88,8 @@ export interface BattlerState {
   personality: number;
   hp: number;
   maxHp: number;
+  /** Its healthbox is on the screen (a wild Pokémon's shows as it cries). */
+  healthboxShown: boolean;
 }
 
 export interface BattleState {
@@ -145,6 +147,7 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
       personality: b.get('personality'),
       hp: b.get('hp'),
       maxHp: b.get('maxHp'),
+      healthboxShown: !!b.get('healthboxShown'),
     });
   }
   return {

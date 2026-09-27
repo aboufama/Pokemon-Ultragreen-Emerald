@@ -1,0 +1,8 @@
+{
+  "about": "A test battle (platform/game/remake_test.c): Blaziken against a wild Swampert in the grass; the intro, the send-out, Blaziken's first move and the wild one's.",
+  "battle": "BLAZIKEN:50,SWAMPERT:50,GRASS",
+  "frames": 1500,
+  "time": [2026, 1, 1, 4, 10, 0, 0],
+  "inputs": [[700, "A"], [704, ""], [900, "A"], [904, ""], [960, "A"], [964, ""], [1000, "A"], [1004, ""]],
+  "every": 30
+}

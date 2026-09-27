@@ -94,6 +94,8 @@ hand. The remake adds two things around it:
   timing shift). The boot matches the ROM frame for frame through the intro.
 - `timing.py`: how many cycles functions take on the ROM (the drivers' costs).
 - `layouts.py`: every struct's layout against the GBA build's.
+- `tools/remake/run.mjs`: `run.mjs`'s scripts in the browser, with the remake
+  layer (the 3D battles), frames saved as PNG.
 
 ## Remake layer (`src/remake/`)
 
@@ -162,8 +164,13 @@ numbers.
 **Test battles.** `platform/game/remake_test.c` starts a wild battle from
 anywhere, as the game starts one, and starts it over when it ends: the game
 page's `?battle=BLAZIKEN:50,SWAMPERT:50,GRASS` (the player's Pokémon, the wild
-one, the place), so the remake's battles can be looked at without playing up
-to one.
+one, the place) and an input script's `"battle"`
+(`platform/host/test_battle.mjs`), so the remake's battles can be looked at
+without playing up to one. `platform/tests/battle.json` is one:
+`platform/tools/run.mjs` runs it headless (the game's own 2D battle) and
+`tools/remake/run.mjs` in the browser with the remake layer (the page's
+`?manual=1`: frame by frame, a blank save, a fixed clock), frame for frame
+the same battle, so the two can be set side by side.
 
 ## Content milestones
 

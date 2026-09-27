@@ -4,7 +4,9 @@
 //   node platform/tools/run.mjs --script platform/tests/boot.json --out build/run/boot
 //
 // The script (JSON): { "frames": N, "inputs": [[frame, "A+START"], ...],
-// "shots": [frame, ...], "every": K, "time": [2026, 1, 1, 4, 10, 0, 0] }.
+// "shots": [frame, ...], "every": K, "time": [2026, 1, 1, 4, 10, 0, 0],
+// "battle": "BLAZIKEN:50,SWAMPERT:50,GRASS" (a test battle, started as soon
+// as the game can: platform/host/test_battle.mjs) }.
 // Frames are the GBA's: frame N ends at the Nth VBlank since power-on, as
 // tools/reference.py counts them on the GBA ROM. Keys named at a frame are
 // held from that frame on, until the next entry.
@@ -13,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadGame, keysFrom, GameHalt, WIDTH, HEIGHT } from '../host/game.mjs';
+import { startTestBattle, testBattleArgs } from '../host/test_battle.mjs';
 import { encodePng } from './png.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +29,10 @@ const wasm = opt('--wasm', path.join(ROOT, 'build/wasm/pokeemerald.wasm'));
 fs.mkdirSync(out, { recursive: true });
 
 const inputs = new Map((script.inputs ?? []).map(([f, k]) => [f, keysFrom(k)]));
+let battle = script.battle
+  ? testBattleArgs(script.battle, JSON.parse(fs.readFileSync(path.join(ROOT, 'src/data/generated/species.json'), 'utf8')),
+    JSON.parse(fs.readFileSync(path.join(ROOT, 'public/game/remake_state.json'), 'utf8')).constants)
+  : null;
 const shots = new Set(script.shots ?? []);
 const logs = [];
 let keys = inputs.get(1) ?? 0;
@@ -48,6 +55,7 @@ try {
   await game.init();
   game.setKeys(keys);
   while (game.vblanks() < script.frames) {
+    if (battle && startTestBattle(game, battle)) battle = null;
     if (!game.frame()) {
       logs.push(`soft reset at frame ${game.vblanks()}`);
       await game.init();

@@ -8,6 +8,7 @@
 //   ... that it faints                   it curls over and shrinks away ('faint'); the sprite's
 //                                        slide down is not followed
 //   ... to come out of its ball          when it shows, it strikes its pose ('intro')
+//   a wild Pokémon's healthbox comes      it cries: 'intro' (once per appearance)
 
 import type { Battler3D } from '../battle3d/battler';
 import { clipFor } from '../battle3d/director';
@@ -23,6 +24,9 @@ export class Acting {
   private readonly fainting = new Set<number>();
   /** Battlers coming out of their balls: 'intro' when they show. */
   private readonly comingOut = new Set<number>();
+  /** Battlers whose 'intro' has played since they appeared. */
+  private readonly introduced = new Set<number>();
+  private readonly healthboxes = new Map<number, boolean>();
   private readonly HIT: number;
   private readonly FAINT: number;
   private readonly COME_OUT: number[];
@@ -39,6 +43,8 @@ export class Acting {
     this.commandSerials.clear();
     this.fainting.clear();
     this.comingOut.clear();
+    this.introduced.clear();
+    this.healthboxes.clear();
   }
 
   isFainting(battler: number): boolean {
@@ -72,11 +78,19 @@ export class Acting {
         } else {
           this.fainting.delete(i);
           if (b.command === this.HIT && body) void body.perform('hit');
-          if (this.COME_OUT.includes(b.command)) this.comingOut.add(i);
+          if (this.COME_OUT.includes(b.command)) {
+            this.comingOut.add(i);
+            this.introduced.delete(i);
+          }
         }
       }
-      if (body && this.comingOut.has(i) && shows(i)) {
+      // Its entrance: out of its ball as it shows, or (a wild one, already
+      // there) as its healthbox comes and it cries.
+      const healthboxCame = b.healthboxShown && this.healthboxes.get(i) === false;
+      this.healthboxes.set(i, b.healthboxShown);
+      if (body && shows(i) && !this.introduced.has(i) && (this.comingOut.has(i) || healthboxCame)) {
         this.comingOut.delete(i);
+        this.introduced.add(i);
         void body.perform('intro');
       }
     });

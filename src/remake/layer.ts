@@ -188,6 +188,12 @@ export class RemakeLayer {
   private readonly arenas = new Map<number, string>();
   private readonly slots = new Map<number, SlotName>();
   private readonly acting: Acting;
+  /**
+   * Whether frames get their pictures. Tools running many frames at once
+   * (the page's manual mode) draw only the frames they show; the battle
+   * lives on (its clips, its arena) in the others.
+   */
+  drawPictures = true;
 
   constructor(private readonly game: Game, info: GameInfo) {
     this.layouts = info.structs;
@@ -256,6 +262,7 @@ export class RemakeLayer {
       body.battler.update(FRAME_SECONDS);
       this.placeSprite(body);
     }
+    if (!this.drawPictures) return;
     if (arena && arena === this.arena) this.renderArena(state);
     if (shown.size) this.renderBodies(shown);
   }
