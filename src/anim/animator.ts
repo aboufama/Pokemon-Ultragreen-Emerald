@@ -93,6 +93,8 @@ export class Animator {
   /** 1 while a finished clip's last pose is held (a multi-hit move's attacker at the foe between hits): it breathes. */
   private holdWeight = 0;
   private readonly delay: (bone: string) => number;
+  /** Changes the pose each frame just before the rig takes it (the battle's reach to a foe of another size). */
+  adjust: ((pose: Pose, clip: string | null, time: number) => Pose) | null = null;
 
   constructor(private readonly rig: Rig, readonly clips: Record<string, Clip>, overlap: Record<string, number> = DEFAULT_OVERLAP) {
     this.delay = (bone) => overlapOf(overlap, bone);
@@ -116,6 +118,17 @@ export class Animator {
 
   has(name: string): boolean {
     return name in this.clips;
+  }
+
+  /** Seconds into the current clip. */
+  get currentTime(): number {
+    return this.current?.time ?? 0;
+  }
+
+  /** A clip's pose at a time, as it plays (each bone its overlap behind), without the life layer. */
+  poseAt(name: string, time: number): Pose | null {
+    const clip = this.clips[name];
+    return clip ? sampleClipLayered(clip, time, this.delay) : null;
   }
 
   /** Start a clip; resolves when a non-looping clip finishes. */
@@ -159,6 +172,7 @@ export class Animator {
     const holdTarget = !cur.clip.loop && cur.done ? 1 : 0;
     this.holdWeight += (holdTarget - this.holdWeight) * Math.min(1, dt * 3);
     pose = this.proceduralLayer(pose);
+    if (this.adjust) pose = this.adjust(pose, cur.clip.name, cur.time);
     this.rig.applyPose(pose);
     this.lastPose = pose;
     return pose;

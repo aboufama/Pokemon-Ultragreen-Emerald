@@ -21,7 +21,7 @@
 // there a moment, then gets up.
 
 import * as THREE from 'three';
-import { Animator } from '../anim/animator';
+import { Animator, compose } from '../anim/animator';
 import { SHRINK_FRAMES, shrinkScale } from '../anim/clip';
 import { SecondOrder, SpringChain, seededRandom, skinnedExtent } from '../anim/dynamics';
 import type { Pose } from '../anim/rig';
@@ -108,6 +108,7 @@ export class Battler3D {
 
   private constructor(readonly stage: BattleStage, readonly slot: SlotName, readonly inst: PokemonInstance) {
     this.animator = new Animator(inst.rig, inst.profile.clips, inst.profile.overlap);
+    this.animator.adjust = (pose, clip, time) => this.reachFoe(pose, clip, time);
     this.random = seededRandom(slot === 'player' ? 0x5eed1 : 0x5eed2);
     this.nextEyeBlink = 1 + this.random() * 2;
     this.setupEffects();
@@ -478,6 +479,75 @@ export class Battler3D {
   /** Distance a contact move travels so the attacker ends up in front of its target. */
   approachDistance(): number {
     return this.approachVector().length();
+  }
+
+  /**
+   * A clip's blows: when (its impacts, a toss's grab), which end strikes (the
+   * one furthest forward then), where it is (model units) and how high the
+   * body is off the ground then (a leap's root.y).
+   */
+  private readonly blows = new Map<string, { t: number; end: string; at: THREE.Vector3; up: number }[]>();
+
+  private blowsOf(clip: string): { t: number; end: string; at: THREE.Vector3; up: number }[] {
+    let list = this.blows.get(clip);
+    if (list) return list;
+    list = [];
+    const rig = this.inst.rig;
+    const ends = ['handL', 'handR', 'footL', 'footR', 'head', 'jaw'].filter((e) => rig.node(e));
+    for (const e of this.profile.clips[clip]?.events ?? []) {
+      if (e.name !== 'impact' && e.name !== 'grab') continue;
+      const pose = this.animator.poseAt(clip, e.t);
+      if (!pose) continue;
+      // (The rig takes the frame's own pose right after: this only measures.)
+      rig.applyPose(pose);
+      // Toward the foe, in the body's own frame (a spin kick lands side-on).
+      const toFoe = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), -(pose.root?.yaw ?? 0) * DEG);
+      let best: { end: string; at: THREE.Vector3 } | null = null;
+      for (const end of ends) {
+        const at = rig.modelPos(rig.node(end)!, new THREE.Vector3());
+        if (!best || at.dot(toFoe) > best.at.dot(toFoe)) best = { end, at };
+      }
+      if (best) list.push({ t: e.t, ...best, up: Math.max(0, pose.root?.y ?? 0) });
+    }
+    this.blows.set(clip, list);
+    return list;
+  }
+
+  /**
+   * A blow at a foe of another size lands where it would on one of its own
+   * size: around each impact the striking hand or foot reaches that much
+   * lower (two-bone IK) while the body sinks and bows into it for a smaller
+   * foe, or the body springs up at a bigger one. (Between two of a kind,
+   * and away from the foe, nothing changes.)
+   */
+  private reachFoe(pose: Pose, clip: string | null, time: number): Pose {
+    const foe = this.target;
+    if (!clip || !foe || (pose.advance ?? 0) < 0.5) return pose;
+    const ratio = foe.height / this.height;
+    if (Math.abs(ratio - 1) < 0.1) return pose;
+    let out = pose;
+    for (const b of this.blowsOf(clip)) {
+      const d = time - b.t;
+      const u = d < 0 ? 1 + d / 0.22 : 1 - d / 0.3;
+      if (u <= 0) continue;
+      const w = u * u * (3 - 2 * u);
+      // The same height on the foe's body as on one of its own size (the
+      // approach already puts the foe's front at the blow's reach).
+      let dy = THREE.MathUtils.clamp((b.at.y + b.up) * (ratio - 1), -0.7, 0.45) * w;
+      if (dy < 0) {
+        // A leap comes in lower first, then the body sinks and bows and the limb reaches.
+        const lower = Math.max(dy, -b.up * w);
+        if (lower < 0) out = compose(out, { root: { y: lower } });
+        dy -= lower;
+        const head = b.end === 'head' || b.end === 'jaw';
+        const bow = -dy * (head ? 90 : 45);
+        out = compose(out, { pelvis: { y: dy * (head ? 0.4 : 0.3) }, bones: { spine: { x: bow * 0.45 }, chest: { x: bow * 0.3 }, neck: { x: bow * 0.25 } } });
+        if (!head && this.inst.rig.limbTo(b.end)) out = { ...out, reach: { ...(out.reach ?? {}), [b.end]: [0, dy * 0.6, 0] } };
+      } else {
+        out = compose(out, { root: { y: dy } });
+      }
+    }
+    return out;
   }
 
   private front = 0.21;

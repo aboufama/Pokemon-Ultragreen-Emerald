@@ -107,6 +107,13 @@ Intimidate). The brief lists them with what each looks like.
 - **Life layer.** Breathing, weight shifts, an idle bounce, gaze drift and
   blinks run on top of every clip; the battler gets knocked back on a spring
   when hit (you animate the flinch pose, not the knock-back).
+- **Foes of other sizes.** Author every blow against a foe of the species'
+  own size (the gates measure that match): `advance` 1 puts the attacker at
+  its own reach from the foe's front whatever the foe's size, and around
+  each impact the engine brings the blow to the same height on a smaller
+  foe's body (the striking hand or foot reaches lower with IK, the body
+  sinks and bows into it) or springs the body up at a bigger one
+  (`reachFoe` in src/battle3d/battler.ts).
 - **Always facing the foe.** A battler faces its opponent at rest, in every
   move and on the way home, and the stance faces it too (the gauntlet's
   `stance faces the foe` gate). No clip turns to look at the foe: a head or

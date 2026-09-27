@@ -53,6 +53,12 @@ export interface Pose {
   fx?: Record<string, number>;
   /** Uniform squash/stretch (1 = none). */
   scale?: number;
+  /**
+   * Move a limb's end (handL/R, footL/R) by this much (model units: +X its
+   * left, +Y up, +Z forward) with two-bone IK of its limb, after everything
+   * else: the battle reaches a blow to a foe of another size (Battler3D).
+   */
+  reach?: Record<string, Vec3>;
 }
 
 export interface LegChain {
@@ -225,6 +231,26 @@ export class Rig {
       const front = pose.plantFront ?? both;
       if (front > 0) this.plantFeet(this.profile.frontLegs, front, front);
     }
+    if (pose.reach) {
+      for (const [end, [x, y, z]] of Object.entries(pose.reach)) {
+        const limb = this.limbTo(end);
+        const node = this.node(end);
+        if (!limb || !node) continue;
+        this.solveTwoBone(limb, this.modelPos(node, new THREE.Vector3()).add(new THREE.Vector3(x, y, z)));
+      }
+    }
+  }
+
+  /** The two-bone limb ending at a hand or foot: a leg, a quadruped's front leg, or an arm (its elbow bending back). */
+  limbTo(end: string): LegChain | null {
+    const side = end.endsWith('L') ? 'left' : end.endsWith('R') ? 'right' : null;
+    if (!side) return null;
+    if (end.startsWith('foot')) return this.profile.legs?.[side] ?? null;
+    if (!end.startsWith('hand')) return null;
+    if (this.profile.frontLegs) return this.profile.frontLegs[side];
+    const s = end.slice(-1);
+    const arm = { thigh: `arm${s}`, shin: `forearm${s}`, foot: `hand${s}`, bend: -1 };
+    return this.node(arm.thigh) && this.node(arm.shin) ? arm : null;
   }
 
   private depth(node: THREE.Object3D): number {
