@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// Publish the battle playtest to GitHub Pages: build the static site
-// (tools/demo/build_demo.mjs) and push it as the only commit of the gh-pages
-// branch, which GitHub serves at https://<owner>.github.io/<repo>/.
+// Publish the site to GitHub Pages: build it (tools/game/build_site.mjs: the
+// compiled game on the front page, the earlier battle playtest in battle/)
+// and push it as the only commit of the gh-pages branch, which GitHub serves
+// at https://<owner>.github.io/<repo>/.
 //
 //   node tools/demo/deploy_pages.mjs [--no-build] [--no-smoke] [--remote origin] [--branch gh-pages] [--dry]
 //
-// Before publishing it opens a battle in every place on the built site
-// (tools/demo/smoke_pages.mjs) and stops if a file is missing or a page errs.
+// Before publishing it plays the built site (tools/game/smoke_site.mjs: the
+// game boots, a battle in 3D, the playtest in every place) and stops if a
+// file is missing or a page errs.
 //
 // The branch holds nothing but the built site and is replaced on every
 // deploy (no history to grow). --dry builds and commits in a temporary
@@ -36,11 +38,11 @@ function git(cwd, ...a) {
 }
 
 if (!args['no-build']) {
-  const b = spawnSync(process.execPath, [join(ROOT, 'tools/demo/build_demo.mjs')], { cwd: ROOT, stdio: 'inherit' });
+  const b = spawnSync(process.execPath, [join(ROOT, 'tools/game/build_site.mjs')], { cwd: ROOT, stdio: 'inherit' });
   if (b.status !== 0) process.exit(b.status ?? 1);
 }
 if (!args['no-smoke']) {
-  const s = spawnSync(process.execPath, [join(ROOT, 'tools/demo/smoke_pages.mjs')], { cwd: ROOT, stdio: 'inherit' });
+  const s = spawnSync(process.execPath, [join(ROOT, 'tools/game/smoke_site.mjs')], { cwd: ROOT, stdio: 'inherit' });
   if (s.status !== 0) process.exit(s.status ?? 1);
 }
 
@@ -54,13 +56,13 @@ const site = m ? `https://${m[1].toLowerCase()}.github.io/${m[2]}/` : '(not a Gi
 
 const dir = await mkdtemp(join(tmpdir(), 'pages-'));
 try {
-  await cp(join(ROOT, 'build/demo/pages'), dir, { recursive: true });
-  await writeFile(join(dir, 'README.md'), `Built battle playtest, published by tools/demo/deploy_pages.mjs from ${source}${dirty}.\nPlay it at ${site}\n`);
+  await cp(join(ROOT, 'build/site'), dir, { recursive: true });
+  await writeFile(join(dir, 'README.md'), `The built site, published by tools/demo/deploy_pages.mjs from ${source}${dirty}.\nPlay the game at ${site} (the earlier battle playtest: ${site}battle/)\n`);
   git(dir, 'init', '-q', '-b', branch);
   git(dir, 'config', 'user.name', name);
   git(dir, 'config', 'user.email', email);
   git(dir, 'add', '-A');
-  git(dir, 'commit', '-q', '-m', `Battle playtest built from ${source}${dirty}`);
+  git(dir, 'commit', '-q', '-m', `Site built from ${source}${dirty}`);
   if (args.dry) {
     console.log(`dry run: committed the site in ${dir}; not pushed. It would be served at ${site}`);
     process.exit(0);

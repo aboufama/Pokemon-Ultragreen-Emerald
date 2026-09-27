@@ -6,7 +6,7 @@
 // assets (tools/demo/build_demo.mjs); this catches one the app needs that the
 // set leaves out.
 //
-//   node tools/demo/smoke_pages.mjs [--prefix /Pokemon-Ultragreen-Emerald/]
+//   node tools/demo/smoke_pages.mjs [--prefix /Pokemon-Ultragreen-Emerald/] [--site build/demo/pages]
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -16,8 +16,8 @@ import { chromium } from 'playwright';
 import { importTs } from '../gauntlet/tsimport.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const SITE = join(ROOT, 'build/demo/pages');
 const argv = process.argv.slice(2);
+const SITE = resolve(ROOT, argv.includes('--site') ? argv[argv.indexOf('--site') + 1] : 'build/demo/pages');
 const prefix = argv.includes('--prefix') ? argv[argv.indexOf('--prefix') + 1] : '/Pokemon-Ultragreen-Emerald/';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.wasm': 'application/wasm', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream', '.webmanifest': 'application/manifest+json' };
 
