@@ -1,0 +1,28 @@
+battle_anim.c: the remake layer learns which battle animation runs.
+
+LaunchBattleAnimation starts every battle animation (a move's, a status
+condition's, the general and special ones); the remake layer's hook records
+the table and the index (the game keeps them in a static it never reads).
+
+--- a/src/battle_anim.c
++++ b/src/battle_anim.c
+@@ -1,4 +1,7 @@
+ #include "global.h"
++#ifdef PLATFORM_WASM
++#include "remake_state.h"
++#endif
+ #include "battle.h"
+ #include "battle_anim.h"
+ #include "battle_controllers.h"
+@@ -209,6 +212,11 @@
+ {
+     s32 i;
+ 
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the remake layer learns which animation runs.
++    RemakeBattleAnimation(animsTable, tableId, isMoveAnim);
++#endif
++
+     if (!IsContest())
+     {
+         InitPrioritiesForVisibleBattlers();
