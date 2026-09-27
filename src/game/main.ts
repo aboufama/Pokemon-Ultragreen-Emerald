@@ -1,8 +1,9 @@
 // The compiled game in the browser: pret/pokeemerald built for WebAssembly
 // (platform/, docs/ARCHITECTURE.md), run at the GBA's frame rate on a
-// canvas, with the keyboard, a gamepad or the touch pad, and the cartridge's
-// save kept in the browser. Its battles are drawn in 3D by the remake layer
-// (src/remake).
+// canvas, with the keyboard, a gamepad or the touch pad, its sound (the
+// game's own m4a engine and the GBA's sound chip, played as it comes:
+// ./audio.ts), and the cartridge's save kept in the browser. Its battles are
+// drawn in 3D by the remake layer (src/remake).
 //
 // ?battle=BLAZIKEN:50,SWAMPERT:50[,GRASS] starts a test battle as soon as
 // the game can (platform/game/remake_test.c): the player's Pokémon and the
@@ -20,6 +21,7 @@ import speciesTable from '../data/generated/species.json';
 import { RemakeLayer } from '../remake/layer';
 import { loadGameInfo } from '../remake/state';
 import { startTestBattle, testBattleArgs } from '../../platform/host/test_battle.mjs';
+import { GameAudio } from './audio';
 
 /** The GBA's refresh: 16.78 MHz / 280896 cycles a frame. */
 const FRAME_MS = 1000 / 59.7275;
@@ -231,6 +233,8 @@ async function main() {
     return;
   }
 
+  // The game's sound, frame by frame (it starts with the first key press or tap).
+  const audio = GameAudio.open();
   let last = performance.now();
   let owed = 0;
   const tick = async (now: number) => {
@@ -254,6 +258,7 @@ async function main() {
       status.textContent = e instanceof GameHalt ? `The game stopped: ${e.message}` : `Error: ${(e as Error).message}`;
       throw e;
     }
+    audio?.push(game.readAudio(), game.audioRate());
     show();
     requestAnimationFrame(tick);
   };
