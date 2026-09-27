@@ -12,7 +12,7 @@
 import { loadGame, KEYS, GameHalt, WIDTH, HEIGHT, type Game } from '../../platform/host/game.mjs';
 import speciesTable from '../data/generated/species.json';
 import { RemakeLayer } from '../remake/layer';
-import { loadStructLayouts } from '../remake/state';
+import { loadGameInfo, type GameInfo } from '../remake/state';
 
 /** The GBA's refresh: 16.78 MHz / 280896 cycles a frame. */
 const FRAME_MS = 1000 / 59.7275;
@@ -130,10 +130,8 @@ function storeSave(game: Game) {
 
 // ---------------------------------------------------------------- test battles
 
-const ENVIRONMENTS = ['GRASS', 'LONG_GRASS', 'SAND', 'UNDERWATER', 'WATER', 'POND', 'MOUNTAIN', 'CAVE', 'BUILDING', 'PLAIN'];
-
 /** The test battle ?battle= asks for: RemakeTestBattle's arguments. */
-function testBattle(): number[] | null {
+function testBattle(info: GameInfo): number[] | null {
   const q = new URLSearchParams(location.search).get('battle');
   if (!q) return null;
   const species = new Map(Object.values(speciesTable as Record<string, { id: number; const: string }>).map((s) => [s.const, s.id]));
@@ -144,8 +142,11 @@ function testBattle(): number[] | null {
     if (id === undefined) throw new Error(`?battle=: no species ${name}`);
     return [id, Number(level) || 5];
   };
-  const env = place ? ENVIRONMENTS.indexOf(place.toUpperCase()) : 0xff;
-  if (env < 0) throw new Error(`?battle=: no place ${place} (${ENVIRONMENTS.join(', ')})`);
+  const env = place ? info.constants[`BATTLE_ENVIRONMENT_${place.toUpperCase()}`] : 0xff;
+  if (env === undefined) {
+    const places = Object.keys(info.constants).filter((k) => k.startsWith('BATTLE_ENVIRONMENT_')).map((k) => k.slice(19));
+    throw new Error(`?battle=: no place ${place} (${places.join(', ')})`);
+  }
   return [...mon(player), ...mon(wild), env];
 }
 
@@ -153,7 +154,7 @@ function testBattle(): number[] | null {
 
 async function main() {
   const url = new URL('game/pokeemerald.wasm', document.baseURI);
-  const [module, layouts] = await Promise.all([WebAssembly.compileStreaming(fetch(url)), loadStructLayouts()]);
+  const [module, info] = await Promise.all([WebAssembly.compileStreaming(fetch(url)), loadGameInfo()]);
   // The remake layer draws the battles in 3D (src/remake): at the start of
   // each frame it prepares the frame's pictures.
   let remake: RemakeLayer | null = null;
@@ -164,8 +165,8 @@ async function main() {
     onFrameStart: () => remake?.onFrameStart(),
   });
   await game.init();
-  remake = new RemakeLayer(game, layouts);
-  let pendingBattle = testBattle();
+  remake = new RemakeLayer(game, info);
+  let pendingBattle = testBattle(info);
   status.textContent = '';
   let last = performance.now();
   let owed = 0;

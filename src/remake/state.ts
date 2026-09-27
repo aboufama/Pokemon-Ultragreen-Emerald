@@ -1,8 +1,9 @@
 // The battle as the compiled game sees it: the snapshot
 // platform/game/remake_state.c fills (struct RemakeState,
 // platform/include/remake_state.h). Fields are read by name, at the offsets
-// the build records next to the module (game/remake_state.json), so nothing
-// here repeats the C layout.
+// the build records next to the module (game/remake_state.json), and the
+// game's constants by name from the same file, so nothing here repeats the C
+// layout or the game's numbers.
 
 export const REMAKE_ANIM = { NONE: 0, MOVE: 1, STATUS: 2, GENERAL: 3, SPECIAL: 4 } as const;
 
@@ -12,10 +13,23 @@ export const REMAKE_BG_MAIN = 0xffff;
 /** field: [offset, size, C type]. */
 export type StructLayouts = Record<string, { size: number; fields: Record<string, [number, number, string]> }>;
 
-export async function loadStructLayouts(base: URL | string = document.baseURI): Promise<StructLayouts> {
+/** What the build tells about the game (platform/build.mjs): the structs' layouts and the game's constants (CONTROLLER_*, B_POSITION_*...). */
+export interface GameInfo {
+  structs: StructLayouts;
+  constants: Record<string, number>;
+}
+
+export async function loadGameInfo(base: URL | string = document.baseURI): Promise<GameInfo> {
   const res = await fetch(new URL('game/remake_state.json', base));
   if (!res.ok) throw new Error(`game/remake_state.json: ${res.status}`);
   return res.json();
+}
+
+/** A constant of the game's by name (a missing one is a mistake, not a zero). */
+export function constant(info: GameInfo, name: string): number {
+  const v = info.constants[name];
+  if (v === undefined) throw new Error(`the game has no constant ${name} (platform/build.mjs REMAKE_CONSTANTS)`);
+  return v;
 }
 
 /** A C struct in the game's memory, read by field name. */
@@ -67,6 +81,9 @@ export interface BattlerState {
   invisible: boolean;
   /** The sprite shows its Pokémon (in the intro the trainer's picture takes its place). */
   showsPokemon: boolean;
+  /** The last command the battle engine gave its controller (CONTROLLER in state.ts), and a count of them. */
+  command: number;
+  commandSerial: number;
   callback: number;
   personality: number;
   hp: number;
@@ -122,6 +139,8 @@ export function readBattleState(layouts: StructLayouts, memory: WebAssembly.Memo
       objMode: b.get('objMode'),
       invisible: !!b.get('invisible'),
       showsPokemon: !!b.get('showsPokemon'),
+      command: b.get('command'),
+      commandSerial: b.get('commandSerial'),
       callback: b.get('callback'),
       personality: b.get('personality'),
       hp: b.get('hp'),

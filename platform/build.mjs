@@ -322,6 +322,38 @@ function link(objects) {
  * lays them out, written next to the module (remake_state.json), so the
  * browser reads fields by name and never keeps a copy of the offsets.
  */
+/**
+ * The game's constants the remake layer uses (src/remake): every constant
+ * with one of these prefixes that these headers define (#define or enum),
+ * evaluated as the game is compiled, so the remake repeats none of the
+ * game's numbers.
+ */
+const REMAKE_CONSTANTS = [
+  ['include/battle_controllers.h', 'CONTROLLER_'],
+  ['include/constants/battle.h', 'BATTLE_ENVIRONMENT_'],
+  ['include/constants/battle.h', 'B_POSITION_'],
+  ['include/constants/battle.h', 'B_SIDE_'],
+];
+
+function gameConstants() {
+  const headers = [...new Set(REMAKE_CONSTANTS.map(([h]) => h))];
+  const names = new Set();
+  for (const [header, prefix] of REMAKE_CONSTANTS) {
+    const text = fs.readFileSync(path.join(DECOMP, header), 'utf8');
+    for (const m of text.matchAll(new RegExp(`^\\s*#define\\s+(${prefix}\\w+)\\s+\\S`, 'gm'))) names.add(m[1]);
+    for (const m of text.matchAll(new RegExp(`^\\s*(${prefix}\\w+)\\s*(?:=[^,\\n]*)?,?\\s*(?://.*)?$`, 'gm'))) names.add(m[1]);
+  }
+  const probe = path.join(OUT, 'remake_constants_probe.c');
+  fs.writeFileSync(probe, ['#include "global.h"', ...headers.map((h) => `#include "${h.replace(/^include\//, '')}"`),
+    ...[...names].map((n) => `int const__${n} = ${n};`)].join('\n') + '\n');
+  const flags = CPPFLAGS.filter((f) => f !== '-E');
+  const r = spawnSync('clang', [...flags, '-O2', '-S', '-o', '-', probe], { cwd: DECOMP, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`game constants probe failed:\n${r.stderr}`);
+  const constants = {};
+  for (const m of r.stdout.matchAll(/^const__(\w+):\n\s+\.int32\s+(-?\d+)/gm)) constants[m[1]] = Number(m[2]);
+  return constants;
+}
+
 function structLayouts() {
   const header = path.join(HERE, 'include/remake_state.h');
   const text = fs.readFileSync(header, 'utf8');
@@ -367,8 +399,9 @@ async function main() {
   const data = await convertData([...game, ...platform]);
   link([...game, ...platform, ...data]);
   if (!PROFILE) {
-    fs.writeFileSync(path.join(PUBLIC, 'remake_state.json'), JSON.stringify(structLayouts(), null, 1));
-    console.log('layouts: public/game/remake_state.json');
+    const info = { structs: structLayouts(), constants: gameConstants() };
+    fs.writeFileSync(path.join(PUBLIC, 'remake_state.json'), JSON.stringify(info, null, 1));
+    console.log(`remake: public/game/remake_state.json (${Object.keys(info.structs).length} structs, ${Object.keys(info.constants).length} game constants)`);
   }
 }
 

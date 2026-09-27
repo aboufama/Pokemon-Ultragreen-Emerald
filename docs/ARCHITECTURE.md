@@ -103,8 +103,11 @@ Battles are the game's battles, with these substitutions:
 |---|---|---|
 | each battler's sprite, while it shows the Pokémon | the species' 3D model where the sprite is: its offset from where it rests, its affine scale, turn and stretch, shown when the sprite is, in the sprite's palette | the battler's sprite (`gBattlerSpriteIds`, `showsPokemon`: a trainer's picture holds the sprite during the intro, a substitute doll behind a Substitute) and its OAM entry this frame |
 | the battle background (BG3), while it shows the place's own | the painted 3D arena for the battle's environment, faded as the game fades BG3's palette | `gBattleEnvironment`; the hooks where the game draws its main background or a move's (`platform/patches/battle_bg.patch`, `battle_anim.patch`) |
-| a move's motion of the attacker (lunge, shake, spin) | the same motion on the 3D body (it follows the sprite), with an in-place acting clip in sync (to come) | the move animation starting (`RemakeBattleAnimation`: its table and index) |
-| the faint's slide down | the curl over and shrink (to come) | the faint sprite callback starting |
+| a move's motion of the attacker (lunge, shake, spin) | the same motion on the 3D body (it follows the sprite), and the move's clip acted in place (no travel, no leaps: `Battler3D.inPlace`) | the move animation starting (`RemakeBattleAnimation`: its table and index) |
+| a hit (the sprite blinks) | the body flinches (`hit`) as it blinks | the engine's command to the battler's controller (`RemakeBattlerCommand`, `platform/patches/battle_controllers.patch`) |
+| the faint's slide down | the curl over and shrink (`faint`); the slide is not followed | the same, `CONTROLLER_FAINTANIMATION` |
+| a send-out, a switch-in | the body strikes its pose (`intro`) as it shows | the same, `CONTROLLER_INTROTRAINERBALLTHROW`, `CONTROLLER_SWITCHINANIM` |
+| copies of the battler's sprite (afterimages, a stat change's window) | the same 3D picture at each copy's place, in its mode | the copies share the sprite's tiles; the PPU moves the picture by the difference of their centres |
 
 A species without a 3D model, a battle position without a place on the stage
 (doubles' second positions, for now) and a place without an arena are drawn
@@ -149,6 +152,12 @@ object ids, split into one picture each.
 While a battle's models or arena load, the page holds the game (it runs no
 frame) and the loading battlers' sprites are hidden, so no 2D Pokémon shows
 for a moment.
+
+The remake reads the game's structs and constants by name: the build writes
+their layouts and values (`CONTROLLER_*`, `B_POSITION_*`,
+`BATTLE_ENVIRONMENT_*`: `REMAKE_CONSTANTS` in `platform/build.mjs`) to
+`public/game/remake_state.json`, so `src/remake` repeats none of the game's
+numbers.
 
 **Test battles.** `platform/game/remake_test.c` starts a wild battle from
 anywhere, as the game starts one, and starts it over when it ends: the game

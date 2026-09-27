@@ -29,6 +29,8 @@ struct RemakeBattler {
     uint8_t objMode;
     uint8_t invisible;
     uint8_t showsPokemon;   // the sprite shows its Pokémon (in the intro the trainer's picture takes its place)
+    uint8_t command;        // the last command the battle engine gave its controller (CONTROLLER_*: a hit, a faint...)
+    uint16_t commandSerial; // counts them (a new one when it changes)
     uint32_t callback;      // its sprite callback (function table index): what it is doing
     uint32_t personality;
     uint16_t hp, maxHp;
@@ -90,8 +92,10 @@ struct RemakeBackground {
 
 struct RemakeSprite {
     uint32_t active;        // the picture replaces the sprite's OAM entries
-    uint32_t tileNum;       // the entries with this first tile are the sprite's
+    uint32_t tileNum;       // the entries with this first tile are the sprite's (and its copies': afterimages, a window)
     uint32_t format;        // REMAKE_FORMAT_*
+    int32_t centerX;        // the centre of the entry the picture was drawn for: another entry
+    int32_t centerY;        // shows it moved by the difference of their centres
     uint16_t pixels[REMAKE_PIXELS];
 };
 
@@ -101,8 +105,10 @@ struct RemakeLayers {
 };
 
 // The game's hooks (platform/patches/battle_anim.patch, battle_bg.patch): an
-// animation starts; the battle background is drawn (REMAKE_BG_MAIN or a move's).
+// animation starts; the battle background is drawn (REMAKE_BG_MAIN or a move's);
 void RemakeBattleAnimation(const uint8_t *const animsTable[], uint16_t tableId, uint8_t isMoveAnim);
 void RemakeBattleBackground(uint16_t background);
+// (platform/patches/battle_controllers.patch) the battle engine gives a battler's controller a command.
+void RemakeBattlerCommand(uint8_t battler, uint8_t command);
 
 #endif // GUARD_REMAKE_STATE_H

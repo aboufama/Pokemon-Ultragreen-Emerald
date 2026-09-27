@@ -55,6 +55,14 @@ export class Battler3D {
   appear = 1;
   /** Where the appear scale pivots, from the root in heights (slot frame): sprites scale about their center. */
   appearPivot = new THREE.Vector3(0, 0.5, 0);
+  /** A scale the sprite it stands for is drawn at (the compiled game's affine sprites, src/remake), on top of `appear`, about the same pivot. */
+  spriteScale = 1;
+  /**
+   * Act in place: the clips' travel (advance, the root's moves along the
+   * ground) and leaps (the root above the ground) are left out, because
+   * something else moves the body (the compiled game's sprite, src/remake).
+   */
+  inPlace = false;
   visible = true;
   /**
    * Sprite-style offset in GBA pixels (x right, y down), like OAM x2/y2:
@@ -507,14 +515,19 @@ export class Battler3D {
   /** The root's scale and the per-frame sprite offsets (appear, slide, bounce) on top of the pose's position. */
   private placeRoot(poseScale: number): void {
     const root = this.inst.root;
-    root.scale.setScalar(poseScale * this.appear);
-    if (this.appear !== 1) root.position.addScaledVector(this.shrinkPivot ?? this.appearPivot, (1 - this.appear) * this.height);
+    const scale = this.appear * this.spriteScale;
+    root.scale.setScalar(poseScale * scale);
+    if (scale !== 1) root.position.addScaledVector(this.shrinkPivot ?? this.appearPivot, (1 - scale) * this.height);
     if (this.screenOffset[0] || this.screenOffset[1]) root.position.add(this.screenOffsetLocal());
   }
 
   update(dt: number): void {
     this.time += dt;
     const pose = this.animator.update(dt);
+    if (this.inPlace) {
+      pose.advance = 0;
+      if (pose.root) pose.root = { ...pose.root, x: 0, z: 0, y: Math.min(0, pose.root.y ?? 0) };
+    }
     this.pose = pose;
     // Fainting, as the 3D games show it: from the faint clip's 'shrink' the
     // body shrinks away into its middle (as the GBA shrinks a Pokémon into
@@ -648,7 +661,7 @@ export class Battler3D {
     const shownLift = root.position.y - cal.lift;
     const up = Math.max(0, shownLift / H);
     const sunk = Math.min(1, Math.max(0, 1 + (shownLift / H) * 4));
-    const shadowScale = (this.appear / (1 + up * 1.6)) * H;
+    const shadowScale = ((this.appear * this.spriteScale) / (1 + up * 1.6)) * H;
     this.shadow.update(root.position.x, root.position.z, root.rotation.y, this.footprint.x * shadowScale, this.footprint.z * shadowScale, this.visible ? sunk * Math.max(0, 1 - up * 1.4) : 0);
 
     // Water rings the feet of a Pokémon standing in its place (not one away at the foe, carried, or gone).

@@ -14,6 +14,8 @@
 #include "remake_state.h"
 
 static struct RemakeState sState = { .background = REMAKE_BG_MAIN };
+static u8 sCommand[REMAKE_BATTLERS];
+static u16 sCommandSerial[REMAKE_BATTLERS];
 
 extern const u8 *const gBattleAnims_Moves[];
 extern const u8 *const gBattleAnims_StatusConditions[];
@@ -42,6 +44,14 @@ void RemakeBattleBackground(u16 background)
     sState.background = background;
 }
 
+void RemakeBattlerCommand(u8 battler, u8 command)
+{
+    if (battler >= REMAKE_BATTLERS)
+        return;
+    sCommand[battler] = command;
+    sCommandSerial[battler]++;
+}
+
 __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void)
 {
     s32 i;
@@ -61,6 +71,8 @@ __attribute__((export_name("RemakeState"))) struct RemakeState *RemakeState(void
         struct RemakeBattler *b = &sState.battlers[i];
         struct Sprite *sprite;
         memset(b, 0, sizeof(*b));
+        b->command = sCommand[i];
+        b->commandSerial = sCommandSerial[i];
         if (!gMain.inBattle || i >= gBattlersCount)
             continue;
         b->present = TRUE;

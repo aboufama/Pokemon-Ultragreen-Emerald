@@ -200,7 +200,6 @@ static void Sprites(u32 line, int bitmapMode)
     }
     if (!(dispcnt & 0x1000))
         return;
-    u8 drawn[REMAKE_SPRITES][2] = { { 0 } };  // the picture, and its window copy
     for (int i = 0; i < 128; i++) {
         u16 a0 = OAM[i * 4], a1 = OAM[i * 4 + 1], a2 = OAM[i * 4 + 2];
         int affine = a0 & 0x100;
@@ -210,6 +209,9 @@ static void Sprites(u32 line, int bitmapMode)
         // where the entry is in the OAM order, with its priority and mode (a
         // window sprite gives the window its shape) and mosaic. The picture
         // is not clipped to the sprite's box (a model can reach beyond it).
+        // A copy of the sprite (the same tiles: an afterimage, a window copy)
+        // shows it moved by the difference between its centre and the one the
+        // picture was drawn for.
         u32 rtile = a2 & 0x3FF, rprio = (a2 >> 10) & 3;
         int rmode = (a0 >> 10) & 3, rmosaic = a0 & 0x1000;
         struct RemakeSprite *remake = 0;
@@ -217,17 +219,31 @@ static void Sprites(u32 line, int bitmapMode)
             if (sRemake.sprites[r].active && sRemake.sprites[r].tileNum == rtile)
                 remake = &sRemake.sprites[r];
         if (remake) {
-            u8 *done = &drawn[remake - sRemake.sprites][rmode == 2];
-            if (*done)
+            if ((a0 >> 14) == 3)
                 continue;
-            *done = 1;
-            u32 row = rmosaic ? line - line % mosV : line;
+            s32 bw = sObjSize[a0 >> 14][a1 >> 14][0], bh = sObjSize[a0 >> 14][a1 >> 14][1];
+            if (affine && (a0 & 0x200)) {
+                bw *= 2;
+                bh *= 2;
+            }
+            s32 ex = a1 & 0x1FF, ey = a0 & 0xFF;
+            if (ex >= SCREEN_W)
+                ex -= 512;
+            if (ey + bh > 256)
+                ey -= 256;
+            s32 dx = ex + bw / 2 - remake->centerX, dy = ey + bh / 2 - remake->centerY;
+            s32 row = (s32)(rmosaic ? line - line % mosV : line) - dy;
+            if (row < 0 || row >= SCREEN_H)
+                continue;
             const u16 *src = &remake->pixels[row * SCREEN_W];
             // Color indices take the entry's palette, as its tiles would.
             int indexed = remake->format == REMAKE_FORMAT_INDEX;
             u32 rbase = (a0 & 0x2000) ? 0 : (a2 >> 12) * 16, rmask = (a0 & 0x2000) ? 0xFF : 0xF;
             for (s32 sx = 0; sx < SCREEN_W; sx++) {
-                u16 c = src[rmosaic ? sx - sx % (s32)mosH : sx];
+                s32 px = (rmosaic ? sx - sx % (s32)mosH : sx) - dx;
+                if (px < 0 || px >= SCREEN_W)
+                    continue;
+                u16 c = src[px];
                 if (!(c & LAYER_OPAQUE) || (indexed && !(c & rmask)))
                     continue;
                 if (rmode == 2) {

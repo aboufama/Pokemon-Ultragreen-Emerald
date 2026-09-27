@@ -17,6 +17,7 @@
 //     is scaled, turned and stretched as the sprite's affine transform draws
 //     it, shows when the sprite shows, and its pixels are the sprite's
 //     palette indices, so the game's own fades, tints and flashes color it.
+//     It acts in place on the game's events (acting.ts).
 //
 // ?remake=0 turns it off.
 
@@ -27,7 +28,8 @@ import { hasProfile } from '../pokemon/registry';
 import { SLOT_PIXEL_ID } from '../pokemon/instantiate';
 import { BattleStage, type SlotName } from '../render3d/stage';
 import type { Game } from '../../platform/host/game.mjs';
-import { REMAKE_BG_MAIN, StructView, readBattleState, type BattleState, type StructLayouts } from './state';
+import { Acting } from './acting';
+import { REMAKE_BG_MAIN, StructView, constant, readBattleState, type BattleState, type GameInfo, type StructLayouts } from './state';
 
 const WIDTH = 240;
 const HEIGHT = 160;
@@ -45,19 +47,19 @@ const REG_BG3CNT = 0x0e;
 const REG_BG3HOFS = 0x1c;
 const REG_BG3VOFS = 0x1e;
 
-/** The battle environments (BATTLE_ENVIRONMENT_*) the remake has an arena for; the others keep the game's background. */
-const ARENAS: Record<number, string> = {
-  0: 'grass', // GRASS
-  1: 'grass', // LONG_GRASS
-  4: 'water', // WATER
-  5: 'water', // POND
-  6: 'cave', // MOUNTAIN
-  7: 'cave', // CAVE
-  9: 'grass', // PLAIN
+/** The arena for each battle environment the remake has one for; the others keep the game's background. */
+const ARENAS: Record<string, string> = {
+  BATTLE_ENVIRONMENT_GRASS: 'grass',
+  BATTLE_ENVIRONMENT_LONG_GRASS: 'grass',
+  BATTLE_ENVIRONMENT_PLAIN: 'grass',
+  BATTLE_ENVIRONMENT_WATER: 'water',
+  BATTLE_ENVIRONMENT_POND: 'water',
+  BATTLE_ENVIRONMENT_MOUNTAIN: 'cave',
+  BATTLE_ENVIRONMENT_CAVE: 'cave',
 };
 
-/** Where each battle position (B_POSITION_*) stands on the stage. Doubles' positions 2 and 3 keep the game's sprites for now. */
-const SLOTS: Record<number, SlotName> = { 0: 'player', 1: 'enemy' };
+/** Where each battle position stands on the stage. Doubles' second positions keep the game's sprites for now. */
+const SLOTS: Record<string, SlotName> = { B_POSITION_PLAYER_LEFT: 'player', B_POSITION_OPPONENT_LEFT: 'enemy' };
 
 /** A species' model name (src/pokemon/<slug>) by its number (SPECIES_*). */
 const SLUGS = new Map<number, string>(Object.values(speciesTable as Record<string, { id: number; slug: string }>).map((s) => [s.id, s.slug]));
@@ -76,10 +78,18 @@ interface OamSprite {
   y: number;
   /** The linear map it is drawn with about its centre (x right, y down): the inverse of its affine matrix. */
   map: [number, number, number, number];
+  /** Drawn semi-transparent (a copy's afterimage, usually). */
+  blended: boolean;
 }
 
-/** The first sprite in OAM drawing tile `tileNum` (not hidden, not a window), as the hardware reads it. */
-function oamSprite(view: DataView, tileNum: number): OamSprite | null {
+/**
+ * The sprite in OAM drawing tile `tileNum` (not hidden, not a window) as the
+ * hardware reads it: the one centred at `at` (the battler's own sprite; the
+ * others are copies of it, afterimages), else the first drawn opaque, else
+ * the first.
+ */
+function oamSprite(view: DataView, tileNum: number, at: [number, number]): OamSprite | null {
+  const found: OamSprite[] = [];
   for (let i = 0; i < 128; i++) {
     const a0 = view.getUint16(OAM + i * 8, true);
     const a1 = view.getUint16(OAM + i * 8 + 2, true);
@@ -103,9 +113,9 @@ function oamSprite(view: DataView, tileNum: number): OamSprite | null {
       const det = (pa * pd - pb * pc) / 65536;
       map = det === 0 ? [0, 0, 0, 0] : [pd / 256 / det, -pb / 256 / det, -pc / 256 / det, pa / 256 / det];
     }
-    return { x: x + bw / 2, y: y + bh / 2, map };
+    found.push({ x: x + bw / 2, y: y + bh / 2, map, blended: ((a0 >> 10) & 3) === 1 });
   }
-  return null;
+  return found.find((o) => o.x === at[0] && o.y === at[1]) ?? found.find((o) => !o.blended) ?? found[0] ?? null;
 }
 
 /** A scroll register's value as an offset within its background's map (-size/2 .. size/2). */
@@ -150,6 +160,8 @@ function estimateBlend(from: number[], to: number[]): { coeff: number; target: [
 
 /** A battler the remake draws: its 3D body in a slot of the stage. */
 interface Body {
+  /** The game's number for the battler. */
+  battlerId: number;
   species: number;
   slot: SlotName;
   battler: Battler3D | null;
@@ -172,8 +184,17 @@ export class RemakeLayer {
   private readonly bodies = new Map<number, Body>();
   private target: THREE.WebGLRenderTarget | null = null;
   private readonly rgba = new Uint8Array(WIDTH * HEIGHT * 4);
+  private readonly layouts: StructLayouts;
+  private readonly arenas = new Map<number, string>();
+  private readonly slots = new Map<number, SlotName>();
+  private readonly acting: Acting;
 
-  constructor(private readonly game: Game, private readonly layouts: StructLayouts) {}
+  constructor(private readonly game: Game, info: GameInfo) {
+    this.layouts = info.structs;
+    for (const [name, arena] of Object.entries(ARENAS)) this.arenas.set(constant(info, name), arena);
+    for (const [name, slot] of Object.entries(SLOTS)) this.slots.set(constant(info, name), slot);
+    this.acting = new Acting(info);
+  }
 
   /** False while a body or an arena the battle needs is loading: the page holds the game until it is ready. */
   ready(): boolean {
@@ -216,9 +237,11 @@ export class RemakeLayer {
     }
     if (!state.battleScreen) return;
     const stage = this.ensureStage();
-    const arena = state.background === REMAKE_BG_MAIN ? ARENAS[state.environment] ?? null : null;
+    const arena = state.background === REMAKE_BG_MAIN ? this.arenas.get(state.environment) ?? null : null;
     if (arena && arena !== this.arena && !this.arenaLoading) this.loadArena(arena);
     const shown = this.placeBodies(state);
+    const showing = new Set([...shown.values()].map((b) => b.battlerId));
+    this.acting.update(state, (i) => this.bodies.get(i)?.battler ?? null, (i) => showing.has(i));
     if (!this.ready()) {
       // The page holds the game on this frame until everything is loaded:
       // meanwhile the sprites of the bodies still loading are hidden.
@@ -227,8 +250,12 @@ export class RemakeLayer {
     }
 
     stage.update(FRAME_SECONDS);
-    for (const [, body] of shown) body.battler!.update(FRAME_SECONDS);
-    for (const [, body] of shown) this.placeSprite(body);
+    // Every body lives on (its clip runs) while its sprite blinks or is away.
+    for (const body of this.bodies.values()) {
+      if (!body.battler) continue;
+      body.battler.update(FRAME_SECONDS);
+      this.placeSprite(body);
+    }
     if (arena && arena === this.arena) this.renderArena(state);
     if (shown.size) this.renderBodies(shown);
   }
@@ -270,6 +297,7 @@ export class RemakeLayer {
   /** The battle is over: the bodies leave the stage (the arena stays loaded for the next one). */
   private endBattle(): void {
     for (const battler of [...this.bodies.keys()]) this.removeBody(battler);
+    this.acting.reset();
   }
 
   private removeBody(battler: number): void {
@@ -290,7 +318,7 @@ export class RemakeLayer {
     const shown = new Map<number, Body>();
     const lines = this.backgroundScroll(view);
     state.battlers.forEach((b, i) => {
-      const slot = SLOTS[b.position];
+      const slot = this.slots.get(b.position);
       const slug = SLUGS.get(b.species);
       if (!b.present || !slot || !slug || !hasProfile(slug)) {
         this.removeBody(i);
@@ -304,15 +332,21 @@ export class RemakeLayer {
       if (!body) body = this.addBody(i, b.species, slot, slug);
       // A trainer's picture (the intro) or the substitute doll keeps the game's sprite.
       if (!body.battler || b.behindSubstitute || !b.showsPokemon) return;
-      // The body shows where the sprite does, and only when it does.
-      const sprite = oamSprite(view, b.tileNum);
-      body.battler.visible = !!sprite;
+      // The body shows where the sprite does, and only when it does. (A
+      // fainting body stays where it was and shrinks away by itself: the
+      // sprite's slide down is not followed.)
+      const sprite = oamSprite(view, b.tileNum, [b.x + b.x2, b.y + b.y2]);
+      const fainting = this.acting.isFainting(i);
+      if (!fainting) body.battler.visible = !!sprite;
       if (!sprite) return;
-      const row = Math.max(0, Math.min(HEIGHT - 1, Math.round(sprite.y)));
-      body.battler.screenOffset = [sprite.x - b.homeX + lines.x[row], sprite.y - b.homeY + lines.y[row]];
-      const [a, bb, c, d] = sprite.map;
-      body.battler.appear = Math.sqrt(Math.abs(a * d - bb * c));
-      body.sprite.userData.map = sprite.map;
+      if (!fainting) {
+        const row = Math.max(0, Math.min(HEIGHT - 1, Math.round(sprite.y)));
+        body.battler.screenOffset = [sprite.x - b.homeX + lines.x[row], sprite.y - b.homeY + lines.y[row]];
+        const [a, bb, c, d] = sprite.map;
+        body.battler.spriteScale = Math.sqrt(Math.abs(a * d - bb * c));
+        body.sprite.userData.map = sprite.map;
+        body.sprite.userData.center = [sprite.x, sprite.y];
+      }
       shown.set(b.tileNum, body);
     });
     return shown;
@@ -324,7 +358,9 @@ export class RemakeLayer {
     sprite.name = `remake-sprite-${slot}`;
     sprite.matrixAutoUpdate = false;
     stage.slots[slot].add(sprite);
-    const body: Body = { species, slot, battler: null, sprite, loading: null, failed: false };
+    sprite.userData.map = [1, 0, 0, 1];
+    sprite.userData.center = [0, 0];
+    const body: Body = { battlerId: battler, species, slot, battler: null, sprite, loading: null, failed: false };
     body.loading = Battler3D.create(stage, slot, slug).then(
       (b3d) => {
         body.loading = null;
@@ -332,8 +368,9 @@ export class RemakeLayer {
           b3d.dispose();
           return;
         }
-        // The body goes under the sprite's transform, in its slot.
+        // The body goes under the sprite's transform, in its slot, and acts in place.
         sprite.add(b3d.inst.root);
+        b3d.inPlace = true;
         body.battler = b3d;
       },
       (e) => {
@@ -364,7 +401,7 @@ export class RemakeLayer {
   private placeSprite(body: Body): void {
     const b3d = body.battler!;
     const [a, b, c, d] = body.sprite.userData.map as [number, number, number, number];
-    const s = b3d.appear || 1;
+    const s = b3d.spriteScale || 1;
     const m = [a / s, b / s, c / s, d / s];
     const group = body.sprite;
     if (Math.abs(m[0] - 1) + Math.abs(m[1]) + Math.abs(m[2]) + Math.abs(m[3] - 1) < 1e-3) {
@@ -475,8 +512,11 @@ export class RemakeLayer {
           out[y * WIDTH + x] = this.rgba[i + 3] === id ? OPAQUE | this.rgba[i] : 0;
         }
       }
+      const [cx, cy] = body.sprite.userData.center as [number, number];
       view.setUint32(sprite.address + this.field('RemakeSprite', 'tileNum'), tileNum, true);
       view.setUint32(sprite.address + this.field('RemakeSprite', 'format'), FORMAT_INDEX, true);
+      view.setInt32(sprite.address + this.field('RemakeSprite', 'centerX'), cx, true);
+      view.setInt32(sprite.address + this.field('RemakeSprite', 'centerY'), cy, true);
       view.setUint32(sprite.address + this.field('RemakeSprite', 'active'), 1, true);
     }
   }
