@@ -2,14 +2,18 @@ import type { SpeciesProfile } from '../profile';
 import { applyCalibration } from '../profile';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS, EXPRESSIONS } from './clips';
+import { EXPRESSIONS, MOMENTS_AND_BLOWS } from './set';
+import { RANGED } from './set_ranged';
+import { STATUS } from './set_status';
 import calibration from './calibration.json';
 
 /**
  * DUSTOX: the poison moth the Wurmple line becomes through Cascoon. It
  * hovers on its broad wings, heavier and slower-beating than Beautifly,
  * looses toxic powder from them, and reaches out with the power of its mind
- * through its antennae.
+ * through its antennae. Its clips are its own, hand-keyed in the first
+ * clips' style (./set.ts and the files it names); the moth kit it once
+ * shared with Beautifly (./clips.ts, ./own.ts) is no longer used.
  */
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
   const cal = calibration as SpeciesProfile['calibration'];
@@ -17,13 +21,13 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'dustox',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: CLIPS,
+    clips: Object.fromEntries([...MOMENTS_AND_BLOWS, ...RANGED, ...STATUS].map((c) => [c.name, c])),
     effectParts: [],
     effects: {},
     brief: {
       bodyPlan: 'bird',
-      character: 'A nocturnal poison moth (1.2 m, 31.6 kg) drawn to streetlights at night: it never stands, hovering on two broad green wings with a heavier, slower beat than Beautifly\'s, its big head with its downturned mouth and feathery antennae up front, two pairs of stubby red legs on its chest. Grumpy and steady rather than quick: it flies at a foe in a heavy rush to slam it, dusts its highly toxic powder down from its wings, and grips foes with the power of its mind through its antennae.',
-      powerSource: 'Its wings for the toxic powder it looses from them (Toxic), the wind of its beats (Gust, Whirlwind, Silver Wind) and its strikes; its antennae for the power of its mind (Confusion, Psybeam, Psychic) and to draw energy in (Giga Drain); its mouth for sludge (Sludge Bomb), thread (String Shot) and beams; the tip of its abdomen for Poison Sting.',
+      character: 'A nocturnal poison moth (1.2 m, 31.6 kg) drawn to streetlights at night: it never stands, hovering on two broad green wings with a heavy, slow beat (slower than Beautifly\'s), its big head with its downturned mouth and feathery antennae up front, two pairs of stubby red legs on its chest. Grumpy and steady rather than quick: it rears back and flies at a foe in a heavy rush to ram it or slash it with a wing, shakes its highly toxic powder down from its wings, and grips foes with the power of its mind through its antennae.',
+      powerSource: 'Its wings for the toxic powder it looses from them (Toxic), the wind of its beats (Gust, Whirlwind, Silver Wind), its wing strikes and the stars it flings (Swift); its antennae for the power of its mind (Confusion, Psybeam, Psychic) and to draw energy in (Giga Drain); its mouth for sludge (Sludge Bomb), thread (String Shot), beams (Hyper Beam, Solar Beam) and snores; the tip of its abdomen, curled under it, for Poison Sting\'s barb.',
     },
     // The mouth texture is an atlas of 4 x 2 cells (mouth_mat): offsets from
     // its usual downturned mouth. It has no eyelids (its eyes are painted
@@ -35,8 +39,15 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       wings: { bones: ['foreTipL', 'foreTipR'], reach: 0.8, about: 'its broad wings: the toxic powder it looses from them, the wind of its beats, its wing strikes' },
       abdomen: { bones: ['hips'], reach: 0.95, about: 'the tip of its abdomen, curled under it to jab and fire a barb' },
     },
-    // Which part each motif's effect leaves from when a move has no part of its own (moves.json sets its moves').
-    emitterFor: { powder: 'wings', storm: 'wings', throw: 'wings', wave: 'wings', mind: 'antennae', drain: 'antennae', spit: 'mouth', breath: 'mouth', beam: 'mouth' },
+    // Which part each motif's effect leaves from when a move has no part of
+    // its own (moves.json sets its moves'): its mind acts through its
+    // antennae (a stare too: its painted eyes have no bone of their own).
+    emitterFor: {
+      powder: 'wings', storm: 'wings', throw: 'wings', wave: 'wings', fling: 'wings', kick_sand: 'wings',
+      mind: 'antennae', drain: 'antennae', glare: 'antennae', bolt: 'antennae', erupt: 'antennae',
+      spit: 'mouth', breath: 'mouth', beam: 'mouth', jet: 'mouth', sound: 'mouth', roar: 'mouth',
+      orb: 'body',
+    },
     // The wing tips and the lower half of each wing flex on springs behind
     // every beat; the antennae bob.
     dynamics: [
@@ -48,55 +59,37 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['antenna2R'], damping: 0.22, elasticity: 0.12, maxDrift: 0.3 },
     ],
     moveClips: {},
-    // Mimic copies moves from outside its movepool: every motif plays its
-    // closest clip of its own (blows fly to the foe, rays and throws leave
-    // from home, status moves stay at home).
+    // Clips by move motif (src/battle3d/motifs.ts): a clip per action its
+    // moves take, named after its motif (strike, beam, spit, storm, drain,
+    // orb, throw, sound, powder, shield, heal, weather, charm, afterimage,
+    // flash, and the strong versions mind_strong and spit_strong) or a
+    // category clip mapped here when it is that action. The rest are the
+    // motifs a move Mimic copies may take, each its closest clip.
     motifClips: {
-      strike: 'aerial_ace',
-      wing: 'aerial_ace',
-      punch: 'facade',
-      horn: 'facade',
-      kick: 'secret_power',
-      peck: 'secret_power',
-      bite: 'thief',
-      grapple: 'thief',
-      slam: 'double_edge',
-      burrow: 'double_edge',
-      tail: 'frustration',
-      vine: 'frustration',
-      spin: 'return',
-      toss: 'return',
-      breath: 'solar_beam',
-      spit: 'sludge_bomb',
-      beam: 'psybeam',
-      beam_strong: 'hyper_beam',
-      jet: 'hyper_beam',
-      burst: 'hyper_beam',
-      erupt: 'psychic',
-      bolt: 'hidden_power',
-      mind: 'confusion',
-      mind_strong: 'psychic',
-      orb: 'shadow_ball',
-      throw: 'swift',
-      fling: 'swift',
-      wave: 'silver_wind',
-      storm: 'gust',
-      quake: 'whirlwind',
-      drain: 'giga_drain',
-      sound: 'snore',
-      roar: 'swagger',
-      glare: 'mimic',
-      kick_sand: 'toxic',
-      powder: 'toxic',
-      buff: 'endure',
-      shield: 'protect',
-      heal: 'moonlight',
-      weather: 'sunny_day',
-      charm: 'attract',
-      afterimage: 'double_team',
+      // Its body ram (Tackle, Facade, Secret Power, Struggle) and its reckless
+      // dive (Double-Edge, Return, Frustration).
+      tackle: 'physical_weak',
+      tackle_strong: 'physical_strong',
+      // Confusion; Psybeam has its own beam; Hyper Beam and Solar Beam are its
+      // great beam from the mouth.
+      mind: 'special_weak',
+      beam_strong: 'special_strong',
+      // Sleep Talk, and the buffs Mimic may copy; Mimic's own stare.
+      buff: 'status_self',
+      glare: 'status_target',
+      // String Shot is spat from its mouth, as Sludge Bomb is.
+      'powder@mouth': 'spit_strong',
+      // Moves outside its movepool that Mimic may copy.
+      punch: 'physical_weak', kick: 'physical_weak', bite: 'physical_weak', peck: 'physical_weak', horn: 'physical_weak',
+      slam: 'physical_strong', spin: 'physical_strong', toss: 'physical_strong', burrow: 'physical_strong',
+      wing: 'strike', tail: 'strike', grapple: 'strike', vine: 'strike',
+      breath: 'special_strong', jet: 'special_strong', burst: 'special_strong',
+      bolt: 'special_weak', erupt: 'mind_strong',
+      wave: 'storm', quake: 'storm', kick_sand: 'storm', fling: 'throw',
+      roar: 'sound',
     },
     hiddenParts: [],
-    // Its heavy body slam, its psychic ray, its toxic powder and the silver wind of its line.
+    // Its heavy body ram, its psychic ray, its toxic powder and the silver wind of its line.
     showcaseMoves: ['TACKLE', 'PSYBEAM', 'TOXIC', 'SILVER_WIND'],
     palette: palettes.normal,
     shinyPalette: palettes.shiny,
