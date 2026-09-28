@@ -443,7 +443,12 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
       groundBurst(attacker, move, vfx, 1);
       vfx.shake(0.03, 0.3);
       tunnel = tunnelFx(attacker, move, vfx);
-    } else if (name === 'release') {
+    } else if ((name === 'release' || name === 'emit') && MOTIFS[motif].kind === 'status') {
+      // The effect leaves the body. A clip made for one action serves another the
+      // body does the same way (a spit serves Toxic, a roar a bellow): the move's
+      // motif says which effect it is, whichever of the two the clip calls it.
+      pending.push(emitFx(attacker, target, move, motif, vfx));
+    } else if (name === 'release' || name === 'emit') {
       fadeBackdrop();
       const r = releaseFx(attacker, target, move, motif, vfx);
       if ('stop' in r) {
@@ -459,8 +464,6 @@ export async function performMove(attacker: Battler3D, target: Battler3D, move: 
       chargeFx(attacker, move, motif, vfx);
     } else if (name === 'aura') {
       auraFx(attacker, motif, move, vfx);
-    } else if (name === 'emit') {
-      pending.push(emitFx(attacker, target, move, motif, vfx));
     } else if (name === 'cry') {
       vfx.shake(0.02, 0.25);
     }

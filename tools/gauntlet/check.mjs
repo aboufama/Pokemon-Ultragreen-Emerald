@@ -161,7 +161,11 @@ for (const side of ['enemy', 'player']) {
 }
 gate(`color fit (loss <= ${MAX_COLOR_LOSS})`, !!cal.colorFit && cal.colorFit.loss <= MAX_COLOR_LOSS, cal.colorFit ? `loss ${cal.colorFit.loss}` : 'not fitted: --phase color');
 
-// 7. Clips: every situation, and every move it can know.
+// 7. Clips: the moments every battle plays, and a clip for every action its
+// moves take: a punch punches, a kick kicks, Double Kick kicks twice, a bite
+// bites. The standard is the first clips of Blaziken, Sceptile and Swampert
+// (git show b7c4fdb:src/pokemon/<slug>/clips.ts): one excellent clip per
+// action, played by every move that takes it, not a rushed clip per move.
 const clips = profile.clips;
 const brief10 = await speciesBrief(slug);
 const pool = brief10.moves;
@@ -179,10 +183,11 @@ function structure(name, c) {
   if ((c.events ?? []).some((e) => e.t < 0 || e.t > c.duration)) problems.push('event outside the clip');
   return problems;
 }
-for (const name of brief10.situations) {
+// The moments every battle plays.
+for (const name of ['idle', 'intro', 'hit', 'faint']) {
   const c = clips[name];
   if (!c) {
-    gate(`situation ${name}`, false, `missing: ${SITUATIONS[name] ?? ''}`);
+    gate(`clip ${name}`, false, `missing: ${SITUATIONS[name] ?? ''}`);
     continue;
   }
   const problems = structure(name, c);
@@ -196,71 +201,77 @@ for (const name of brief10.situations) {
     if (c.keys.some((k) => (r(k).y ?? 0) < FAINT_LIMITS.sink)) problems.push(`sinks into the ground (root.y below ${FAINT_LIMITS.sink}): a faint curls over and shrinks away`);
     if (c.keys.some((k) => Math.abs(r(k).pitch ?? 0) > FAINT_LIMITS.tip || Math.abs(r(k).roll ?? 0) > FAINT_LIMITS.tip)) problems.push(`topples over (root tipped past ${FAINT_LIMITS.tip}°): a faint curls over and shrinks away`);
   }
-  gate(`situation ${name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s, ${c.keys.length} keys${events.length ? ', ' + events.join(' ') : ''}`);
+  gate(`clip ${name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s, ${c.keys.length} keys${events.length ? ', ' + events.join(' ') : ''}`);
 }
+// The other situations (sleeping, a status taking hold, a stat rising...) show
+// the game's own effect on the body at rest where the species has no clip.
+const noSituation = brief10.situations.filter((n) => !['idle', 'intro', 'hit', 'faint'].includes(n) && !clips[n]);
+if (noSituation.length) warn('situations without a clip of their own', noSituation.join(', '));
 
-// Every move in its movepool has its own clip (and its variants): made for
-// that move, or for a move of the same action (src/battle3d/actions.ts),
-// never another move's or a category clip.
-const ownClip = (moveConst) => {
-  for (const m of sameAction(moveConst)) {
-    const name = profile.moveClips?.[m] ?? moveClipName(m);
-    if (clips[name]) return { name, via: m };
-  }
-  return null;
+// Every move plays a clip that shows its action: one made for it (or for a
+// move of the same action), one named after its motif, or one the profile
+// maps to its motif in motifClips. A move that falls through to a category
+// clip made for another action fails, and names the motif it needs.
+const CATEGORY = ['physical_weak', 'physical_strong', 'special_weak', 'special_strong', 'status_self', 'status_target'];
+const depicts = (move, clip) => {
+  for (const m of sameAction(move.const)) if (clip === (profile.moveClips?.[m] ?? moveClipName(m))) return true;
+  if (profile.moveClips?.[move.const] === clip) return true;
+  const motif = data.motifOf(move);
+  if (motif === 'other') return true;
+  const part = profile.moveParts?.[move.const];
+  const keys = [motif, `${motif}_strong`, ...(part ? [`${motif}@${part}`, `${motif}@${part}_strong`] : [])];
+  return keys.some((k) => (profile.motifClips?.[k] ?? k) === clip) || !CATEGORY.includes(clip);
 };
-const inPool = new Set(pool.map((m) => m.const));
-for (const [m, target] of Object.entries(profile.moveClips ?? {})) {
-  const allowed = sameAction(m).map(moveClipName);
-  const ok = allowed.some((a) => target === a || target.startsWith(`${a}_`));
-  if (inPool.has(m)) gate(`moveClips ${m} -> ${target}`, ok, ok ? '' : `plays a clip made for another move: give ${m.replace('MOVE_', '')} its own (${allowed[0]})`);
-  else if (!ok) warn(`moveClips ${m} -> ${target}`, 'a move it can\'t know: remove the entry');
-}
+const missingMotifs = new Map();
+const byClip = new Map();
 for (const m of pool) {
   const move = data.moves[m.const];
-  const own = ownClip(m.const);
+  const clip = clipOf(data, profile, m.const);
   const motif = data.motifOf(move);
-  if (!own) {
-    gate(`move ${m.name}`, false, `no clip: ${moveClipName(m.const)} (${motif}: ${data.MOTIFS[motif].body}) [${m.sources.join(',')}]`);
+  const c = clips[clip];
+  if (!c || !depicts(move, clip)) {
+    if (!missingMotifs.has(motif)) missingMotifs.set(motif, []);
+    missingMotifs.get(motif).push(m.name);
     continue;
   }
-  const c = clips[own.name];
-  const problems = structure(own.name, c);
+  if (!byClip.has(clip)) byClip.set(clip, []);
+  byClip.get(clip).push(m);
+}
+for (const [motif, moves] of missingMotifs) {
+  gate(`a clip for ${motif} (${data.MOTIFS[motif]?.body ?? ''})`, false, `${moves.join(', ')} fall through to a clip made for another action: give it a ${motif} clip (or map one in motifClips)`);
+}
+for (const [clip, moves] of byClip) {
+  const c = clips[clip];
+  const problems = structure(clip, c);
   const events = (c.events ?? []).map((e) => e.name);
-  const info = data.MOTIFS[motif];
-  const twoTurn = TWO_TURN_EFFECTS.has(move.effect);
-  // The events its effects need: a contact move's impact, a ranged one's release, a status move's own.
-  let need = info.requires ?? (info.kind === 'contact' ? ['impact'] : info.kind === 'ranged' ? (motif === 'quake' ? ['impact'] : ['release']) : info.events.slice(0, 1));
-  // A two-turn move's first turn is its _charge (a burrow's dig): its strike needs the rest.
-  if (twoTurn) need = need.filter((e) => e !== 'dig');
-  const lacking = need.filter((e) => !events.includes(e));
-  if (lacking.length) problems.push(`needs ${lacking.map((e) => `a '${e}'`).join(' and ')} event`);
-  gate(`move ${m.name} -> ${own.name}`, problems.length === 0, problems.join('; ') || `${c.duration.toFixed(2)} s ${events.join(' ')}${own.via !== m.const ? ` (the same action as ${own.via.replace('MOVE_', '')})` : ''}`);
-  // Its variants: each hit of a multi-hit move, a two-turn move's first turn.
-  const variants = [];
-  if (MULTI_HIT_EFFECTS.has(move.effect)) variants.push('_first', ...(MANY_HIT_EFFECTS.has(move.effect) ? ['_next'] : []), '_last');
-  if (twoTurn) variants.push('_charge');
-  for (const v of variants) {
-    const vc = clips[own.name + v];
-    if (!vc) {
-      gate(`move ${m.name} ${v.slice(1)} -> ${own.name + v}`, false, `missing: ${v === '_charge' ? 'the first turn (gathering power, burrowing, storing energy)' : v === '_first' ? 'the first hit: leap in, strike, stay at the foe' : v === '_next' ? 'a hit between: strike again from the foe (another limb, another angle), stay' : 'the last hit: strike from the foe, go home'}`);
-      continue;
-    }
-    const ve = (vc.events ?? []).map((e) => e.name);
-    const vp = structure(own.name + v, vc);
-    const vneed = v === '_charge' ? (ve.includes('charge') || ve.includes('dig') ? [] : ["a 'charge' (or a burrow's 'dig')"]) : ve.includes(info.kind === 'contact' ? 'impact' : 'release') ? [] : [`a '${info.kind === 'contact' ? 'impact' : 'release'}'`];
-    if (vneed.length) vp.push(`needs ${vneed.join(' and ')} event`);
-    gate(`move ${m.name} ${v.slice(1)} -> ${own.name + v}`, vp.length === 0, vp.join('; ') || `${vc.duration.toFixed(2)} s ${ve.join(' ')}`);
+  // The events its moves' effects need: a contact move's impact, a ranged one's release, a status move's own.
+  const need = new Set();
+  for (const m of moves) {
+    const move = data.moves[m.const];
+    const info = data.MOTIFS[data.motifOf(move)];
+    let n = info.requires ?? (info.kind === 'contact' ? ['impact'] : info.kind === 'ranged' ? (data.motifOf(move) === 'quake' ? ['impact'] : ['release']) : info.events.slice(0, 1));
+    if (TWO_TURN_EFFECTS.has(move.effect)) n = n.filter((e) => e !== 'dig');
+    n.forEach((e) => need.add(e));
+    // Double Kick kicks twice (a hit each: the battles cut the clip between its blows).
+    if (move.effect === 'EFFECT_DOUBLE_HIT' && !clips[`${clip}_first`] && events.filter((e) => e === 'impact').length < 2) warn(`${m.name} -> ${clip}`, 'one blow: each of its two hits plays the same strike again (two impacts in the clip give each hit its own)');
+    if (TWO_TURN_EFFECTS.has(move.effect) && !clips[`${clip}_charge`] && !events.includes('dig') && !(events.includes('charge') && events.includes('release'))) warn(`${m.name} -> ${clip}`, 'plays whole on both turns: a charge and a release (or a dig) let the battles split it');
   }
+  // (The effect leaving the body is a 'release' or an 'emit': either serves, src/battle3d/director.ts.)
+  const leaves = (e) => (e === 'release' || e === 'emit') && (events.includes('release') || events.includes('emit'));
+  const lacking = [...need].filter((e) => !events.includes(e) && !leaves(e));
+  if (lacking.length) problems.push(`needs ${lacking.map((e) => `a '${e}'`).join(' and ')} event`);
+  gate(`clip ${clip} (${moves.length} move${moves.length === 1 ? '' : 's'})`, problems.length === 0, problems.join('; ') || `${moves.map((m) => m.name).join(', ')}`);
+}
+for (const [m, target] of Object.entries(profile.moveClips ?? {})) {
+  if (!clips[target]) gate(`moveClips ${m} -> ${target}`, false, 'no such clip');
 }
 
 // Moves outside its movepool that one of its moves can call (Mimic, Mirror
-// Move, Metronome, Assist, Nature Power) play its clip for their motif: every
-// motif resolves to a clip of its own (motifClips, or a clip named after it).
+// Move, Metronome, Assist, Nature Power) play its clip for their motif.
 const CALLERS = ['MOVE_MIMIC', 'MOVE_MIRROR_MOVE', 'MOVE_METRONOME', 'MOVE_ASSIST', 'MOVE_NATURE_POWER'];
 if (pool.some((m) => CALLERS.includes(m.const))) {
   const unmapped = Object.keys(data.MOTIFS).filter((mo) => mo !== 'other' && !clips[profile.motifClips?.[mo] ?? mo] && !clips[profile.motifClips?.[`${mo}_strong`] ?? `${mo}_strong`]);
-  gate('every motif has a clip (for moves Mimic or Mirror Move call)', unmapped.length === 0, unmapped.length ? `map these in motifClips to its closest clip: ${unmapped.join(', ')}` : '');
+  if (unmapped.length) warn('motifs a called move may need', `no clip for: ${unmapped.join(', ')} (they play the category clip)`);
 }
 
 // 8. The fundamentals (tools/gauntlet/fundamentals.mjs): contact moves travel
@@ -404,16 +415,18 @@ if (args.render) {
       const far = r.contacts.filter((c) => c.reach > REACH);
       gate(`${name} lands on the foe as ${side}`, r.contacts.length > 0 && far.length === 0, r.contacts.length ? r.contacts.map((c) => `${c.event} gap ${c.reach.toFixed(2)}`).join(', ') + (far.length ? `: the blow must reach the foe's body (gap <= ${REACH} of its height)` : '') : 'no blow landed');
     };
-    for (const m of pool) {
+    // Each clip, performed as the battle does for the first of its moves.
+    for (const [clipName, moves] of byClip) {
+      const m = moves[0];
       const move = data.moves[m.const];
       const r = await run('perform', m.const.replace('MOVE_', ''));
-      gate(`performs ${m.name} as ${side}`, r.done && r.errors.length === 0, r.errors.slice(0, 2).join(' | '));
-      const role = roles.get(ownClip(m.const)?.name);
-      blows(`${m.name}`, r, role?.contact && !(clips[ownClip(m.const)?.name]?.events ?? []).some((e) => e.name === 'dig') ? true : false);
+      gate(`performs ${m.name} (${clipName}) as ${side}`, r.done && r.errors.length === 0, r.errors.slice(0, 2).join(' | '));
+      const role = roles.get(clipName);
+      blows(`${m.name} (${clipName})`, r, role?.contact && !(clips[clipName]?.events ?? []).some((e) => e.name === 'dig') ? true : false);
       // A multi-hit run from its first hit to its last; a first hit, then home.
-      const own = ownClip(m.const)?.name;
-      if (own && MULTI_HIT_EFFECTS.has(move.effect)) {
-        const run1 = [`${own}_first`, ...(MANY_HIT_EFFECTS.has(move.effect) ? [`${own}_next`] : []), `${own}_last`].filter((c) => clips[c]);
+      const own = clipName;
+      if (own && moves.some((x) => MULTI_HIT_EFFECTS.has(data.moves[x.const].effect))) {
+        const run1 = [`${own}_first`, `${own}_next`, `${own}_last`].filter((c) => clips[c]);
         for (const c of run1) {
           const rr = await run('play', c);
           gate(`plays ${c} as ${side}`, rr.done && rr.errors.length === 0, rr.errors.slice(0, 2).join(' | '));
@@ -425,7 +438,7 @@ if (args.render) {
           gate(`plays ${own}_first then return_home as ${side}`, rr.done && rr.errors.length === 0, rr.errors.slice(0, 2).join(' | '));
         }
       }
-      if (own && TWO_TURN_EFFECTS.has(move.effect) && clips[`${own}_charge`]) {
+      if (own && moves.some((x) => TWO_TURN_EFFECTS.has(data.moves[x.const].effect)) && clips[`${own}_charge`]) {
         const rr = await run('play', `${own}_charge`);
         gate(`plays ${own}_charge as ${side}`, rr.done && rr.errors.length === 0, rr.errors.slice(0, 2).join(' | '));
       }

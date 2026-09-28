@@ -3,6 +3,7 @@ import { applyCalibration } from '../profile';
 import { BLAZIKEN_RIG } from './rig';
 import { STANCE } from './poses';
 import { BLAZIKEN_CLIPS, BLAZIKEN_EXPRESSIONS } from './first';
+import { MORE_CLIPS } from './more';
 import calibration from './calibration.json';
 
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
@@ -11,7 +12,8 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'blaziken',
     rig: BLAZIKEN_RIG,
     poses: { stance: STANCE },
-    clips: BLAZIKEN_CLIPS,
+    // The first clips, and clips in their style for the actions they had none for.
+    clips: { ...BLAZIKEN_CLIPS, ...MORE_CLIPS },
     effectParts: ['Fire'],
     effects: {
       // Colors from Blaziken's own palette ramp (yellows -> orange -> red).
@@ -32,8 +34,9 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     moveClips: {
       MOVE_LOW_KICK: 'physical_weak_kick',
     },
-    // Mud-Slap is flicked with a foot.
-    emitterFor: { fling: 'feet' },
+    // Mud-Slap is flicked with a foot; Toxic is spat from the beak; thrown
+    // volleys (Rock Slide, Swift) leave the claw.
+    emitterFor: { fling: 'feet', powder: 'mouth', throw: 'hands' },
     // Clips by move motif (src/battle3d/motifs.ts). Blaziken's clips keep
     // their category names; this maps the motifs they perform.
     motifClips: {
@@ -49,6 +52,10 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       spit: 'special_weak',
       buff: 'status_self',
       roar: 'status_target',
+      // Toxic spat from the beak; a stare and a bellow are its roar at the foe.
+      powder: 'special_weak',
+      glare: 'status_target',
+      sound: 'status_target',
     },
     brief: {
       bodyPlan: 'biped',

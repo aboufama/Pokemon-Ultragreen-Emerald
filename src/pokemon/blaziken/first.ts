@@ -710,3 +710,6 @@ export const BLAZIKEN_EXPRESSIONS: Record<string, [number, number]> = {
   closed2: [1, 2],
   hurt: [0, 3],
 };
+
+// The first clips' own helpers, for the clips added since in the same style (./more.ts).
+export { key, snap, fall, ANGRY, SHUT, DROWSY, HURT, OPEN_EYES, jaw, flames, pelvis, bend, GUARD, ARMS_SPREAD_UP, CHAMBER, ELBOWS_BACK, BRACED, CROSSED, FLEX, FISTS, TUCK, HOP, LAND };
