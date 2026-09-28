@@ -7,8 +7,13 @@ condition's, the general and special ones); the remake layer's hook records
 the table and the index (the game keeps them in a static it never reads).
 Once the script is set to run, a move's animation may wait at its start
 (RemakeHoldAnimation): while the page's remake draws the battle in 3D, the
-game's effects begin when its 3D attacker gets there (its strike landing on
-the foe, its breath leaving its mouth), not before.
+game's effects begin when its 3D attacker gets there (its breath leaving its
+mouth), not before. A contact move's animation instead runs while the 3D
+attacker travels and waits at its hit (RunAnimScriptCommand looks ahead
+through the commands that run together, up to the next delay or wait, for
+the first hit splat or shake of the foe): its splat, shake and sound land
+with the 3D blow, and if the blow lands first, what is left of its lead-in
+hurries (WaitAnimFrameCount).
 LoadMoveBg puts a move's background in the battle background's place (BG3's
 map and tiles); the hook records which one, so the remake shows its arena
 only while the main background is up. MoveBattlerSpriteToBG draws a
@@ -49,7 +54,150 @@ battler and palette, so the remake draws the battler there too.
  
      for (i = 0; i < ANIM_SPRITE_INDEX_COUNT; i++)
          sAnimSpriteIndexArray[i] = 0xFFFF;
-@@ -718,6 +730,10 @@
+@@ -310,8 +322,130 @@
+     }
+ }
+ 
++#ifdef PLATFORM_WASM
++// PLATFORM_WASM: a contact move's animation runs while the remake's 3D
++// attacker travels and waits at its hit until the blow lands
++// (RemakeHoldAtHit). Its hit is the group of commands that run together
++// (up to the next delay or wait) with the first hit splat or shake of the
++// foe, its sound among them.
++extern const struct SpriteTemplate gBasicHitSplatSpriteTemplate;
++extern const struct SpriteTemplate gPersistHitSplatSpriteTemplate;
++extern const struct SpriteTemplate gHandleInvertHitSplatSpriteTemplate;
++extern const struct SpriteTemplate gRandomPosHitSplatSpriteTemplate;
++extern const struct SpriteTemplate gMonEdgeHitSplatSpriteTemplate;
++extern const struct SpriteTemplate gFlashingHitSplatSpriteTemplate;
++extern const struct SpriteTemplate gWaterHitSplatSpriteTemplate;
++void AnimTask_ShakeMon(u8 taskId);
++void AnimTask_ShakeMon2(u8 taskId);
++void AnimTask_ShakeMonInPlace(u8 taskId);
++void AnimTask_ShakeAndSinkMon(u8 taskId);
++void AnimTask_ShakeTargetInPattern(u8 taskId);
++void AnimTask_ShakeTargetBasedOnMovePowerOrDmg(u8 taskId);
++
++static bool8 IsHitSplat(const struct SpriteTemplate *template)
++{
++    return template == &gBasicHitSplatSpriteTemplate || template == &gPersistHitSplatSpriteTemplate
++        || template == &gHandleInvertHitSplatSpriteTemplate || template == &gRandomPosHitSplatSpriteTemplate
++        || template == &gMonEdgeHitSplatSpriteTemplate || template == &gFlashingHitSplatSpriteTemplate
++        || template == &gWaterHitSplatSpriteTemplate;
++}
++
++// A task shaking the foe (its first argument the anim battler it shakes).
++static bool8 ShakesFoe(TaskFunc func, u8 argsCount, const u8 *args)
++{
++    s16 battler = argsCount ? (s16)T1_READ_16(args) : -1;
++    if (func == AnimTask_ShakeTargetInPattern || func == AnimTask_ShakeTargetBasedOnMovePowerOrDmg)
++        return TRUE;
++    if (func == AnimTask_ShakeMon || func == AnimTask_ShakeMon2 || func == AnimTask_ShakeMonInPlace || func == AnimTask_ShakeAndSinkMon)
++        return battler == ANIM_TARGET || battler == ANIM_DEF_PARTNER;
++    return FALSE;
++}
++
++// Whether the commands from `ptr` up to the script's next wait hit the foe
++// (following calls and jumps as the script will). A script without a hit
++// waits at its end, so the battle never goes on before the blow lands.
++static bool8 GroupHitsFoe(const u8 *ptr)
++{
++    const u8 *returns[4];
++    u8 depth = 0;
++    s32 steps;
++
++    for (steps = 0; steps < 128; steps++)
++    {
++        switch (ptr[0])
++        {
++        case 0x02: // createsprite
++            if (IsHitSplat((const struct SpriteTemplate *)T2_READ_32(ptr + 1)))
++                return TRUE;
++            ptr += 7 + 2 * ptr[6];
++            break;
++        case 0x03: // createvisualtask
++            if (ShakesFoe((TaskFunc)T2_READ_32(ptr + 1), ptr[6], ptr + 7))
++                return TRUE;
++            ptr += 7 + 2 * ptr[6];
++            break;
++        case 0x08: // end
++            return TRUE;
++        case 0x0E: // call
++            if (depth == ARRAY_COUNT(returns))
++                return FALSE;
++            returns[depth++] = ptr + 5;
++            ptr = T2_READ_PTR(ptr + 1);
++            break;
++        case 0x0F: // return
++            if (depth == 0)
++                return FALSE;
++            ptr = returns[--depth];
++            break;
++        case 0x11: // choosetwoturnanim
++            ptr = T2_READ_PTR(ptr + ((gAnimMoveTurn & 1) ? 5 : 1));
++            break;
++        case 0x12: // jumpifmoveturn
++            ptr = ptr[1] == gAnimMoveTurn ? T2_READ_PTR(ptr + 2) : ptr + 6;
++            break;
++        case 0x13: // goto
++            ptr = T2_READ_PTR(ptr + 1);
++            break;
++        case 0x06: case 0x07: case 0x0D: case 0x15: case 0x29: case 0x2F:
++            ptr += 1;
++            break;
++        case 0x0A: case 0x0B: case 0x14: case 0x18: case 0x1A: case 0x22: case 0x23:
++        case 0x28: case 0x2A: case 0x2B: case 0x2C: case 0x2D: case 0x2E:
++            ptr += 2;
++            break;
++        case 0x00: case 0x01: case 0x09: case 0x0C: case 0x1E:
++            ptr += 3;
++            break;
++        case 0x10: case 0x19: case 0x25:
++            ptr += 4;
++            break;
++        case 0x24: // jumpifcontest (never in a battle)
++            ptr += 5;
++            break;
++        case 0x1C:
++            ptr += 6;
++            break;
++        case 0x1B: case 0x26: case 0x27:
++            ptr += 7;
++            break;
++        case 0x1F: // createsoundtask
++            ptr += 6 + 2 * ptr[5];
++            break;
++        default: // a delay or a wait: the group ends before any hit
++            return FALSE;
++        }
++    }
++    return FALSE;
++}
++#endif
++
+ static void WaitAnimFrameCount(void)
+ {
++#ifdef PLATFORM_WASM
++    // PLATFORM_WASM: the remake's blow has landed before the animation got to its hit: it hurries there.
++    if (RemakeHitHurries())
++        sAnimFramesToWait = 0;
++#endif
+     if (sAnimFramesToWait <= 0)
+     {
+         gAnimScriptCallback = RunAnimScriptCommand;
+@@ -327,6 +461,11 @@
+ {
+     do
+     {
++#ifdef PLATFORM_WASM
++        // PLATFORM_WASM: a contact move's animation waits at its hit for the remake's 3D blow.
++        if (RemakeHitPending() && GroupHitsFoe(sBattleAnimScriptPtr) && RemakeWaitAtHit())
++            return;
++#endif
+         sScriptCmdTable[sBattleAnimScriptPtr[0]]();
+     } while (sAnimFramesToWait == 0 && gAnimScriptActive);
+ }
+@@ -718,6 +857,10 @@
  
          if (IsContest())
              FlipBattlerBgTiles();
@@ -60,7 +208,7 @@ battler and palette, so the remake draws the battler there too.
      }
      else
      {
-@@ -745,6 +761,10 @@
+@@ -745,6 +888,10 @@
          CpuCopy32(&gPlttBufferUnfaded[OBJ_PLTT_ID(battler)], (void *)(BG_PLTT + PLTT_OFFSET_4BPP(9)), PLTT_SIZE_4BPP);
  
          DrawBattlerOnBg(2, 0, 0, GetBattlerPosition(battler), animBg.paletteId, animBg.bgTiles + 0x1000, animBg.bgTilemap + 0x400, animBg.tilesOffset);
@@ -71,7 +219,7 @@ battler and palette, so the remake draws the battler there too.
      }
  }
  
-@@ -1200,6 +1220,10 @@
+@@ -1200,6 +1347,10 @@
      }
      else
      {

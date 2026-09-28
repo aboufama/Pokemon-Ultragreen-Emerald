@@ -6,9 +6,13 @@
 //                               comes home; a ranged one aims and lets fly at
 //                               it. The game holds its own animation at its
 //                               start (RemakeHoldAnimation) until the clip's
-//                               first effect event (its impact, release, emit,
-//                               aura...), so the game's effects, sounds and the
-//                               foe's shake begin as the strike lands. A strike
+//                               first effect event (its release, emit,
+//                               aura...), so its effects leave as the breath
+//                               does; a blow's (a clip whose first effect is
+//                               its impact) runs with the approach instead and
+//                               waits at its hit (RemakeHoldAtHit), so the
+//                               game's splat, sound and the foe's shake land
+//                               with the 3D strike. A strike
 //                               knocks the foe back and it flinches then. While
 //                               the clip runs the body is the clip's: drawn
 //                               where it is (free of its sprite), not the
@@ -157,8 +161,8 @@ export class Acting {
   private readonly inRun = new Set<number>();
   /** Battlers that were just struck (their next 'hit' from the engine is the same blow). */
   private readonly struck = new Set<number>();
-  /** Attackers holding where a multi-hit move's hit left them, waiting for the next: for how many frames, and whether that is away from home. */
-  private readonly waiting = new Map<number, { frames: number; away: boolean }>();
+  /** Attackers holding where a multi-hit move's hit left them, waiting for the next: for how many frames, whether that is away from home, and at which foe. */
+  private readonly waiting = new Map<number, { frames: number; away: boolean; foe: number }>();
   private bodyOf: (battler: number) => Battler3D | null = () => null;
   private readonly loggedIdle = new Set<string>();
   private readonly k: Record<string, number>;
@@ -213,12 +217,12 @@ export class Acting {
    * whether its body shows this frame, `release` lets the game's held
    * animation go.
    */
-  update(state: BattleState, bodyOf: (battler: number) => Battler3D | null, shows: (battler: number) => boolean, release: () => void): void {
+  update(state: BattleState, bodyOf: (battler: number) => Battler3D | null, shows: (battler: number) => boolean, release: () => void, holdAtHit: () => void = () => {}): void {
     this.bodyOf = bodyOf;
     // A move's animation, or a situation's. (The first frame only notes where
     // the game is: an animation from before is not replayed.)
     if (this.animSerial !== null && state.animSerial !== this.animSerial) {
-      if (state.animTable === this.MOVE_ANIM) this.startMove(state, bodyOf, release);
+      if (state.animTable === this.MOVE_ANIM) this.startMove(state, bodyOf, release, holdAtHit);
       else this.startSituation(state, bodyOf);
     }
     this.animSerial = state.animSerial;
@@ -228,8 +232,9 @@ export class Acting {
     // A message the game shows without an animation.
     if (this.messageSerial !== null && state.messageSerial !== this.messageSerial) this.startMessage(state, bodyOf);
     this.messageSerial = state.messageSerial;
-    // A multi-hit move's attacker waiting at the foe goes home when its next hit doesn't come.
-    for (const [battler, w] of this.waiting) if (++w.frames > WAIT_AT_FOE) this.goHome(battler);
+    // A multi-hit move's attacker waiting at the foe goes home when its next
+    // hit doesn't come, or at once when the foe is down (no more hits come).
+    for (const [battler, w] of this.waiting) if (++w.frames > WAIT_AT_FOE || state.battlers[w.foe]?.hp === 0) this.goHome(battler);
     // The states it rests in: asleep, worn down; frozen solid.
     state.battlers.forEach((b, i) => {
       const body = bodyOf(i);
@@ -320,7 +325,7 @@ export class Acting {
     return base + variant;
   }
 
-  private startMove(state: BattleState, bodyOf: (battler: number) => Battler3D | null, release: () => void): void {
+  private startMove(state: BattleState, bodyOf: (battler: number) => Battler3D | null, release: () => void, holdAtHit: () => void): void {
     const attacker = bodyOf(state.animAttacker);
     const move = MOVES_BY_ID.get(state.animId);
     // Anyone else waiting at a foe is done waiting: another move has begun.
@@ -335,9 +340,12 @@ export class Acting {
     log(`move ${state.animAttacker} ${move.const} ${clip}`);
     // Not waiting any more: this hit carries on from where the last left it.
     this.waiting.delete(state.animAttacker);
-    const events = attacker.profile.clips[clip]?.events ?? [];
-    const held = state.animHeld && events.some((e) => EFFECT_EVENTS.has(e.name));
+    const effects = (attacker.profile.clips[clip]?.events ?? []).filter((e) => EFFECT_EVENTS.has(e.name));
+    const held = state.animHeld && effects.length > 0;
     if (state.animHeld && !held) release();
+    // A blow: the game's animation runs with the approach and waits at its
+    // hit (the splat, the foe's shake, the sound) for the strike to land.
+    if (held && effects.reduce((a, e) => (e.t < a.t ? e : a)).name === 'impact') holdAtHit();
     this.perform(attacker, clip, { attacker: state.animAttacker, target: state.animTarget, move, held, heldFrames: 0, struck: false, foeTakes: null }, bodyOf, release);
   }
 
@@ -430,7 +438,7 @@ export class Acting {
       // The next hit may have begun already (it carries on from here).
       if (this.performing.get(p.attacker) !== p) return;
       this.performing.delete(p.attacker);
-      if (stays && this.inRun.has(p.attacker)) this.waiting.set(p.attacker, { frames: 0, away: (attacker.pose.advance ?? 0) > 0.5 });
+      if (stays && this.inRun.has(p.attacker)) this.waiting.set(p.attacker, { frames: 0, away: (attacker.pose.advance ?? 0) > 0.5, foe: p.target });
       else this.driven.delete(p.attacker);
     });
   }

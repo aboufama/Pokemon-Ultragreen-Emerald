@@ -20,6 +20,11 @@ static void (*sHeldCallback)(void);
 static u16 sHeldFrames;
 // A held animation lets itself go after this long, whatever the page does.
 #define HOLD_FRAMES_MAX 240
+// A contact move's animation held at its hit (RemakeHoldAtHit): waiting for
+// the 3D blow, or hurrying to the hit once the blow has landed.
+enum { HIT_HOLD_OFF, HIT_HOLD_WAITING, HIT_HOLD_HURRY };
+static u8 sHitHold;
+static u16 sHitHeldFrames;
 static u8 sCommand[REMAKE_BATTLERS];
 static u16 sCommandSerial[REMAKE_BATTLERS];
 static u8 sCopyBattler[2] = { REMAKE_NO_BATTLER, REMAKE_NO_BATTLER };
@@ -51,18 +56,23 @@ void RemakeBattleAnimation(const u8 *const animsTable[], u16 tableId, u8 isMoveA
         ? gBattleSpritesDataPtr->animationData->animArg : 0;
 }
 
-// The held script's callback: nothing runs until the remake lets it go.
+// The held script's callback: nothing runs until the remake lets it go (a
+// move held at its hit runs at once, and waits there: RemakeWaitAtHit).
 static void HeldAnimation(void)
 {
-    if (sState.animHeld && ++sHeldFrames <= HOLD_FRAMES_MAX)
-        return;
-    sState.animHeld = FALSE;
+    if (sHitHold == HIT_HOLD_OFF)
+    {
+        if (sState.animHeld && ++sHeldFrames <= HOLD_FRAMES_MAX)
+            return;
+        sState.animHeld = FALSE;
+    }
     gAnimScriptCallback = sHeldCallback;
     gAnimScriptCallback();
 }
 
 void RemakeHoldAnimation(u8 isMoveAnim)
 {
+    sHitHold = HIT_HOLD_OFF;
     if (!sHoldAnimations || !isMoveAnim || !gMain.inBattle)
         return;
     sState.animHeld = TRUE;
@@ -83,6 +93,41 @@ __attribute__((export_name("RemakeHoldAnimations"))) void RemakeHoldAnimations(u
 __attribute__((export_name("RemakeReleaseAnimation"))) void RemakeReleaseAnimation(void)
 {
     sState.animHeld = FALSE;
+    // Held at its hit: the hit plays now (or, still in its lead-in, the
+    // animation hurries there).
+    if (sHitHold == HIT_HOLD_WAITING)
+        sHitHold = HIT_HOLD_HURRY;
+}
+
+// A contact move: its animation runs from now, while the 3D attacker
+// travels, and waits at its hit (the commands that splat and shake the foe,
+// its sound among them) until the blow lands. It still reads as held.
+__attribute__((export_name("RemakeHoldAtHit"))) void RemakeHoldAtHit(void)
+{
+    if (!sState.animHeld)
+        return;
+    sHitHold = HIT_HOLD_WAITING;
+    sHitHeldFrames = 0;
+}
+
+bool8 RemakeHitPending(void)
+{
+    return sHitHold != HIT_HOLD_OFF;
+}
+
+bool8 RemakeWaitAtHit(void)
+{
+    if (sHitHold == HIT_HOLD_WAITING && ++sHitHeldFrames <= HOLD_FRAMES_MAX)
+        return TRUE;
+    // The blow has landed (or never will): the hit plays, the hold is over.
+    sHitHold = HIT_HOLD_OFF;
+    sState.animHeld = FALSE;
+    return FALSE;
+}
+
+bool8 RemakeHitHurries(void)
+{
+    return sHitHold == HIT_HOLD_HURRY;
 }
 
 void RemakeMoveFailed(u8 attacker, u8 target, u16 move, u8 result)

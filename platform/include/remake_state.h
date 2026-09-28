@@ -66,7 +66,7 @@ struct RemakeState {
     uint8_t animAttacker, animTarget;
     uint8_t animHits;       // gMultiHitCounter as it launched: the hits left, this one included (0: one hit)
     uint8_t animTurn;       // gAnimMoveTurn: a two-turn move's charging turn is 0, its strike 1
-    uint8_t animHeld;       // the game holds the move's animation at its start until the remake lets it go
+    uint8_t animHeld;       // the game holds the move's animation (at its start, or a blow's at its hit) until the remake lets it go
     uint8_t animStatArg;    // a stat change's animation: gBattleSpritesDataPtr->animationData->animArg (its
                             // STAT_ANIM_* kind: rises and falls, by how much)
     uint8_t moveResult;     // gMoveResultFlags (MOVE_RESULT_*: super effective, missed...) and a critical hit
@@ -159,6 +159,14 @@ void RemakeBattlerCopy(uint8_t bg, uint8_t battler, uint8_t palette);
 // until the remake's 3D attacker is where the game's own effects begin (its
 // strike landing, its breath leaving): RemakeReleaseAnimation.
 void RemakeHoldAnimation(uint8_t isMoveAnim);
+// RunAnimScriptCommand, before each command: a contact move's animation held
+// at its hit (the page's RemakeHoldAtHit) runs its lead-in with the 3D
+// attacker's approach; at the commands that hit the foe it waits
+// (RemakeWaitAtHit is true) until the blow lands (RemakeReleaseAnimation).
+// Released before it gets there, its delays hurry (RemakeHitHurries).
+uint8_t RemakeHitPending(void);
+uint8_t RemakeWaitAtHit(void);
+uint8_t RemakeHitHurries(void);
 // JumpIfMoveFailed, when a move fails at its foe (it missed, the foe
 // protected itself, or it has no effect on it): no animation shows it, so the
 // remake acts it out (the attacker strikes, the foe dodges or shrugs it off).

@@ -309,7 +309,8 @@ export class RemakeLayer {
     const scroll = this.backgroundScroll(this.view());
     const pictures = this.placeBodies(state, scroll);
     const showing = new Set(pictures.map((p) => p.body.battlerId));
-    this.acting.update(state, (i) => this.bodies.get(i)?.battler ?? null, (i) => showing.has(i), () => (this.game.exports().RemakeReleaseAnimation as () => void)());
+    const exports = this.game.exports();
+    this.acting.update(state, (i) => this.bodies.get(i)?.battler ?? null, (i) => showing.has(i), () => (exports.RemakeReleaseAnimation as () => void)(), () => (exports.RemakeHoldAtHit as () => void)());
     if (!this.ready()) {
       // The page holds the game on this frame until everything is loaded:
       // meanwhile the sprites of the bodies still loading are hidden.
