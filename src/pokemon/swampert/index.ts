@@ -3,6 +3,7 @@ import { applyCalibration } from '../profile';
 import { RIG } from './rig';
 import { STANCE } from './poses';
 import { CLIPS, EXPRESSIONS } from './first';
+import { MORE_CLIPS } from './more';
 import calibration from './calibration.json';
 
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
@@ -11,7 +12,8 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'swampert',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: CLIPS,
+    // The first clips, and clips in their style for the actions they had none for.
+    clips: { ...CLIPS, ...MORE_CLIPS },
     effectParts: [],
     effects: {},
     expressions: { material: 'Eye', cell: [0.5, 0.25], cells: EXPRESSIONS },
@@ -63,6 +65,16 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       buff: 'status_self',
       weather: 'status_self',
       roar: 'status_target',
+      // As the first clips have it: Hydro Pump, Blizzard and Icy Wind are its
+      // blasts from the jaws, Whirlpool its wave, Toxic is spat as it
+      // bellows, Snore and Uproar its bellow, Hidden Power spat from the mouth.
+      jet: 'special_strong',
+      storm: 'special_strong',
+      breath: 'special_strong',
+      erupt: 'wave',
+      powder: 'status_target',
+      sound: 'status_target',
+      orb: 'special_weak',
     },
     hiddenParts: [],
     showcaseMoves: ['EARTHQUAKE', 'MUD_SHOT', 'PROTECT', 'MUDDY_WATER'],

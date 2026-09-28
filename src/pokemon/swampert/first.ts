@@ -814,3 +814,6 @@ export const EXPRESSIONS: Record<string, [number, number]> = {
   narrow: [1, 2],
   hurt: [0, 3],
 };
+
+// The first clips' own helpers, for the clips added since in the same style (./more.ts).
+export { key, snap, fall, ANGRY, SHUT, DROWSY, SQUINT, NARROW, HURT, OPEN_EYES, jaw, MOUTH_SHUT, pelvis, bend, twist, sink, arms, ARMS_UP, ARMS_RISING, ARMS_SPREAD_UP, ARMS_ROAR, ARMS_WIDE, ARMS_DOWN_FRONT, ARMS_TUCKED, ARMS_BACK, ARMS_FWD_SPREAD, FISTS, CURL, TUCK, HOP, LAND };
