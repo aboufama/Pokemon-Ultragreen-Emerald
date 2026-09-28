@@ -137,7 +137,7 @@
       "by": "hand"
     },
     "MOVE_ROCK_SMASH": {
-      "part": "hands",
+      "part": "forepaw",
       "by": "hand"
     },
     "MOVE_BODY_SLAM": {
@@ -189,7 +189,7 @@
       "by": "hand"
     },
     "MOVE_COVET": {
-      "part": "mouth",
+      "part": "forepaw",
       "by": "hand"
     },
     "MOVE_LEER": {

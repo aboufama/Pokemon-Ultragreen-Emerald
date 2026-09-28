@@ -2,7 +2,8 @@ import type { SpeciesProfile } from '../profile';
 import { applyCalibration } from '../profile';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS, EXPRESSIONS } from './clips';
+import { CONTACT_CLIPS, EXPRESSIONS } from './set';
+import { HOME_CLIPS } from './set_home';
 import calibration from './calibration.json';
 
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
@@ -11,7 +12,10 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'mightyena',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: CLIPS,
+    // Its own clips, a clip for every action its moves take (./set.ts: the
+    // moments and its blows at the foe; ./set_home.ts: the moves it performs
+    // from home), written by hand in the style of the first clips.
+    clips: { ...CONTACT_CLIPS, ...HOME_CLIPS },
     effectParts: [],
     effects: {},
     expressions: { material: 'Eye', cell: [0.5, 0.25], cells: EXPRESSIONS },
@@ -76,19 +80,44 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['cheekL'], damping: 0.28, elasticity: 0.18, maxDrift: 0.25 },
       { bones: ['cheekR'], damping: 0.28, elasticity: 0.18, maxDrift: 0.25 },
     ],
-    // Every move in its movepool plays its own clip (named after it).
     moveClips: {},
-    // For moves Mimic or Mirror Move call from outside its movepool: each
-    // motif's closest clip of its own.
+    // Clips by move motif (src/battle3d/motifs.ts): every move plays the clip
+    // of its action. tackle, bite, tail, slam, burrow, punch, roar,
+    // kick_sand, charm, shield, heal, weather, afterimage, powder, sound and
+    // fling have clips of their own name; the category clips perform these.
     motifClips: {
-      strike: 'thief', punch: 'counter', kick: 'rock_smash', bite: 'bite', tackle: 'tackle', slam: 'body_slam',
-      tail: 'iron_tail', wing: 'return', peck: 'poison_fang', horn: 'take_down', spin: 'iron_tail', grapple: 'crunch',
-      vine: 'thief', toss: 'strength', burrow: 'dig',
-      breath: 'hyper_beam', spit: 'shadow_ball', beam: 'hyper_beam', jet: 'hyper_beam', throw: 'hidden_power',
-      wave: 'mud_slap', quake: 'rock_smash', burst: 'hyper_beam', erupt: 'hidden_power', storm: 'hidden_power',
-      bolt: 'hidden_power', mind: 'hidden_power', orb: 'shadow_ball', drain: 'hidden_power', sound: 'sound', fling: 'mud_slap',
-      roar: 'roar', glare: 'leer', kick_sand: 'sand_attack', powder: 'toxic', buff: 'psych_up', shield: 'protect',
-      heal: 'rest', weather: 'sunny_day', charm: 'attract', afterimage: 'double_team', flash: 'scary_face',
+      // Its forepaw's rake (Thief, Covet, Rock Smash), its reckless full-weight
+      // charge (Take Down, Double-Edge, Return, Frustration, Strength), the orb
+      // and the beam from its jaws, its shake, its snarl.
+      strike: 'physical_weak',
+      tackle_strong: 'physical_strong',
+      orb: 'special_weak',
+      beam: 'special_strong',
+      buff: 'status_self',
+      glare: 'status_target',
+      // Moves outside its movepool that Mimic or Sleep Talk call: each motif's
+      // closest clip of its own.
+      kick: 'punch',
+      quake: 'punch',
+      peck: 'bite',
+      grapple: 'bite',
+      horn: 'tackle',
+      wing: 'slam',
+      spin: 'tail',
+      vine: 'physical_weak',
+      toss: 'physical_strong',
+      breath: 'special_strong',
+      jet: 'special_strong',
+      burst: 'special_strong',
+      spit: 'special_weak',
+      bolt: 'special_weak',
+      drain: 'special_weak',
+      throw: 'fling',
+      wave: 'roar',
+      erupt: 'roar',
+      storm: 'roar',
+      mind: 'status_target',
+      flash: 'status_target',
     },
     hiddenParts: [],
     showcaseMoves: ['CRUNCH', 'SHADOW_BALL', 'SCARY_FACE', 'TAKE_DOWN'],
