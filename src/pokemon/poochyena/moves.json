@@ -1,5 +1,5 @@
 {
-  "classifier": "set by hand (Jev unavailable here: no TYPESAFE_API_KEY), as the line's clips perform each move",
+  "classifier": "set by hand (Jev unavailable here: no TYPESAFE_API_KEY), as its clips perform each move",
   "parts": {
     "mouth": "Its mouth or jaws: bites, breathes, spits, roars or fires from the mouth",
     "head": "Its head, horn or crest: headbutts and rams",
@@ -129,7 +129,7 @@
       "by": "hand"
     },
     "MOVE_ROCK_SMASH": {
-      "part": "hands",
+      "part": "forepaw",
       "by": "hand"
     },
     "MOVE_BODY_SLAM": {
@@ -141,7 +141,7 @@
       "by": "hand"
     },
     "MOVE_COUNTER": {
-      "part": "body",
+      "part": "hands",
       "by": "hand"
     },
     "MOVE_MIMIC": {
@@ -181,7 +181,7 @@
       "by": "hand"
     },
     "MOVE_COVET": {
-      "part": "mouth",
+      "part": "forepaw",
       "by": "hand"
     },
     "MOVE_LEER": {

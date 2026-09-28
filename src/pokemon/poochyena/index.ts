@@ -2,7 +2,7 @@ import type { SpeciesProfile } from '../profile';
 import { applyCalibration } from '../profile';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS, EXPRESSIONS } from './clips';
+import { EXPRESSIONS, POOCHYENA_CLIPS } from './set';
 import calibration from './calibration.json';
 
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
@@ -11,30 +11,34 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'poochyena',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: CLIPS,
+    // A clip for every action its moves take, keyed by hand in the first
+    // clips' style (./set.ts); every move of an action plays its clip.
+    clips: { ...POOCHYENA_CLIPS },
     effectParts: [],
     effects: {},
     expressions: { material: 'Eye', cell: [0.5, 0.25], cells: EXPRESSIONS },
     brief: {
       bodyPlan: 'quadruped',
       character:
-        'A 13.6 kg hyena pup that bullies above its size: it stands low on stiff legs with its hackles and tail bristling, ' +
-        'head thrust at the foe and fangs bared. It attacks in quick, low, flat darts: a pounce that lands it on the foe ' +
-        'and a snap, a tug or a head-down butt, then it springs back home. Light, quick and jerky, all nerve: fast snaps, ' +
-        'sharp barks and a springy tail that flicks up at every move. It chases tenaciously, but when the foe strikes back ' +
-        'it yelps and cringes (the Pokédex: it turns tail and runs), then bristles up again.',
+        'A 13.6 kg hyena pup that bullies above its size: it stands squared up to the foe on all four paws, hindquarters ' +
+        'swung out, head up and fangs bared, hackles and tail bristling. Light, quick and springy, all nerve: it pounces to ' +
+        'the foe in one long, low arc with its body stretched out straight, lands on all fours in front of it and bites, ' +
+        'rams head first, rakes with a forepaw or throws its weight on it, then bounds home backwards still facing it. Its ' +
+        'hackles and tail flick up at every move; when struck it yelps and cringes, ears flat and tail tucked (the Pokédex: ' +
+        'it turns tail and runs if the foe strikes back), then bristles up again.',
       powerSource:
-        'Its jaws: bared fangs for Bite, Crunch and Poison Fang, barks, howls and roars from its mouth, the dark orb of ' +
-        'Shadow Ball gathered in them and hurled, Toxic retched up. Dark menace from its stare (Leer, Scary Face, Taunt) and ' +
-        'its nose (Odor Sleuth); its low head and shoulders behind Tackle and Take Down; its right forepaw swipes, digs and ' +
-        'scoops (Thief, Dig, Mud-Slap) and its hind paws kick the dirt back at the foe (Sand-Attack).',
+        'Its jaws: bared fangs for Bite, Crunch and Poison Fang; howls, roars and snores from its mouth; the dark orb of ' +
+        'Shadow Ball gathered in them and hurled, and Toxic breathed out. Dark menace from its snarl and stare (Leer, Scary ' +
+        'Face, Taunt) and its nose (Odor Sleuth); its head and shoulders behind Tackle and Take Down; its right forepaw rakes ' +
+        '(Thief, Rock Smash) and flicks mud (Mud-Slap), both forepaws dig (Dig) and strike back (Counter), and its hind paws ' +
+        'kick the dirt back at the foe (Sand-Attack).',
     },
-    // The mouth (jaw tip, built in) serves its bites' effects, barks, howls,
-    // the Shadow Ball it hurls and Toxic; the eyes its glares. The right
-    // forepaw (the near one from our side) swipes and scoops mud; the hind
-    // paws kick the sand back at the foe with its back turned.
+    // The mouth (jaw tip, built in) serves its bites' effects, howls, the
+    // snore, the Shadow Ball it hurls and Toxic; the eyes its glares. The
+    // right forepaw (the near one from our side) rakes and flicks mud; the
+    // hind paws kick the sand back at the foe with its rump turned to it.
     emitters: {
-      forepaw: { bones: ['handR'], about: 'its right forepaw, which swipes, digs and scoops mud' },
+      forepaw: { bones: ['handR'], about: 'its right forepaw, which rakes, digs and flicks mud' },
       hindPaws: { bones: ['toeR', 'toeL'], about: 'its hind paws, which kick dirt back at the foe' },
     },
     emitterFor: {
@@ -67,19 +71,22 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['cheekL'], damping: 0.28, elasticity: 0.18, maxDrift: 0.25 },
       { bones: ['cheekR'], damping: 0.28, elasticity: 0.18, maxDrift: 0.25 },
     ],
-    // Every move in its movepool plays its own clip (named after it).
+    // Every move plays the clip of its action: the clips are named after
+    // their motifs (bite, tackle, tackle_strong for the strong charges, strike,
+    // punch, tail, slam, burrow, orb, beam, sound, fling, roar, glare,
+    // kick_sand, charm, shield, heal, weather, buff, afterimage, powder).
     moveClips: {},
-    // For moves Mimic or Mirror Move call from outside its movepool: each
-    // motif's closest clip of its own.
+    // The motifs outside its movepool (moves Mimic can call), each on its
+    // closest action: a quadruped's kick is its rearing forepaw blow, a peck
+    // or a grip its bite, a horn its head-first charge, a spin its tail's
+    // spin; streams from the mouth its beam, a spat projectile or a bolt its
+    // hurled orb, a thrown volley its flick; a summons, a wave or a flash its
+    // howl; a mind move or a drain its stare; Earthquake its rearing
+    // forepaw blow (a quadruped's stamp).
     motifClips: {
-      strike: 'thief', punch: 'counter', kick: 'rock_smash', bite: 'bite', tackle: 'tackle', slam: 'body_slam',
-      tail: 'iron_tail', wing: 'return', peck: 'poison_fang', horn: 'take_down', spin: 'iron_tail', grapple: 'crunch',
-      vine: 'thief', toss: 'crunch', burrow: 'dig',
-      breath: 'shadow_ball', spit: 'shadow_ball', beam: 'shadow_ball', jet: 'shadow_ball', throw: 'hidden_power',
-      wave: 'mud_slap', quake: 'rock_smash', burst: 'shadow_ball', erupt: 'hidden_power', storm: 'hidden_power',
-      bolt: 'hidden_power', mind: 'hidden_power', orb: 'shadow_ball', drain: 'hidden_power', sound: 'sound', fling: 'mud_slap',
-      roar: 'roar', glare: 'leer', kick_sand: 'sand_attack', powder: 'toxic', buff: 'psych_up', shield: 'protect',
-      heal: 'rest', weather: 'sunny_day', charm: 'attract', afterimage: 'double_team', flash: 'scary_face',
+      kick: 'punch', wing: 'tackle', peck: 'bite', horn: 'tackle', spin: 'tail', grapple: 'bite', vine: 'strike', toss: 'bite',
+      breath: 'beam', spit: 'orb', jet: 'beam', throw: 'fling', wave: 'roar', quake: 'punch', burst: 'beam', erupt: 'roar',
+      storm: 'beam', bolt: 'orb', mind: 'glare', drain: 'glare', flash: 'roar',
     },
     hiddenParts: [],
     showcaseMoves: ['BITE', 'SHADOW_BALL', 'HOWL', 'TAKE_DOWN'],
