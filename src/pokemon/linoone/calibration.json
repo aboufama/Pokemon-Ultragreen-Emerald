@@ -2,8 +2,8 @@
   "height": 0.8174,
   "slots": {
     "enemy": {
-      "dx": -0.099,
-      "dz": 0,
+      "dx": -0.158,
+      "dz": -0.35,
       "lift": 0
     },
     "player": {
@@ -28,8 +28,8 @@
   },
   "fit": {
     "enemy": {
-      "iou": 0.5627,
-      "boxIou": 0.7627
+      "iou": 0.635,
+      "boxIou": 0.7534
     },
     "player": {
       "iou": 0.6884,
