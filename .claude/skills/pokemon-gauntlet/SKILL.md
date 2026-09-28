@@ -269,6 +269,23 @@ any that goes under a healthbox: from our side the foe's box is only a few
 pixels above our Pokémon's head and ours is to its right (see the
 pokemon-animation skill); `--shots` saves the worst frames.
 
+For a batch, `tools/shots/fastsheet.mjs` is many times quicker than
+move_sheet: the battle view loads once per side and every item plays after
+the last, one image per item with both sides stacked
+(`--items move:LEAF_BLADE,clip:dodge,...`, `--enemy <slug>` for a foe of
+another size). `tools/gauntlet/uiclear_fast.mjs --species <slug> [--clips a,b]`
+is the quick healthbox pass while iterating; the gate still runs the real one.
+
+The benchmark for *engaging* is the first set of clips the user saw and
+loved, from before the compiled game: `git show
+b7c4fdb:src/pokemon/blaziken/clips.ts` (and `sceptile/clips.ts`,
+`swampert/clips.ts` at the same commit). A contact move there springs into a
+real leap (`root.y` 0.07 h for a jab, 0.2 h and more for a big blow), strikes
+with the whole body at the foe (a spinning kick at the top of the arc, an
+uppercut that lifts both feet off the ground), carries through, lands deep
+and hops home. Hold every contact clip to that: a shuffle, a small step or
+a strike that barely leaves home is not engaging.
+
 Open the sheets and look at every frame: anticipation, the leap to the foe
 and the blow landing **on its body**, follow-through, arcs, no sliding, the
 hop home, the effect leaving the right body part, the silhouette readable
