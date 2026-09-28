@@ -2,7 +2,7 @@ import type { SpeciesProfile } from '../profile';
 import { applyCalibration } from '../profile';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS, EXPRESSIONS } from './clips';
+import { SILCOON_CLIPS, SILCOON_EXPRESSIONS } from './set';
 import calibration from './calibration.json';
 
 /**
@@ -16,17 +16,18 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'silcoon',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: CLIPS,
+    // Its clips, one per action its moves take, written by hand (./set.ts).
+    clips: SILCOON_CLIPS,
     effectParts: [],
     effects: {},
     brief: {
       bodyPlan: 'blob',
-      character: 'A silk cocoon resting on the tips of its silk strands (0.6 m, 10 kg), still living on the energy it stored as a Wurmple. It has no limbs: it hops, tips, rocks and wobbles, and throws its whole body at a foe. Watchful: it keeps watch over its surroundings through the opening in its silk with its two eyes, narrowing them at a foe. Light for a cocoon, so its hops are springy and its strands quiver.',
+      character: 'A silk cocoon resting on the tips of its silk strands (0.6 m, 10 kg), still living on the energy it stored as a Wurmple. It has no limbs: it hops, tips, rocks and swells, and throws its whole shell at a foe. Placid and buoyant: it bobs on its strands like a buoy, rocks back to gather itself, hops high and springy for a cocoon, lands soft and bobs before it settles, and keeps calm eyes on the foe (it keeps watch with its two eyes). Its loose strands trail, bristle and droop with what it does and quiver on their own.',
       powerSource: 'Its whole body for Tackle (it throws itself at the foe); the opening in its silk, between its eyes, for String Shot and Poison Sting; Harden tenses and stiffens its silk.',
     },
     // The eye texture is an atlas of 4 x 2 cells (eye_mat): offsets from the
     // open eye; blinks come from its half and closed cells.
-    expressions: { material: 'eye_mat', cell: [0.25, 0.5], cells: EXPRESSIONS },
+    expressions: { material: 'eye_mat', cell: [0.25, 0.5], cells: SILCOON_EXPRESSIONS },
     emitters: {
       opening: { bones: ['opening'], offset: [0, 0, 0], about: 'the opening in its silk between its two eyes, where it spits thread and fires barbs' },
     },
@@ -44,13 +45,14 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['strandR'], damping: 0.24, elasticity: 0.16, maxDrift: 0.28 },
     ],
     moveClips: {},
-    // Its moves' motifs, played by its own clips (it learns no move that
-    // calls others: Mimic, Mirror Move...).
+    // The category clips its moves take, each the action of its moves'
+    // motif: its blow is the Tackle's bump, its spat barb Poison Sting, its
+    // self-status Harden, its status at the foe String Shot's thread.
     motifClips: {
-      tackle: 'tackle',
-      shield: 'harden',
-      powder: 'string_shot',
-      spit: 'poison_sting',
+      tackle: 'physical_weak',
+      spit: 'special_weak',
+      shield: 'status_self',
+      powder: 'status_target',
     },
     hiddenParts: [],
     showcaseMoves: ['TACKLE', 'STRING_SHOT', 'HARDEN', 'POISON_STING'],

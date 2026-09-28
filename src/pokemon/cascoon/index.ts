@@ -2,14 +2,13 @@ import type { SpeciesProfile } from '../profile';
 import { applyCalibration } from '../profile';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS, EXPRESSIONS } from './clips';
+import { CASCOON_CLIPS, CASCOON_EXPRESSIONS } from './set';
 import calibration from './calibration.json';
 
 /**
  * CASCOON: Wurmple's other cocoon. It hides motionless and glares out of the
  * opening in its silk; it has no limbs, so it hops, tips and throws its
- * whole body, and spits thread and barbs from the opening. Its ability,
- * Shed Skin, sheds a status condition (shake_off).
+ * whole shell, and spits thread and barbs from the opening.
  */
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
   const cal = calibration as SpeciesProfile['calibration'];
@@ -17,17 +16,18 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'cascoon',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: CLIPS,
+    // Its clips, one per action its moves take, written by hand (./set.ts).
+    clips: CASCOON_CLIPS,
     effectParts: [],
     effects: {},
     brief: {
       bodyPlan: 'blob',
-      character: 'A purple silk cocoon on the tips of its silk strands (0.7 m, 11.5 kg), heavier than Silcoon. It hides motionless under leaves and in the gaps of branches, so it keeps still and glares out of the opening in its silk rather than watching round; when it does move it is slow, stiff and grumpy: heavy hops, tips and rocks of its whole body, which it throws at a foe. With Shed Skin it shivers and heaves an ailment off with its old skin.',
+      character: 'A purple silk cocoon on the tips of its silk strands (0.7 m, 11.5 kg), heavier than Silcoon. It hides motionless under leaves and in the gaps of branches, so it keeps still, hunkered, and glares out of the opening in its silk. When it does move it is heavy, stiff and grumpy: it hunches its brow forward and squats rather than rocking back, hops low and thuds down deep, rams and grinds with its whole shell, clenches with its eyes open, and keeps its glare on the foe throughout.',
       powerSource: 'Its whole body for Tackle (it throws itself at the foe); the opening in its silk, where its eyes glare out, for String Shot and Poison Sting; Harden tenses and stiffens its silk.',
     },
     // The eye texture is an atlas of 4 x 2 cells (eye_mat): offsets from the
     // open eye; blinks come from its half and closed cells.
-    expressions: { material: 'eye_mat', cell: [0.25, 0.5], cells: EXPRESSIONS },
+    expressions: { material: 'eye_mat', cell: [0.25, 0.5], cells: CASCOON_EXPRESSIONS },
     emitters: {
       opening: { bones: ['opening'], offset: [0, 0, 0], about: 'the opening in its silk where its eyes glare out, where it spits thread and fires barbs' },
     },
@@ -45,13 +45,14 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['strandR'], damping: 0.28, elasticity: 0.18, maxDrift: 0.24 },
     ],
     moveClips: {},
-    // Its moves' motifs, played by its own clips (it learns no move that
-    // calls others: Mimic, Mirror Move...).
+    // The category clips its moves take, each the action of its moves'
+    // motif: its blow is the Tackle's ram, its spat barb Poison Sting, its
+    // self-status Harden, its status at the foe String Shot's thread.
     motifClips: {
-      tackle: 'tackle',
-      shield: 'harden',
-      powder: 'string_shot',
-      spit: 'poison_sting',
+      tackle: 'physical_weak',
+      spit: 'special_weak',
+      shield: 'status_self',
+      powder: 'status_target',
     },
     hiddenParts: [],
     showcaseMoves: ['TACKLE', 'STRING_SHOT', 'HARDEN', 'POISON_STING'],

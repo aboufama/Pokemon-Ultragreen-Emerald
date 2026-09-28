@@ -2,8 +2,8 @@
 //
 // The upstream export is a static mesh; tools/models/rig_static.mjs gave it a
 // skeleton from src/pokemon/cascoon/skeleton.json (public/assets/pokemon/
-// cascoon/SOURCE.json, "rigged"), laid out like Silcoon's so the two share
-// the cocoon choreography:
+// cascoon/SOURCE.json, "rigged"), laid out like Silcoon's (each has its own
+// clips, ./set.ts):
 //
 //   Hips (the base of the cocoon) > Spine (its middle) > Head (its top, with
 //   the eyes in the silk opening) > Opening (a marker in the opening's
