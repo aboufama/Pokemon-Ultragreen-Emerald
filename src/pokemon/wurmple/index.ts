@@ -3,7 +3,7 @@ import { applyCalibration } from '../profile';
 import { DEFAULT_OVERLAP } from '../../anim/animator';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS, EXPRESSIONS } from './clips';
+import { CLIPS, EXPRESSIONS } from './set';
 import calibration from './calibration.json';
 
 /**
@@ -56,12 +56,13 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       tail: 0.03, tail2: 0.06, tail3: 0.09, tailSpikes: 0.1, crest: 0.08,
     },
     moveClips: {},
-    // Its moves' motifs, played by its own clips (it learns no move that
-    // calls others: Mimic, Mirror Move...).
+    // Its moves' actions (./set.ts): Tackle and Struggle play its tackle;
+    // Poison Sting (spit) is its weak ranged attack, the tail spikes' jab;
+    // String Shot (powder) its status move at the foe, thread from the
+    // mouth. It learns no move that calls others (Mimic, Mirror Move...).
     motifClips: {
-      tackle: 'tackle',
-      spit: 'poison_sting',
-      powder: 'string_shot',
+      spit: 'special_weak',
+      powder: 'status_target',
     },
     hiddenParts: [],
     showcaseMoves: ['TACKLE', 'STRING_SHOT', 'POISON_STING'],
