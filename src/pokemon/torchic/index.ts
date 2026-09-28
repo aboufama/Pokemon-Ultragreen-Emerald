@@ -3,7 +3,8 @@ import { applyCalibration } from '../profile';
 import { DEFAULT_OVERLAP } from '../../anim/animator';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { TORCHIC_CLIPS, TORCHIC_EXPRESSIONS } from './clips';
+import { TORCHIC_SET, TORCHIC_EXPRESSIONS } from './set';
+import { TORCHIC_MORE } from './set_more';
 import calibration from './calibration.json';
 
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
@@ -12,7 +13,10 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'torchic',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: TORCHIC_CLIPS,
+    // A clip for every action its moves take, made the way Blaziken's first
+    // clips are (./set.ts) and its clips since (./set_more.ts). The per-move
+    // clips of ./clips/ are no longer played.
+    clips: { ...TORCHIC_SET, ...TORCHIC_MORE },
     // The model has no effect meshes: its fire is the game's (and the move effects').
     effectParts: [],
     effects: {},
@@ -21,13 +25,14 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       bodyPlan: 'bird',
       character:
         'A 2.5 kg fire chick, all round head and down on stubby legs, not a small Blaziken: plucky and eager, it squares up to ' +
-        'anything, bobs and bounces rather than strides, and when it gets fired up it puffs out its chest, stands its crest up ' +
-        'and flutters its tiny wings. It has no arms: it fights with its little beak (pecks, chirps, spits), the talons of its ' +
-        'big feet (a barnyard scratch, a sand kick) and its whole round body, thrown head first.',
+        'anything and springs about light and quick, and when it gets fired up it puffs out its chest, stands its crest up ' +
+        'and flutters its tiny wings. It has no arms: it fights with its little beak (pecks, spits, seizes), the talons of its ' +
+        'big feet (a rooster\'s spring and rake, hop-kicks, a sand kick) and its whole round body (thrown crown first, or ' +
+        'swung round behind a wing tuft like a fist).',
       powerSource:
         'The fire in its belly (Pokédex: if attacked, it strikes back by spitting balls of fire it forms in its stomach): it ' +
-        'heaves its chest to bring the flame up, then spits embers and streams of fire from its beak. Its feet scratch and kick ' +
-        'up sand; its wing tufts only flutter and fling.',
+        'heaves its chest to bring the flame up, then spits embers and streams of fire from its beak. Its feet rake, kick and ' +
+        'scratch up sand; its wing tufts flutter.',
     },
     emitters: {
       wings: { bones: ['wingBL', 'wingBR'], about: 'tiny yellow wing tufts at the sides of its chest (it has no arms or hands)' },
@@ -35,9 +40,10 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       hands: { bones: ['jaw'], about: 'its beak, which it seizes with (it has no arms or hands)' },
     },
     emitterFor: {
-      // Swift's stars (and the rocks it calls) are flung with a flap of the wing tufts.
-      throw: 'wings',
-      // Mud-Slap is pecked up and flicked from the beak (its feet kick the
+      // Swift's stars leave the beak as it flicks its head (the rocks of
+      // Rock Slide and Rock Tomb fall on the foe from above).
+      throw: 'mouth',
+      // Mud-Slap is scooped up and flung from the beak (its feet kick the
       // sand of Sand-Attack); Toxic is spat and Hidden Power's orbs fly from
       // the beak too.
       fling: 'mouth',
@@ -74,62 +80,55 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       wingAL: 0.06, wingBL: 0.06, wingCL: 0.065, wingAR: 0.06, wingBR: 0.06, wingCR: 0.065,
       tail2: 0.08,
     },
-    // Every move it can know has a clip of its own, named after it.
     moveClips: {},
-    // Moves outside its movepool that Mimic or Mirror Move call play its
-    // closest clip for their motif (src/battle3d/motifs.ts).
+    // Clips by move motif (src/battle3d/motifs.ts). The category clips keep
+    // their names (Blaziken's); punch, tackle, tackle_strong, peck, toss,
+    // burrow, fling, afterimage, shield, heal, weather, charm, burst, throw,
+    // slam and quake are named after their motifs. The rest are the
+    // actions its own moves show, and the clips that best show a move
+    // Mimic or Mirror Move calls from outside its movepool.
     motifClips: {
-      // No hands: a strike is its talon rake, a punch its whole body thrown head first.
-      strike: 'scratch',
-      punch: 'mega_punch',
-      kick: 'mega_kick',
+      // Scratch, Slash, Cut: its talon rake. A lash of a vine is raked too.
+      strike: 'physical_weak',
+      vine: 'physical_weak',
+      // Mega Kick is its big flying kick; kicks Mirror Move copies (Double
+      // Kick) are its two hop-kicks.
+      kick: 'physical_weak_kick',
+      kick_strong: 'physical_strong',
+      // Its beak does what jaws and horns do, and seizes what it binds.
       bite: 'peck',
-      tackle: 'quick_attack',
-      tackle_strong: 'double_edge',
-      slam: 'body_slam',
-      // Iron Tail: a leap and a swoop down onto the foe; Wing Attack: a slap of a wing tuft.
-      tail: 'aerial_ace',
-      wing: 'smelling_salt',
-      peck: 'peck',
-      // Horn Attack: its crown as the horn.
-      horn: 'rock_smash',
-      // Rapid Spin, Rollout, Flame Wheel: a streak at the foe crown first.
-      spin: 'quick_attack',
-      // Bind, Wrap: set against the foe and shoving.
-      grapple: 'strength',
-      // Vine Whip: the beak whipped across the foe.
-      vine: 'cut',
-      toss: 'seismic_toss',
-      burrow: 'dig',
-      breath: 'flamethrower',
-      spit: 'ember',
-      spit_strong: 'fire_blast',
-      beam: 'flamethrower',
-      jet: 'flamethrower',
-      throw: 'swift',
-      wave: 'rock_slide',
-      // Earthquake: the stamp that shakes the ground.
-      quake: 'rock_tomb',
-      burst: 'overheat',
-      erupt: 'rock_slide',
-      storm: 'fire_spin',
-      bolt: 'hidden_power',
-      mind: 'hidden_power',
-      orb: 'hidden_power',
-      drain: 'hidden_power',
-      sound: 'growl',
-      fling: 'mud_slap',
-      roar: 'growl',
-      glare: 'mimic',
-      kick_sand: 'sand_attack',
-      powder: 'toxic',
-      buff: 'focus_energy',
-      shield: 'protect',
-      heal: 'rest',
-      weather: 'sunny_day',
-      charm: 'attract',
-      afterimage: 'double_team',
-      flash: 'growl',
+      horn: 'peck',
+      grapple: 'peck',
+      // A tail swung down, or a rolling spin, is its whole body thrown.
+      tail: 'slam',
+      spin: 'tackle',
+      // A wing strike is its wing-tuft haymaker.
+      wing: 'punch',
+      // Ember is spat from the beak (and Fire Blast), Flamethrower and Fire
+      // Spin stream from it; so do beams, jets and gusts.
+      spit: 'special_weak',
+      breath: 'special_strong',
+      beam: 'special_strong',
+      jet: 'special_strong',
+      storm: 'special_strong',
+      // Hidden Power's orb and Toxic are spat from the beak, energy drawn from
+      // the foe comes with a spit's heave.
+      orb: 'special_weak',
+      powder: 'special_weak',
+      drain: 'special_weak',
+      // A cry at the foe: Growl, a stare (Mimic), a snore, a psychic push.
+      roar: 'status_target',
+      glare: 'status_target',
+      sound: 'status_target',
+      mind: 'status_target',
+      // Power gathered and let out all at once: Overheat, and a wave, a
+      // bolt, an eruption or a flash called from outside its movepool.
+      wave: 'burst',
+      bolt: 'burst',
+      erupt: 'burst',
+      flash: 'burst',
+      kick_sand: 'status_target_kick',
+      buff: 'status_self',
     },
     // The beak comes as two alternate meshes: the open one (with the inside
     // of the mouth) follows the jaw both shut and open; the closed one would
