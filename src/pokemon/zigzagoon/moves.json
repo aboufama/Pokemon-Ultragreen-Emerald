@@ -12,7 +12,7 @@
   },
   "moves": {
     "MOVE_ATTRACT": {
-      "part": "eyes",
+      "part": "tail",
       "by": "hand"
     },
     "MOVE_BELLY_DRUM": {
@@ -28,7 +28,7 @@
       "by": "hand"
     },
     "MOVE_CHARM": {
-      "part": "eyes",
+      "part": "tail",
       "by": "hand"
     },
     "MOVE_COVET": {
@@ -108,15 +108,15 @@
       "by": "hand"
     },
     "MOVE_MUD_SPORT": {
-      "part": "hands",
+      "part": "feet",
       "by": "hand"
     },
     "MOVE_ODOR_SLEUTH": {
-      "part": "mouth",
+      "part": "eyes",
       "by": "hand"
     },
     "MOVE_PIN_MISSILE": {
-      "part": "fur",
+      "part": "mouth",
       "by": "hand"
     },
     "MOVE_PROTECT": {
@@ -124,7 +124,7 @@
       "by": "hand"
     },
     "MOVE_PURSUIT": {
-      "part": "mouth",
+      "part": "head",
       "by": "hand"
     },
     "MOVE_RAIN_DANCE": {
@@ -148,7 +148,7 @@
       "by": "hand"
     },
     "MOVE_SAND_ATTACK": {
-      "part": "hands",
+      "part": "feet",
       "by": "hand"
     },
     "MOVE_SECRET_POWER": {
@@ -160,7 +160,7 @@
       "by": "hand"
     },
     "MOVE_SHOCK_WAVE": {
-      "part": "fur",
+      "part": "mouth",
       "by": "hand"
     },
     "MOVE_SLEEP_TALK": {
@@ -208,19 +208,19 @@
       "by": "hand"
     },
     "MOVE_THUNDER": {
-      "part": "fur",
+      "part": "mouth",
       "by": "hand"
     },
     "MOVE_THUNDERBOLT": {
-      "part": "fur",
+      "part": "mouth",
       "by": "hand"
     },
     "MOVE_THUNDER_WAVE": {
-      "part": "fur",
+      "part": "mouth",
       "by": "hand"
     },
     "MOVE_TICKLE": {
-      "part": "hands",
+      "part": "tail",
       "by": "hand"
     },
     "MOVE_TOXIC": {
@@ -228,7 +228,7 @@
       "by": "hand"
     },
     "MOVE_TRICK": {
-      "part": "hands",
+      "part": "eyes",
       "by": "hand"
     },
     "MOVE_WATER_PULSE": {

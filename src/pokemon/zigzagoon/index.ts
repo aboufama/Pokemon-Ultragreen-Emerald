@@ -3,7 +3,9 @@ import { applyCalibration } from '../profile';
 import { DEFAULT_OVERLAP } from '../../anim/animator';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS, EXPRESSIONS } from './clips';
+import { CLIPS, EXPRESSIONS } from './set';
+import { RANGED_CLIPS } from './set_ranged';
+import { STATUS_CLIPS } from './set_status';
 import calibration from './calibration.json';
 
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
@@ -12,7 +14,10 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'zigzagoon',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: CLIPS,
+    // A clip per action, written by hand in the first clips' style (./set.ts:
+    // the moments and the contact moves; ./set_ranged.ts; ./set_status.ts).
+    // The earlier kit-built set (./clips/) is kept, unused.
+    clips: { ...CLIPS, ...RANGED_CLIPS, ...STATUS_CLIPS },
     effectParts: [],
     effects: {},
     expressions: { material: 'Eye', cell: [0.5, 0.25], cells: EXPRESSIONS },
@@ -20,27 +25,35 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       bodyPlan: 'quadruped',
       character:
         'A tiny raccoon (0.4 m, 17.5 kg), restless and curious: low on four short legs, nose to the ground, it wanders back ' +
-        'and forth in zigzags and is never still. It fights scrappily and all at once, head down, shoving with its whole ' +
-        'little body (Tackle, Headbutt), rearing onto its haunches to swipe with a front paw, and taunting with its bushy ' +
-        'striped tail. Light and quick: it rebounds off what it hits and shakes it off; its springy tail and fur bounce after it.',
+        'and forth in zigzags and is never still. It fights scrappily and all at once: it goes to the foe in zigzag bounds ' +
+        '(a springing bound off to one side, a second angled back in), rams it forehead first, rears onto its haunches to ' +
+        'swat it with a forepaw, and taunts it with its bushy zigzag tail. Light and springy: it rebounds off what it hits ' +
+        'and shakes it off; its tail and fur bounce after it.',
       powerSource:
-        'Its body and its nose: it rams with its forehead and shoulders, scoops sand with both front paws, wags its big ' +
-        'zigzag tail at the foe (Tail Whip), growls and spits from its small mouth, drums its belly and bristles its fur. ' +
-        'The Pokédex: it rubs its nose against the ground as it wanders, leaving zigzag footprints.',
+        'Its body and its mouth: it rams with its forehead and its whole little body, swats with its forepaws, clubs with ' +
+        'its big zigzag tail (Iron Tail) and wags it at the foe (Tail Whip), rakes dirt back with its hind legs, drums its ' +
+        'belly, and everything it fires leaves its small mouth with the head driven at the foe. The Pokédex: it rubs its ' +
+        'nose against the ground as it wanders, leaving zigzag footprints.',
     },
-    // Built-in emitters cover most of it (the mouth for spit and beams, the
-    // front paws for what it scoops); the tail and the spiky fur are its own.
+    // Built-in emitters cover most of it (the mouth for everything it fires,
+    // the forepaws for Mud-Slap, the hind paws for the dirt it rakes back);
+    // the tail and the spiky fur are its own.
     emitters: {
       tail: { bones: ['tailTop'], about: 'its bushy zigzag tail, raised behind it' },
       fur: { bones: ['mane', 'furBack'], about: 'the spiky fur on its shoulders and back, bristling' },
     },
     emitterFor: {
-      // Tail Whip and the charms: the hearts come off the wagging tail
-      // (moves.json points Attract and Charm at its winking eyes).
+      // Tail Whip and the charms: the hearts come off the wagging tail.
       charm: 'tail',
-      // Sand-Attack, Mud Sport and Mud-Slap are scooped with the front paws.
-      kick_sand: 'hands',
+      // Swift's stars fly off the flicked tail.
+      throw: 'tail',
+      // Sand-Attack and Mud Sport: its hind legs rake the dirt back at the foe.
+      kick_sand: 'feet',
+      // Mud-Slap is scooped and flicked with a forepaw.
       fling: 'hands',
+      // Toxic is spat; Blizzard blows from the mouth.
+      powder: 'mouth',
+      storm: 'mouth',
     },
     // Loose parts on springs. The tail is big and bouncy (its top lobe on
     // the chain, its back lobe on its own); the ears and the fur are stiffer.
@@ -56,50 +69,33 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     // little later than the one before (the springs add the bounce).
     overlap: { ...DEFAULT_OVERLAP, tail: 0.05, tail2: 0.09, tail3: 0.12, tailTop: 0.12 },
     moveClips: {},
-    // Clips by move motif (src/battle3d/motifs.ts), for moves outside its
-    // movepool that Mimic calls: each motif plays its closest move clip
-    // (tackle and charm have clips of their own name).
+    // Clips by move motif (src/battle3d/motifs.ts). Every motif of its
+    // movepool has a clip of its name (tackle, tackle_strong, strike, tail,
+    // slam, spin, burrow; spit, beam, breath, orb, bolt, erupt, wave, fling,
+    // throw; roar, charm, kick_sand, buff, shield, heal, glare, weather,
+    // afterimage); these motifs are the same action as one of them, and the
+    // rest are for moves outside its movepool that Mimic calls.
     motifClips: {
-      strike: 'cut',
-      punch: 'rock_smash',
-      kick: 'return',
-      bite: 'pursuit',
-      slam: 'body_slam',
-      tail: 'iron_tail',
-      wing: 'fury_cutter',
-      peck: 'secret_power',
-      horn: 'headbutt',
-      spin: 'rollout',
-      grapple: 'thief',
-      vine: 'flail',
-      toss: 'body_slam',
-      burrow: 'dig',
-      breath: 'icy_wind',
-      spit: 'water_pulse',
-      beam: 'ice_beam',
-      jet: 'ice_beam',
-      throw: 'swift',
-      wave: 'surf',
-      quake: 'rock_smash',
-      burst: 'thunderbolt',
-      erupt: 'thunder',
-      storm: 'blizzard',
-      bolt: 'thunderbolt',
-      mind: 'hidden_power',
-      orb: 'shadow_ball',
-      drain: 'hidden_power',
-      sound: 'blizzard',
-      fling: 'mud_slap',
-      roar: 'growl',
-      glare: 'odor_sleuth',
-      kick_sand: 'sand_attack',
-      powder: 'toxic',
-      buff: 'belly_drum',
-      shield: 'protect',
-      heal: 'rest',
-      weather: 'sunny_day',
-      afterimage: 'double_team',
-      flash: 'swagger',
+      // Blizzard is a howling cold breath; Snore its growl; Toxic spat.
+      storm: 'breath',
+      sound: 'roar',
+      powder: 'spit',
+      // Called by Mimic: each plays its closest action.
+      punch: 'strike',
+      kick: 'strike',
+      wing: 'strike',
+      grapple: 'strike',
+      bite: 'tackle',
+      peck: 'tackle',
+      horn: 'tackle',
+      vine: 'tail',
+      toss: 'slam',
+      quake: 'slam',
+      jet: 'beam',
+      burst: 'bolt',
+      drain: 'orb',
+      mind: 'glare',
+      flash: 'glare',
     },
     hiddenParts: [],
     showcaseMoves: ['TACKLE', 'PIN_MISSILE', 'GROWL', 'TAIL_WHIP'],
