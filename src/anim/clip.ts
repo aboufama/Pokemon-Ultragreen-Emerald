@@ -67,6 +67,8 @@ export interface Clip {
   events?: ClipEvent[];
   /** Placeholder from the generic starter set (the gauntlet requires bespoke clips). */
   generic?: boolean;
+  /** A piece cut from this clip for a battle's hits or turns (src/battle3d/variants.ts). */
+  derived?: string;
 }
 
 // ---------------------------------------------------------------------------

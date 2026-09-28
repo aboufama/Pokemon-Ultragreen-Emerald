@@ -82,7 +82,8 @@ export function clipFor(attacker: Battler3D, move: MoveData): string {
  */
 export function hitClips(attacker: Battler3D, move: MoveData, hits: number): string[] {
   const base = clipFor(attacker, move);
-  const has = (v: string) => !!attacker.profile.clips[base + v];
+  // (The playtest plays a clip made as one piece whole: pieces cut from it are the compiled game's.)
+  const has = (v: string) => !!attacker.profile.clips[base + v] && !attacker.profile.clips[base + v].derived;
   if (hits < 2 || !has('_first') || !has('_last')) return [base];
   const between = Array.from({ length: hits - 2 }, () => (has('_next') ? '_next' : '_last'));
   return [base + '_first', ...between.map((v) => base + v), base + '_last'];

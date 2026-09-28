@@ -2,6 +2,7 @@
 import { asset } from '../gba/assets';
 import { type MovePartsFile, type SpeciesProfile, movePartsOf } from './profile';
 import { makeGenericClips } from './generic/clips';
+import { deriveVariants } from '../battle3d/variants';
 
 /** The clips every battle plays for every species (the rest are chosen per move). */
 export const MOMENT_CLIPS = ['idle', 'intro', 'hit', 'faint'] as const;
@@ -57,6 +58,8 @@ export function getSpeciesProfile(slug: string): Promise<SpeciesProfile> {
       // A moment a species has no clip for yet (mid-gauntlet) plays the generic one.
       const generic = makeGenericClips(profile.poses.stance ?? {});
       for (const name of MOMENT_CLIPS) if (!profile.clips[name]) profile.clips[name] = { ...generic[name], generic: true };
+      // The pieces the compiled game's battles play a clip in (a hit each, a turn each), cut from it where it has none.
+      deriveVariants(profile.clips);
       return profile;
     })();
     cache.set(slug, p);

@@ -70,6 +70,12 @@ export const MULTI_HIT_VARIANTS = { first: '_first', next: '_next', last: '_last
 /** A two-turn move's first turn (Solar Beam gathering light, Dig burrowing, Bide storing energy): its clip's variant. */
 export const CHARGE_VARIANT = '_charge';
 
+/** A two-turn move's second turn, where its clip is played in two pieces (src/battle3d/variants.ts). */
+export const SECOND_TURN_VARIANT = '_turn2';
+
+/** The way home from the foe after a multi-hit run whose next hit didn't come, cut from the run's clip. */
+export const HOME_VARIANT = '_home';
+
 /**
  * Moves that take two turns, by their effect: the game plays the first turn's
  * animation (its choosetwoturnanim's first branch) with animTurn 0.

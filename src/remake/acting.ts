@@ -48,7 +48,7 @@
 
 import type { Battler3D } from '../battle3d/battler';
 import { clipFor } from '../battle3d/director';
-import { CHARGE_VARIANT, EFFECT_EVENTS, MULTI_HIT_EFFECTS, MULTI_HIT_VARIANTS, TWO_TURN_EFFECTS } from '../battle3d/situations';
+import { CHARGE_VARIANT, EFFECT_EVENTS, MULTI_HIT_EFFECTS, MULTI_HIT_VARIANTS, TWO_TURN_EFFECTS, SECOND_TURN_VARIANT, HOME_VARIANT } from '../battle3d/situations';
 import { isStrong } from '../battle3d/motifs';
 import { MOVES, type MoveData } from '../data';
 import { constant, type BattleState, type GameInfo } from './state';
@@ -162,7 +162,7 @@ export class Acting {
   /** Battlers that were just struck (their next 'hit' from the engine is the same blow). */
   private readonly struck = new Set<number>();
   /** Attackers holding where a multi-hit move's hit left them, waiting for the next: for how many frames, whether that is away from home, and at which foe. */
-  private readonly waiting = new Map<number, { frames: number; away: boolean; foe: number }>();
+  private readonly waiting = new Map<number, { frames: number; away: boolean; foe: number; clip: string }>();
   private bodyOf: (battler: number) => Battler3D | null = () => null;
   private readonly loggedIdle = new Set<string>();
   private readonly k: Record<string, number>;
@@ -307,6 +307,8 @@ export class Acting {
     const base = clipFor(attacker, move);
     const has = (name: string) => !!attacker.profile.clips[name];
     if (TWO_TURN_EFFECTS.has(move.effect) && state.animTurn === 0 && has(base + CHARGE_VARIANT)) return base + CHARGE_VARIANT;
+    // The second turn of a clip played in two pieces (Dig bursting up, Solar Beam firing).
+    if (TWO_TURN_EFFECTS.has(move.effect) && state.animTurn !== 0 && has(base + SECOND_TURN_VARIANT)) return base + SECOND_TURN_VARIANT;
     // In a run: the last hit left it at the foe (it may still be finishing there).
     const atFoe = this.inRun.has(battler);
     if (!MULTI_HIT_EFFECTS.has(move.effect)) {
@@ -359,8 +361,10 @@ export class Acting {
       this.driven.delete(battler);
       return;
     }
-    if (w.away && body.profile.clips.return_home) {
-      void body.perform('return_home').then(() => {
+    // Home the way the run's clip goes home, or with the species' own 'return_home'.
+    const home = body.profile.clips[w.clip + HOME_VARIANT] ? w.clip + HOME_VARIANT : body.profile.clips.return_home ? 'return_home' : null;
+    if (w.away && home) {
+      void body.perform(home).then(() => {
         if (!this.waiting.has(battler) && !this.performing.has(battler)) this.driven.delete(battler);
       });
     } else {
@@ -438,7 +442,7 @@ export class Acting {
       // The next hit may have begun already (it carries on from here).
       if (this.performing.get(p.attacker) !== p) return;
       this.performing.delete(p.attacker);
-      if (stays && this.inRun.has(p.attacker)) this.waiting.set(p.attacker, { frames: 0, away: (attacker.pose.advance ?? 0) > 0.5, foe: p.target });
+      if (stays && this.inRun.has(p.attacker)) this.waiting.set(p.attacker, { frames: 0, away: (attacker.pose.advance ?? 0) > 0.5, foe: p.target, clip: clip.replace(/_(first|next)$/, '') });
       else this.driven.delete(p.attacker);
     });
   }

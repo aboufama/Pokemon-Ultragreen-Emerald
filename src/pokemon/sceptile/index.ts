@@ -4,7 +4,7 @@ import type { SpringChainSpec } from '../../anim/dynamics';
 import { DEFAULT_OVERLAP } from '../../anim/animator';
 import { RIG, TAIL_FRONDS } from './rig';
 import { STANCE } from './poses';
-import { SCEPTILE_CLIPS, SCEPTILE_EXPRESSIONS } from './clips';
+import { SCEPTILE_CLIPS, SCEPTILE_EXPRESSIONS } from './first';
 import calibration from './calibration.json';
 
 /** The tail's fern leaflets: two-bone chains on Tail3..Tail5, stiff, so the frond rustles as the tail moves. */
@@ -60,58 +60,33 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       bladeATipL: 0.09, bladeATipR: 0.09, bladeBTipL: 0.09, bladeBTipR: 0.09,
     },
     moveClips: {},
+    // Clips by move motif (src/battle3d/motifs.ts). The category clips are
+    // Sceptile's own versions of its showcase moves; this maps the motifs
+    // they perform, plus motifs whose moves read right on a shared clip.
+    // Motif clips are named after the category they stand in for
+    // (physical_strong_punch...); toss, burrow, fling, afterimage and flash
+    // are named after their motifs and need no entry here.
+    // Where two motifs share a clip, the level-up one is listed last
+    // (tools/gauntlet/check.mjs records one motif per clip).
     motifClips: {
-      // Moves outside its movepool (Mimic can call any move) play the closest
-      // of its own move clips: the same body part doing the same kind of thing.
-      strike: 'cut',
-      strike_strong: 'leaf_blade',
-      punch: 'mega_punch',
-      kick: 'mega_kick',
-      bite: 'crunch',
-      tackle: 'return',
-      tackle_strong: 'double_edge',
-      slam: 'body_slam',
-      tail: 'iron_tail',
-      // A flying slash for wing blows; a head jab for pecks and horns.
-      wing: 'aerial_ace',
-      peck: 'facade',
-      horn: 'facade',
-      spin: 'iron_tail',
-      grapple: 'crush_claw',
-      toss: 'seismic_toss',
-      burrow: 'dig',
-      vine: 'cut',
-      breath: 'dragon_breath',
-      spit: 'bullet_seed',
-      beam: 'solar_beam',
-      beam_strong: 'hyper_beam',
-      jet: 'solar_beam',
-      throw: 'swift',
-      // A push of power from the hands: waves, bursts, bolts, the mind, orbs.
-      wave: 'hidden_power',
-      burst: 'hidden_power',
-      bolt: 'hidden_power',
-      mind: 'hidden_power',
-      orb: 'hidden_power',
-      // Summoned from the sky onto the foe.
-      erupt: 'rock_tomb',
-      storm: 'swift',
-      quake: 'earthquake',
-      drain: 'absorb',
-      sound: 'dragon_breath',
-      fling: 'mud_slap',
-      roar: 'roar',
-      glare: 'leer',
-      kick_sand: 'mud_sport',
-      powder: 'toxic',
-      buff: 'swords_dance',
-      shield: 'protect',
-      heal: 'safeguard',
-      weather: 'sunny_day',
-      charm: 'attract',
-      afterimage: 'double_team',
-      flash: 'flash',
-      other: 'safeguard',
+      strike: 'physical_weak',
+      strike_strong: 'physical_strong_strike',
+      tail: 'physical_strong',
+      slam: 'physical_strong',
+      spit: 'special_weak',
+      beam: 'special_strong',
+      buff: 'status_self',
+      roar: 'status_target',
+      tackle: 'physical_weak_tackle',
+      punch: 'physical_strong_punch',
+      quake: 'physical_strong_quake',
+      throw: 'special_weak_throw',
+      drain: 'special_weak_drain',
+      shield: 'status_self_shield',
+      weather: 'status_self_heal',
+      heal: 'status_self_heal',
+      charm: 'status_target_glare',
+      glare: 'status_target_glare',
     },
     hiddenParts: [],
     showcaseMoves: ['LEAF_BLADE', 'SOLAR_BEAM', 'SLAM', 'AGILITY'],
