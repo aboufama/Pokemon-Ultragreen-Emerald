@@ -12,25 +12,27 @@ import type { Pose } from '../../anim/rig';
 
 /**
  * Battle stance with the posture of the stock Emerald sprites, facing the foe
- * (battlers always face their opponent): up on its long flat feet with the
- * knees a little bent (the sprites draw short legs under a big head); the
- * arms held out wide to the sides at shoulder height, elbows soft and the big
- * three-fingered hands turned up and open, the way both sprites spread them;
- * the huge head up and square to the foe, cocked a little (cool and calm, it
- * glares right back); the thick leaf tail swept round to its left behind it,
- * its root lifted off the ground and the tip curling up.
- * Fit (tools/calibrate/candidates.mjs): enemy IoU 0.59 / box 0.79, player
- * 0.53 / 0.81; the straight-legged version missed the enemy box (0.73).
+ * (battlers always face their opponent), grounded and ready to spring: both
+ * long flat feet planted a little apart, the knees bent and bowed out in a
+ * low gecko's crouch (the sprites draw short, bent legs under a big head);
+ * the arms held out wide to the sides at shoulder height, elbows soft and the
+ * big three-fingered hands turned up and open, the way both sprites spread
+ * them; the huge head up and square to the foe, cocked a little (cool and
+ * calm, it glares right back); the thick leaf tail swept round to its left
+ * behind it, its root lifted off the ground and the tip curling up.
+ * Fit (tools/calibrate/candidates.mjs, against the upright version it
+ * replaces): enemy IoU 0.63 / box 0.86, player 0.53 / 0.78 (upright: 0.63 /
+ * 0.86, 0.54 / 0.81); the deeper, wider crouch reads as ready at game size.
  */
 export const STANCE: Pose = {
   plantFeet: 1,
-  pelvis: { y: -0.035 },
+  pelvis: { y: -0.065 },
   expression: 'open',
   bones: {
-    spine: { x: 6 },
+    spine: { x: 9 },
     chest: { x: 2 },
     neck: { x: -2 },
-    head: { x: -5, z: 3 },
+    head: { x: -8, z: 3 },
     tail: { x: 8, y: -26 },
     tail2: { x: 3, y: -8 },
     tail3: { y: -6 },
@@ -44,9 +46,10 @@ export const STANCE: Pose = {
     armR: { dir: [-0.95, 0.04, 0.3] },
     forearmR: { dir: [-0.8, 0.36, 0.48] },
     handR: { dir: [-0.55, 0.66, 0.52], twist: -70 },
-    thighL: { dir: [0.12, -0.99, 0.05] },
-    shinL: { dir: [0.05, -0.99, -0.06] },
-    thighR: { dir: [-0.12, -0.99, 0.05] },
-    shinR: { dir: [-0.05, -0.99, -0.06] },
+    thighL: { dir: [0.26, -0.95, 0.12] },
+    shinL: { dir: [0.1, -0.99, -0.08] },
+    thighR: { dir: [-0.26, -0.95, 0.12] },
+    shinR: { dir: [-0.1, -0.99, -0.08] },
   },
 };
+
