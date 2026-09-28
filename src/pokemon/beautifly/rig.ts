@@ -47,5 +47,9 @@ export const RIG: RigProfile = {
     proboscis11: 'Jaw11_09',
     proboscis12: 'Jaw12_08',
   },
-  pelvisNodes: ['Hips_06'],
+  // The pelvis channel moves the whole body: the abdomen (Hips) and the
+  // thorax with the head and wings (Spine) are both children of Waist, so
+  // both move together (Hips alone tore the abdomen off the thorax when the
+  // life layer's hover or a reach moved it).
+  pelvisNodes: ['Hips_06', 'Spine_055'],
 };

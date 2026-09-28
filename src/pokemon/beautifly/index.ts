@@ -1,9 +1,15 @@
 import type { SpeciesProfile } from '../profile';
 import { applyCalibration } from '../profile';
+import { DEFAULT_OVERLAP } from '../../anim/animator';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { CLIPS } from './clips';
+import { SET_CLIPS } from './set';
+import { RANGED_CLIPS } from './set_ranged';
+import { STATUS_CLIPS } from './set_status';
 import calibration from './calibration.json';
+
+/** The proboscis uncoils (and coils) from the face out to the tip, like a whip unrolling. */
+const PROBOSCIS_OVERLAP = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`proboscis${i + 1}`, +(0.005 * (i + 1)).toFixed(3)]));
 
 /**
  * BEAUTIFLY: the butterfly the Wurmple line becomes through Silcoon. It never
@@ -16,22 +22,23 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'beautifly',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: CLIPS,
+    // Its set (./set.ts, ./set_ranged.ts, ./set_status.ts): a clip for every
+    // action its moves take, hand-keyed in the first clips' style.
+    clips: { ...SET_CLIPS, ...RANGED_CLIPS, ...STATUS_CLIPS },
     effectParts: [],
     effects: {},
     brief: {
       bodyPlan: 'bird',
-      character: 'A butterfly (1 m, 28.4 kg) that flits through flower fields drinking nectar and gathering pollen: light and graceful, it hovers on big patterned forewings and hindwings with long trailing tail streamers that never stop beating, its proboscis coiled under its face. It attacks ferociously when angered: it flies straight at a foe to strike it with its body or slash it with a wing, then flutters back.',
-      powerSource: 'Its wings for the wind and the scales and spores it shakes off them (Gust, Whirlwind, Silver Wind, Stun Spore) and every flying strike; its long proboscis, uncoiled at the foe, to drink its energy (Absorb, Mega Drain, Giga Drain) and spray poison (Toxic); its mouth for String Shot; its abdomen for Poison Sting.',
+      character: 'A butterfly (1 m, 28.4 kg) that flits through flower fields drinking nectar: light and graceful, it hovers on big patterned wings with long trailing tail streamers, beating slowly at rest and fast and hard in a fight. It attacks ferociously when angered: it rears back, swoops at the foe in one arc and rams it or slashes it with its wings, then flutters home.',
+      powerSource: 'Its wings: every beat whips up wind (Gust, Whirlwind, Silver Wind), scales, spores and stars are shaken or flung off them (Stun Spore, Silver Wind, Swift), and they slash in its flying strikes. Its long needle of a proboscis, coiled under its face, uncoils at the foe to drink its energy (Absorb, Mega Drain, Giga Drain), fires a poison barb (Poison Sting) and sprays poison (Toxic); thread and beams leave its mouth at the proboscis root (String Shot, Hyper Beam, Solar Beam).',
     },
     emitters: {
-      mouth: { bones: ['proboscis1'], offset: [0, 0, 0], about: 'its mouth under its face, where the proboscis starts: String Shot, beams and cries leave it' },
-      proboscis: { bones: ['proboscis12'], reach: 0.9, about: 'the tip of its long proboscis, uncoiled at the foe to drink (drains) and spray' },
-      wings: { bones: ['foreTipL', 'foreTipR'], reach: 0.9, about: 'its big patterned forewings: the wind of every beat, scales and spores shaken off them' },
-      abdomen: { bones: ['hips'], reach: 0.95, about: 'the tip of its abdomen, curled under it like a wasp\'s to jab and fire a barb' },
+      mouth: { bones: ['proboscis1'], offset: [0, 0, 0], about: 'its mouth under its face, where the proboscis starts: thread, beams, orbs and its snore leave it' },
+      proboscis: { bones: ['proboscis12'], reach: 0.9, about: 'the tip of its long needle-like proboscis, uncoiled at the foe to drink (drains), fire a barb and spray' },
+      wings: { bones: ['foreTipL', 'foreTipR'], reach: 0.9, about: 'its big patterned forewings: the wind of every beat, the scales, spores and stars shaken or flung off them' },
     },
     // Which part each motif's effect leaves from when a move has no part of its own (moves.json sets its moves').
-    emitterFor: { powder: 'wings', storm: 'wings', spit: 'abdomen', drain: 'proboscis', breath: 'mouth', beam: 'mouth', throw: 'wings', wave: 'wings' },
+    emitterFor: { storm: 'wings', powder: 'wings', throw: 'wings', drain: 'proboscis', spit: 'proboscis', beam: 'mouth', orb: 'mouth', sound: 'mouth' },
     // The hindwings' long tail streamers trail and flutter behind every beat;
     // the forewing tips flex; the antennae bob.
     dynamics: [
@@ -42,52 +49,55 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['antenna2L', 'antenna3L'], damping: 0.22, elasticity: 0.12, maxDrift: 0.3 },
       { bones: ['antenna2R', 'antenna3R'], damping: 0.22, elasticity: 0.12, maxDrift: 0.3 },
     ],
-    moveClips: {},
-    // Mimic copies moves from outside its movepool: every motif plays its
-    // closest clip of its own (blows fly to the foe, rays and throws leave
-    // from home, status moves stay at home).
+    overlap: { ...DEFAULT_OVERLAP, ...PROBOSCIS_OVERLAP },
+    // Double-Edge (and Take Down, the same action) is its reckless stoop and crash.
+    moveClips: { MOVE_DOUBLE_EDGE: 'physical_strong' },
+    // Clips by move motif (src/battle3d/motifs.ts). The clips named after a
+    // motif (tackle, storm, drain, orb, mind, sound, throw, shield, powder,
+    // heal, weather, charm, afterimage, flash) need no entry; this maps the
+    // category clips to the motifs they perform, and every other motif to its
+    // closest clip for the moves Mimic and Sleep Talk can call.
     motifClips: {
-      strike: 'aerial_ace',
-      wing: 'aerial_ace',
-      punch: 'facade',
-      horn: 'facade',
-      kick: 'secret_power',
-      peck: 'secret_power',
-      bite: 'thief',
-      grapple: 'thief',
-      slam: 'double_edge',
-      burrow: 'double_edge',
-      tail: 'frustration',
-      vine: 'frustration',
-      spin: 'return',
-      toss: 'return',
-      breath: 'solar_beam',
-      spit: 'poison_sting',
-      beam: 'solar_beam',
-      beam_strong: 'hyper_beam',
-      jet: 'hyper_beam',
-      burst: 'hyper_beam',
-      erupt: 'psychic',
-      bolt: 'hidden_power',
-      mind: 'psychic',
-      orb: 'shadow_ball',
-      throw: 'swift',
-      fling: 'swift',
-      wave: 'silver_wind',
-      storm: 'gust',
-      quake: 'whirlwind',
-      drain: 'giga_drain',
-      sound: 'snore',
-      roar: 'swagger',
-      glare: 'mimic',
-      kick_sand: 'stun_spore',
-      powder: 'stun_spore',
-      buff: 'endure',
-      shield: 'protect',
-      heal: 'morning_sun',
-      weather: 'sunny_day',
-      charm: 'attract',
-      afterimage: 'double_team',
+      // Its wing slash (Aerial Ace, Thief).
+      strike: 'physical_weak',
+      wing: 'physical_weak',
+      // Its needle of a proboscis: Poison Sting's barb, String Shot's thread and Toxic's poison.
+      spit: 'special_weak',
+      'powder@mouth': 'special_weak',
+      'powder@proboscis': 'special_weak',
+      // The beam from its mouth (Hyper Beam, Solar Beam).
+      beam: 'special_strong',
+      // Sleep Talk's display, Mimic's stare.
+      buff: 'status_self',
+      glare: 'status_target',
+      // Called moves: blows fly to the foe (a ram, a wing slash, the big stoop)...
+      punch: 'tackle',
+      kick: 'physical_weak',
+      bite: 'tackle',
+      peck: 'tackle',
+      horn: 'tackle',
+      grapple: 'tackle',
+      spin: 'tackle',
+      tail: 'physical_weak',
+      vine: 'physical_weak',
+      slam: 'physical_strong',
+      toss: 'physical_strong',
+      burrow: 'physical_strong',
+      punch_strong: 'physical_strong',
+      kick_strong: 'physical_strong',
+      strike_strong: 'physical_strong',
+      // ...rays and throws leave from home...
+      breath: 'special_strong',
+      jet: 'special_strong',
+      burst: 'special_strong',
+      bolt: 'special_weak',
+      fling: 'special_weak',
+      wave: 'storm',
+      quake: 'storm',
+      erupt: 'mind',
+      // ...and status moves stay at home.
+      roar: 'status_target',
+      kick_sand: 'powder',
     },
     hiddenParts: [],
     // Its wing slash, its drink, its paralysing powder and its signature silver wind.

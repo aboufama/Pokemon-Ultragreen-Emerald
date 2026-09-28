@@ -3,9 +3,8 @@
   "parts": {
     "body": "its whole body: a body slam or a ram in flight, a swoop, a pose, an aura around it",
     "wings": "its big patterned wings: every beat and wing slash, the wind they whip up, the scales and spores shaken off them",
-    "proboscis": "its long proboscis, coiled under its face: it uncoils it at the foe to drink its energy and to spray",
+    "proboscis": "its long needle-like proboscis, coiled under its face: it uncoils it at the foe to drink its energy, to fire a poison barb and to spray",
     "mouth": "its mouth under its face, where the proboscis starts: thread, beams, cries and snores",
-    "abdomen": "the tip of its abdomen, curled under its body like a wasp's to jab and fire a barb",
     "eyes": "its eyes: a stare, the power of its mind"
   },
   "moves": {
@@ -21,7 +20,7 @@
     "MOVE_HARDEN": { "part": "body", "by": "hand" },
     "MOVE_TACKLE": { "part": "body", "by": "hand" },
     "MOVE_STRING_SHOT": { "part": "mouth", "by": "hand" },
-    "MOVE_POISON_STING": { "part": "abdomen", "by": "hand" },
+    "MOVE_POISON_STING": { "part": "proboscis", "by": "hand" },
     "MOVE_TOXIC": { "part": "proboscis", "by": "hand" },
     "MOVE_HIDDEN_POWER": { "part": "body", "by": "hand" },
     "MOVE_SUNNY_DAY": { "part": "body", "by": "hand" },
