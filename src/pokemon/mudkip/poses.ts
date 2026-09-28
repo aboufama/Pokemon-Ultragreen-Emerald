@@ -21,8 +21,12 @@ import type { Pose } from '../../anim/rig';
  * sprites are drawn in three-quarter view; square to the foe, an untwisted fin
  * shows only its thin edge).
  *
- * The front legs are held straight down in model space, so a chest that dips
- * or lifts keeps its paws where they stand (the foot IK only pins their height).
+ * The front legs are aimed with the elbows bent back. The paws are pinned
+ * where they stand (rig.ts plantAt) and the IK sets how far the legs bend;
+ * the aims only seed which way the elbows go. Aimed straight, a lean forward
+ * over the planted paws left the solver no elbow direction on these short
+ * legs: the elbows swung forward and the paws slid back and dipped into the
+ * ground; seeded 60° back, the elbows stay back even in a headbutt's lunge.
  */
 export const STANCE: Pose = {
   plantFeet: 1,
@@ -35,9 +39,9 @@ export const STANCE: Pose = {
     tail: { x: 30, y: -62, z: -15 },
   },
   aim: {
-    armL: { dir: [0, -0.982, -0.188] },
-    forearmL: { dir: [0, -1, 0] },
-    armR: { dir: [0, -0.982, -0.188] },
-    forearmR: { dir: [0, -1, 0] },
+    armL: { dir: [0, -0.5, -0.866] },
+    forearmL: { dir: [0, -0.845, 0.535] },
+    armR: { dir: [0, -0.5, -0.866] },
+    forearmR: { dir: [0, -0.845, 0.535] },
   },
 };

@@ -39,13 +39,16 @@ export const RIG: RigProfile = {
     ...sides('foot', 'Foot'),
   },
   pelvisNodes: ['Hips', 'Spine1'],
+  // Planted feet stay where the stance stands them (plantAt: measured from the
+  // stance, in model heights), so a coil, a lean or a butt moves the body over
+  // its four feet instead of sliding them along with it.
   legs: {
-    left: { thigh: 'thighL', shin: 'shinL', foot: 'footL' },
-    right: { thigh: 'thighR', shin: 'shinR', foot: 'footR' },
+    left: { thigh: 'thighL', shin: 'shinL', foot: 'footL', plantAt: [0.107, 0.0215, -0.016] },
+    right: { thigh: 'thighR', shin: 'shinR', foot: 'footR', plantAt: [-0.107, 0.0215, -0.016] },
   },
   // Walks on all fours: the front legs are planted too (elbows bend back).
   frontLegs: {
-    left: { thigh: 'armL', shin: 'forearmL', foot: 'handL', bend: -1 },
-    right: { thigh: 'armR', shin: 'forearmR', foot: 'handR', bend: -1 },
+    left: { thigh: 'armL', shin: 'forearmL', foot: 'handL', bend: -1, plantAt: [0.1073, 0.015, 0.2047] },
+    right: { thigh: 'armR', shin: 'forearmR', foot: 'handR', bend: -1, plantAt: [-0.1073, 0.015, 0.2047] },
   },
 };
