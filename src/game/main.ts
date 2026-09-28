@@ -487,8 +487,9 @@ function manualMode(game: Game, layer: RemakeLayer, screen: GbaScreen, setOnVBla
       while (game.vblanks() < vblanks) {
         // The game waits while the remake layer loads what a battle needs.
         while (!layer.ready()) await new Promise((r) => setTimeout(r, 20));
-        // Only the frame shown gets the remake's pictures.
-        layer.drawPictures = game.vblanks() + 1 >= vblanks;
+        // Only the frame shown gets the remake's pictures (the last few: a
+        // frame the GBA would lag spans two VBlanks or more).
+        layer.drawPictures = game.vblanks() + 3 >= vblanks;
         if (pending && startTestBattle(game, pending)) pending = null;
         if (!game.frame()) await game.init();
       }
