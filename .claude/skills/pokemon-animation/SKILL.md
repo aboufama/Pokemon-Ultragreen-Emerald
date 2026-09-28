@@ -1,6 +1,6 @@
 ---
 name: pokemon-animation
-description: Author battle animation clips for a Pokémon in this repo at the reference (Blaziken) quality — contact moves that leap to the foe and land on it, a clip of its own for every move in the species' movepool (a Double Kick kicks twice, a Mega Punch is a haymaker) and for every battle situation, with anticipation, snaps, follow-through and weight, fitting the species' anatomy and type. Use when writing or fixing any clip in src/pokemon/<slug>/clips.ts, when a clip looks stiff, floaty, sliding, "flailing" or strikes the air, or when a move should use a body part (mouth, cannons, flower, tail) differently.
+description: Author battle animation clips for a Pokémon in this repo at the level of the first clips of Blaziken, Sceptile and Swampert — contact moves that leap to the foe and land on it, a clip for every action the species' moves take (a Double Kick kicks twice, a Mega Punch is a haymaker), with anticipation, snaps, follow-through and weight, fitting the species' anatomy and type. Use when writing or fixing any clip in src/pokemon/<slug>/clips.ts, when a clip looks stiff, floaty, sliding, "flailing" or strikes the air, or when a move should use a body part (mouth, cannons, flower, tail) differently.
 ---
 
 # Pokémon battle animation
@@ -49,47 +49,36 @@ again. The rules, all gated (`tools/gauntlet/fundamentals.mjs`, and
 - a multi-hit move plays once per hit (the next section) and a toss grabs
   the foe at `advance` 1.
 
-## Every move its own clip, and every situation
+## A clip for every action, at the first clips' level
 
-Every move the species can know has its own clip, named after the move:
-`MOVE_DOUBLE_KICK` plays `double_kick`, `MOVE_SAND_ATTACK` `sand_attack`
-(src/battle3d/actions.ts). Its movepool is its level-up moves and its
-pre-evolutions', its TM/HM and tutor moves, its family's egg moves and
-Struggle: `node tools/gauntlet/brief.mjs --slug <slug>` lists them, each with
-the clips it needs. **The clip is that move's action**, not its category's:
-a Double Kick kicks twice, a Mega Kick is one huge kick, a Stomp comes down
-on the foe, a Blaze Kick spins with a flaming heel, a Mega Punch is a
-haymaker, a Sky Uppercut rises through the foe, a Headbutt leads with the
-skull, a Quick Attack is a blur, a Body Slam is a leap and crush, Growl is a
-cute snarl, Roar a thunderous one, Screech a piercing shriek.
-`reference/move-actions.md` says what each move's action is. Only moves that
-are the same action may share one clip (`SAME_ACTION` in actions.ts:
-Protect and Detect, Absorb and its stronger forms, Rollout and Ice Ball...);
-the gauntlet fails a clip copied from another (`distinct`) and a move that
-plays another move's clip.
+The standard is the first clips of Blaziken, Sceptile and Swampert
+(`src/pokemon/<slug>/first.ts`, and `more.ts` for the clips added since in
+their style): what the user saw first and loved, and asked every species to
+match ("they need to be at the level they were at for the original three").
 
-Variants, by the move's effect (the game plays its animation per hit and
-per turn):
+A species has a clip for every **action** its moves take, and every move
+plays the clip of its action: the moments (`idle`, `intro`, `hit`, `faint`),
+the category clips (`physical_weak`, `physical_strong`, `special_weak`,
+`special_strong`, `status_self`, `status_target`) and a clip per motif its
+movepool needs (`kick`, `punch`, `bite`, `slam`, `quake`, `shield`...), or a
+category clip mapped to a motif in `motifClips` when it truly is that action.
+**The clip is the action**: a Double Kick kicks twice (two impacts), a Mega
+Kick is one huge kick, a Stomp comes down on the foe, a Mega Punch is a
+haymaker, a Headbutt leads with the skull, a Body Slam is a leap and crush.
+`reference/move-actions.md` says what each move's action is;
+`node tools/gauntlet/brief.mjs --slug <slug>` lists the movepool with motifs.
+One excellent clip per action beats a rushed clip per move.
 
-| move | clips |
+Battles play a clip in the pieces they need (src/battle3d/variants.ts: cut on
+the clip's own keys, so every pose stays yours):
+
+| move | how its clip plays |
 |---|---|
-| multi-hit (Double Kick, Fury Swipes, Pin Missile, Bullet Seed, Triple Kick) | `<move>` a lone hit (in, strike, home), `<move>_first` (in, strike, **stay at the foe**), `<move>_next` for moves of 3+ hits (strike again from there: the other limb, another angle; stay), `<move>_last` (strike, then home). One impact each. `_first` ends, `_next` starts and ends, `_last` and `return_home` start in one pose (within 30°). Ranged ones fire from home the same way |
-| two-turn (Solar Beam, Dig, Dive, Bide, Fly, Skull Bash) | `<move>_charge` the first turn (gathering light, burrowing out of sight with `dig`, storing energy: a `charge` or `dig` event), then `<move>` the strike (Dig's starts underground where the first turn left it) |
+| multi-hit (Double Kick, Fury Swipes, Bullet Seed) | a hit each: the first leaps in and stays at the foe, the next strike again from there, the last goes home. A clip with two impacts (Double Kick) gives each hit its own blow; a clip with one replays its strike |
+| two-turn (Dig, Dive, Solar Beam) | a turn each: a clip with a `dig` is cut where it is deepest underground (it waits there, out of sight), one with a `charge` and a `release` on its gathered pose before the snap |
 
-And every situation (src/battle3d/situations.ts, `SITUATIONS`), each its own
-clip: `idle`, `intro`, `hit`, `hit_strong`, `faint`; `dodge` (a move misses
-it), `unaffected` (no effect, or it protected itself), `return_home` (from
-the foe back home after a run of hits); the status animations
-(`status_sleep`, `status_poison`, `status_burn`, `status_paralysis`,
-`status_freeze`, `status_confusion`, `status_infatuation`, `status_curse`,
-`status_nightmare`, `status_wrapped`); the states that last, as loops
-(`idle_asleep` while asleep, `idle_tired` at a quarter of its HP or less);
-`stat_up`, `stat_down`, `level_up`, `drained` (Leech Seed), `healed`,
-`focus` (Focus Punch's setup), `hang_on` (Focus Band, Endure); what the game
-only says: `flinch`, `recharge`, `wake`, `shake_off`, `break_free` (out of a
-Poké Ball); the weather each turn: `weather_rain`, `weather_sun`,
-`weather_sand`, `weather_hail`; and its ability's (`intimidate` for
-Intimidate). The brief lists them with what each looks like.
+A species may still author its own `_first`/`_next`/`_last` or `_charge`
+where the cut pieces aren't right; authored ones win.
 
 ## What the engine already does (don't fight it)
 

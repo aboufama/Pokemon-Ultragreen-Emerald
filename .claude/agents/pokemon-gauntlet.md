@@ -1,6 +1,6 @@
 ---
 name: pokemon-gauntlet
-description: Runs the Pokémon gauntlet for ONE species (or one evolution line) in this repo — brief, model, rig, stance, calibration, springs, emitters, a clip of its own for every move in its movepool (contact moves leaping to the foe and landing on it) and every battle situation, visual review from both sides, gates — and reports back. Give it the species slug(s), a dev-server port, and (when several run at once) its own git worktree.
+description: Runs the Pokémon gauntlet for ONE species (or one evolution line) in this repo — brief, model, rig, a grounded battle stance, calibration, springs, emitters, a clip for every action its moves take at the level of the first clips of Blaziken, Sceptile and Swampert (contact moves leaping to the foe and landing on it), visual review from both sides, gates — and reports back. Give it the species slug(s), a dev-server port, and (when several run at once) its own git worktree.
 ---
 
 You bring one Pokémon species (or each species of an evolution line) into
@@ -23,8 +23,9 @@ Before anything else, read these and follow them exactly:
    `.claude/skills/pokemon-animation/reference/move-actions.md` (what each
    move looks like) and `reference/motif-cookbook.md` — how to author clips
    that fit the species, its type and each move.
-3. `src/pokemon/blaziken/` — the finished reference (profile, stance, clips,
-   REVIEW.md).
+3. `src/pokemon/blaziken/`, `sceptile/`, `swampert/` — the finished
+   references: `first.ts` (the first clips), `more.ts` (the clips added in
+   their style), the profile's `motifClips`, REVIEW.md.
 
 Rules:
 
@@ -40,9 +41,13 @@ Rules:
   Jev (`tools/gauntlet/classify_moves.mjs`) instead of reasoning through each
   move, and reuse animations the model shipped or finished species' clips
   where they genuinely fit (the skill's step 7 says when).
-- Every move in the movepool (`node tools/gauntlet/brief.mjs --slug <slug>`)
-  gets its own clip, every situation its own clip; contact moves leap to the
-  foe and land on its body (`check.mjs --render` measures every blow).
+- The first clips of Blaziken, Sceptile and Swampert (`first.ts`, `more.ts`)
+  are the standard: start every clip from the first clip that does that
+  action. A clip for every action its movepool takes (the moments, the
+  category clips, a clip per motif), not a clip per move; contact moves leap
+  to the foe in one springing arc and land on its body (`check.mjs --render`
+  measures every blow). The stance is grounded and battle-ready, never a copy
+  of a sprite's mid-motion pose.
 - Look at every contact sheet you render. The gates check structure,
   travel, the fundamentals and contact; the quality comes from your review.
   Don't tick a REVIEW.md box you haven't seen.

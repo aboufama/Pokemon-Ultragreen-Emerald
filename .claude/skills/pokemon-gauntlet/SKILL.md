@@ -1,6 +1,6 @@
 ---
 name: pokemon-gauntlet
-description: Bring one Pokémon species into this repo's 3D battle system at the reference (Blaziken) quality, end to end — a species brief from the game's own data, the pre-rigged model, rig map, a stance with the stock Emerald sprites' posture that faces the foe, calibration, springs and effect emitters, a clip of its own for every move in its movepool (contact moves leaping to the foe and landing on it; a Double Kick kicks twice) and for every battle situation, frame-by-frame review from both sides, and the automated gates. Use for "add <species>", "run the gauntlet for X", "rig/animate a new Pokémon", or finishing a species that fails tools/gauntlet/check.mjs.
+description: Bring one Pokémon species into this repo's 3D battle system at the reference (Blaziken) quality, end to end — a species brief from the game's own data, the pre-rigged model, rig map, a grounded battle stance in the stock Emerald sprites' spirit that faces the foe, calibration, springs and effect emitters, a clip for every action its moves take at the level of the first clips of Blaziken, Sceptile and Swampert (contact moves leaping to the foe and landing on it; a Double Kick kicks twice), frame-by-frame review from both sides, and the automated gates. Use for "add <species>", "run the gauntlet for X", "rig/animate a new Pokémon", or finishing a species that fails tools/gauntlet/check.mjs.
 ---
 
 # The Pokémon gauntlet
@@ -16,14 +16,27 @@ use the fundamentals of animated 3D characters; a comprehensive move set for
 every Pokémon*, and contact moves *jump toward the opposing Pokémon and
 actually engage with it, like Blaziken does*. So:
 
-- **every move in its movepool has its own clip** (named after the move), and
-  its multi-hit and two-turn variants;
-- **every battle situation has its own clip** (hit, dodge, the status
-  conditions, sleep, weather, flinch...);
-- **contact moves travel to the foe and land on its body**, then come home.
+- **the first clips are the standard**: the clips of Blaziken, Sceptile and
+  Swampert as the user first saw and loved them (`src/pokemon/<slug>/first.ts`,
+  and `more.ts` for the clips added since in their style). Every clip you make
+  reads like one of them: one springing leap to the foe along an arc (never a
+  string of small hops, never a blow from beside the foe), the whole body in
+  the strike, follow-through, a deep landing, a hop home;
+- **a clip for every action its moves take**: the moments (idle, intro, hit,
+  faint), the category clips, and a clip per motif its movepool needs (a punch
+  punches, a kick kicks, Double Kick kicks twice, a bite bites, Earthquake
+  stamps); every move plays the clip of its action (`motifClips`). One
+  excellent clip per action, not a rushed clip per move: the user rejected
+  that as "very bad";
+- **contact moves travel to the foe and land on its body**, then come home;
+- **the stance is battle-ready and grounded**: both feet on the ground (all
+  four for a quadruped), the stock sprite's character and posture, never a
+  copy of a mid-motion pose (a sprite caught mid-leap or on one foot: the
+  user, of Combusken's crane stance: "you don't have to match exactly when
+  they're in a dynamic stance").
 
-The gates in `tools/gauntlet/check.mjs` hold all of it (the movepool, the
-situations, the fundamentals and, with `--render`, that every blow lands),
+The gates in `tools/gauntlet/check.mjs` hold all of it (a clip for every
+action, the fundamentals and, with `--render`, that every blow lands),
 and your own frame-by-frame review must back them up. Load the
 `pokemon-animation` skill before writing clips.
 
@@ -122,7 +135,11 @@ them). Check `/?mode=riglab&species=<slug>&bones=1`.
 ## 4. Stance (`poses.ts`)
 
 Match the stock **front** sprite's posture: the crouch, how the limbs are
-held, the head's tilt, the tail, how wide it stands. Not its orientation:
+held, the head's tilt, the tail, how wide it stands; but a battle stance,
+grounded: both feet on the ground (all four for a quadruped). A sprite drawn
+mid-motion (mid-leap, on one foot, a kick raised) gives the character, not
+the pose: stand it on its feet in that spirit, and document the lower
+silhouette score as a FIT_EXCEPTIONS entry in check.mjs. Not its orientation:
 every battler always faces its opponent, at rest and in every move, so the
 stance faces the foe (body square to it, head looking at it). Sprites are
 drawn side-on; copying that turn leaves the Pokémon looking away until it
@@ -213,45 +230,41 @@ Jev's motif for moves the motif table doesn't name. It needs
 
 ## 7. Clips
 
-Follow the **pokemon-animation** skill and `reference/move-actions.md`.
-Required, all bespoke to the species (none may stay a generic placeholder):
+Follow the **pokemon-animation** skill and `reference/move-actions.md`, with
+the first clips open beside you. Required, all bespoke to the species (none
+may stay a generic placeholder):
 
-- every **situation** the brief lists (`idle`, `intro`, `hit`, `hit_strong`,
-  `faint`, `dodge`, `unaffected`, `return_home`, the status animations, the
-  `idle_asleep` and `idle_tired` loops, the stat and message situations, the
-  weather, its ability's);
-- every **move in its movepool**, a clip named after the move (`mega_kick`,
-  `sand_attack`), each that move's own action; a multi-hit move's `_first`,
-  `_next` (3+ hits) and `_last`, a two-turn move's `_charge`. Only moves of
-  the same action (`SAME_ACTION` in src/battle3d/actions.ts) may share one;
-- `motifClips` mapping every motif to its closest clip, for moves Mimic or
-  Mirror Move call from outside its movepool (the gate lists the unmapped).
+- the **moments**: `idle` (a loop), `intro` (with its `cry`), `hit`, `faint`
+  (with its `shrink`);
+- the **category clips** its movepool uses: `physical_weak` (its quick blow),
+  `physical_strong` (its big blow), `special_weak`, `special_strong`,
+  `status_self`, `status_target`;
+- a **clip per motif** its movepool needs, named after the motif (`kick`,
+  `punch`, `bite`, `tackle`, `slam`, `quake`, `shield`, `burrow`, `toss`...)
+  or a category clip mapped to the motif in `motifClips` when it truly is that
+  action (a spit serves Toxic; a roar serves a bellow). The gate lists every
+  motif whose moves fall through to a clip made for another action.
 
-Each clip carries the events its effects need. Keep `clips.ts` organised like
-Blaziken's: helpers and reusable deltas (the stance, guard, tuck, landing,
-its travel in and out), then one commented clip per move and situation.
-Split it into several files when it grows (`clips/moves_contact.ts`,
-`clips/situations.ts`...).
+Start each clip from the first clip that does that action (Blaziken's kicks
+and punches, Sceptile's blades and tail, Swampert's heavy blows, breaths and
+waves): the same beats, timing and arcs, re-posed on your stance and
+proportions and re-timed for your weight. An evolution line starts from its
+final form's first clips (Combusken and Torchic from Blaziken's, Grovyle and
+Treecko from Sceptile's, Marshtomp and Mudkip from Swampert's); a body the
+first clips don't have (a quadruped, a caterpillar, a cocoon, a moth) keeps
+their beats: anticipation, one springing leap or pounce along an arc, the
+strike with the whole body, follow-through, a deep landing, a hop home.
 
-Reuse before you author, but never at the expense of quality:
+The engine plays a clip made in one piece in the pieces a battle needs (a
+hit each for multi-hit moves, a turn each for Dig and Solar Beam: see the
+pokemon-animation skill); give a two-blow action two impacts and a burrow its
+`dig`, and the rest follows. Situations beyond the moments (sleeping, a
+status taking hold, a stat rising...) are optional: the game shows its own
+effect on the body at rest.
 
-- **Its travel and deltas**: write the leap in, the landing and the hop home
-  once as helpers (keys with the species' own tuck, arc and weight) and use
-  them in every contact clip, varied by move (a Quick Attack is a low streak,
-  a Body Slam a high arc, a Mega Kick a long run-up).
-- **Its family's clips**: an evolution line shares its choreography: a
-  Grovyle's Leaf Blade is a Sceptile's re-posed on its own stance and
-  proportions and re-timed for its weight. Rebuild the action on your STANCE
-  and look at it on your model; never paste a clip unchanged.
-- **Animations the model shipped** (step 2): an official `attack01` or
-  `damage01` is better than one you would write; say in your report that the
-  species has them (there is no importer yet).
-- Never one clip for moves that look different: the gauntlet fails a clip
-  copied from another (`distinct`) and a move mapped to another move's clip.
-
-This is a lot of clips (40 to 70 moves, 36 situations). Work in batches by
-action family (the claws, the kicks, the tackles, the breaths, the status
-moves), render and review each batch, and commit as you go.
+Each clip carries the events its effects need. Keep the clip files
+organised like the first clips: helpers and reusable deltas (the stance's
+guard, tuck, landing), then one commented clip per action.
 
 ## 8. Review — the part that makes the quality
 
