@@ -68,7 +68,14 @@ declare global {
        * surface points), in the foe's heights: about 0 when the blow lands
        * on it.
        */
-      contacts: { frame: number; event: string; reach: number }[];
+      contacts: { frame: number; event: string; reach: number; depth: number; flat: number }[];
+      /**
+       * With sampleGaps set, the same gap every frame stepped while a clip
+       * plays: the poses shown around a blow (stop motion holds each a few
+       * frames) give its closest approach.
+       */
+      sampleGaps: boolean;
+      gaps: { frame: number; reach: number; depth: number; flat: number }[];
       label: string;
       /** The clip that plays, its length and events. */
       info: { clip: string; duration: number; events: { t: number; name: string }[] };
@@ -97,8 +104,13 @@ function surfacePoints(b: Battler3D, step: number): THREE.Vector3[] {
   return out;
 }
 
-/** The gap between two bodies' surfaces, in `unit`s: 0 where they touch or overlap. */
-function gapBetween(a: Battler3D, b: Battler3D, unit: number): number {
+/**
+ * The gap between two bodies' surfaces, in `unit`s: 0 where they touch or
+ * overlap. `depth` is the part of it along the camera's line of sight, which
+ * the fixed battle camera can hardly show; `flat` the part across the screen,
+ * which it shows.
+ */
+function gapBetween(a: Battler3D, b: Battler3D, unit: number, camera?: THREE.Camera): { reach: number; depth: number; flat: number } {
   const pa = surfacePoints(a, 2), pb = surfacePoints(b, 2);
   // Only the parts of each body facing the other can be nearest: bucket b's points on a grid.
   const cell = unit * 0.1;
@@ -109,15 +121,26 @@ function gapBetween(a: Battler3D, b: Battler3D, unit: number): number {
     (grid.get(k) ?? grid.set(k, []).get(k)!).push(p);
   }
   let best = Infinity;
+  let pair: [THREE.Vector3, THREE.Vector3] | null = null;
+  const consider = (p: THREE.Vector3, q: THREE.Vector3) => {
+    const d = p.distanceTo(q);
+    if (d < best) { best = d; pair = [p, q]; }
+  };
   // Near misses first (within two cells), then everything if nothing is that close.
   for (const p of pa) {
     const cx = Math.floor(p.x / cell), cy = Math.floor(p.y / cell), cz = Math.floor(p.z / cell);
     for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
-      for (const q of grid.get(`${cx + dx},${cy + dy},${cz + dz}`) ?? []) best = Math.min(best, p.distanceTo(q));
+      for (const q of grid.get(`${cx + dx},${cy + dy},${cz + dz}`) ?? []) consider(p, q);
     }
   }
-  if (best === Infinity) for (const p of pa) for (let i = 0; i < pb.length; i += 7) best = Math.min(best, p.distanceTo(pb[i]));
-  return best / unit;
+  if (best === Infinity) for (const p of pa) for (let i = 0; i < pb.length; i += 7) consider(p, pb[i]);
+  const reach = best / unit;
+  if (!pair || !camera) return { reach, depth: reach, flat: reach };
+  const [p, q] = pair as [THREE.Vector3, THREE.Vector3];
+  const view = camera.getWorldDirection(new THREE.Vector3());
+  const d = new THREE.Vector3().subVectors(q, p);
+  const depth = Math.abs(d.dot(view)) / unit;
+  return { reach, depth, flat: Math.sqrt(Math.max(0, reach * reach - depth * depth)) };
 }
 
 function macrotask(): Promise<void> {
@@ -219,7 +242,7 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
   /** A clip's events: a faint's shrink, and how close the body came to the foe at each blow. */
   const recordContacts = (e: string) => {
     if (e === 'shrink') api.hits.push(api.frame);
-    if (e === 'impact' || e === 'grab') api.contacts.push({ frame: api.frame, event: e, reach: gapBetween(attacker, defender, defender.height) });
+    if (e === 'impact' || e === 'grab') api.contacts.push({ frame: api.frame, event: e, ...gapBetween(attacker, defender, defender.height, stage.camera) });
   };
   const playing = moveName ? clipFor(attacker, moveData(moveName)) : clipName;
   const clip = attacker.profile.clips[playing];
@@ -227,7 +250,9 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
     done: false,
     frame: 0,
     hits: [] as number[],
-    contacts: [] as { frame: number; event: string; reach: number }[],
+    contacts: [] as { frame: number; event: string; reach: number; depth: number; flat: number }[],
+    sampleGaps: false,
+    gaps: [] as { frame: number; reach: number; depth: number; flat: number }[],
     label,
     info: { clip: playing, duration: clip?.duration ?? 0, events: clip?.events ?? [] },
     start() {
@@ -262,6 +287,7 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
       for (let i = 0; i < frames; i++) {
         api.frame++;
         update();
+        if (api.sampleGaps && !api.done) api.gaps.push({ frame: api.frame, ...gapBetween(attacker, defender, defender.height, stage.camera) });
       }
     },
     joints(names: string[]) {
@@ -305,7 +331,7 @@ export async function runClipReview(root: HTMLElement): Promise<void> {
       void performMove(attacker, defender, m, vfx, {
         onHit: () => {
           api.hits.push(api.frame);
-          api.contacts.push({ frame: api.frame, event: 'hit', reach: gapBetween(attacker, defender, defender.height) });
+          api.contacts.push({ frame: api.frame, event: 'hit', ...gapBetween(attacker, defender, defender.height, stage.camera) });
         },
       }).then(() => {
         api.done = true;

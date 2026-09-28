@@ -32,8 +32,10 @@ import type { RGB } from '../gba/bitmap';
 import { SLOT_PIXEL_ID, instantiatePokemon, type PokemonInstance } from '../pokemon/instantiate';
 import { GroundShadow } from '../render3d/shadow';
 
-/** How far short of the foe a contact move's travel stops (the attacker's front from the foe's, in its heights): the blow closes it. */
+/** How far short of the foe a contact move's travel stops (the attacker's front from the foe's, in its heights) when its clip has no blow at the foe to measure. */
 export const STRIKE_GAP = 0.15;
+/** How far a landing blow presses into the foe's body (in the foe's heights): contact that reads as a hit. */
+export const BLOW_PRESS = 0.02;
 
 const DEG = Math.PI / 180;
 /** Lying on its side (a thrown body lands so): rolled about its forward axis. */
@@ -453,16 +455,30 @@ export class Battler3D {
 
   /**
    * Where a contact move's travel takes the attacker (advance 1), from home,
-   * in its slot's frame: in front of its target where the target stands
-   * (each calibration places its model off the slot's centre, as its sprite
-   * sits: from the slots' centres alone a model placed back in its slot
-   * stopped far short and one placed forward overshot past the foe's side),
-   * STRIKE_GAP of its height short of the foe: its front (the furthest point
-   * of its body toward the foe, in its stance) that far from the foe's
-   * front, whatever their shapes, so every blow drives in to close the gap
-   * (a limb extending, a lunge, the body slamming in).
+   * in its slot's frame, toward its target where the target stands (each
+   * calibration places its model off the slot's centre, as its sprite sits:
+   * from the slots' centres alone a model placed back in its slot stopped far
+   * short and one placed forward overshot past the foe's side).
+   *
+   * How far: as far as the move's blows land on the foe's body
+   * (blowTravel), whatever the two bodies' shapes and the blow (a fist
+   * reaching up under a chin, a kick side-on, a tail swung round). Without
+   * blows at the foe (a clip that steps in without striking), STRIKE_GAP of
+   * its height short of it: its front (the furthest point of its body toward
+   * the foe, in its stance) that far from the foe's front.
    */
   approachVector(): THREE.Vector3 {
+    const v = this.placesApart();
+    if (!this.target) return v;
+    const d = v.length();
+    const travel = this.travelClip ? this.blowTravel(this.travelClip, v) : null;
+    if (travel !== null) return d > 0 ? v.multiplyScalar(travel / d) : v;
+    const contact = (this.frontDepth() + STRIKE_GAP) * this.height + this.target.frontDepth() * this.target.height;
+    return d > contact ? v.multiplyScalar((d - contact) / d) : v.set(0, 0, 0);
+  }
+
+  /** From its place to its target's, on the ground, in its slot's frame (0 without a target). */
+  private placesApart(): THREE.Vector3 {
     const v = new THREE.Vector3();
     if (!this.target) return v;
     const slot = this.stage.slots[this.slot], foeSlot = this.stage.slots[this.target.slot];
@@ -471,10 +487,129 @@ export class Battler3D {
     const own = this.profile.calibration.slots[this.slot];
     const foe = this.target.profile.calibration.slots[this.target.slot];
     v.set(foe.dx, 0, foe.dz).applyMatrix4(foeSlot.matrixWorld).applyMatrix4(slot.matrixWorld.clone().invert());
-    v.sub(new THREE.Vector3(own.dx, 0, own.dz)).setY(0);
-    const contact = (this.frontDepth() + STRIKE_GAP) * this.height + this.target.frontDepth() * this.target.height;
-    const d = v.length();
-    return d > contact ? v.multiplyScalar((d - contact) / d) : v.set(0, 0, 0);
+    return v.sub(new THREE.Vector3(own.dx, 0, own.dz)).setY(0);
+  }
+
+  /** The clip whose blows set the travel: the move's, kept by its pieces and the way home (see play). */
+  private travelClip: string | null = null;
+  /** blowTravel's measures, by clip, foe and slot. */
+  private readonly travels = new Map<string, number | null>();
+
+  /**
+   * How far a clip travels so its blows land on the foe's body: at each blow
+   * at the foe (an impact before any throw, or a grab), the clip's pose then,
+   * set at home, is swept along the travel until it first touches the foe
+   * as the foe stands, compared cell by cell across the travel line (its
+   * sides and heights), and the travel takes it that far and BLOW_PRESS of
+   * the foe's height into it, at the blow's advance. Several blows share the
+   * mean. null: no blow at the foe (a ranged or status clip, a burrow, which
+   * comes up under the foe). Measured once per clip, foe and side.
+   */
+  private blowTravel(clip: string, apart = this.placesApart()): number | null {
+    const foe = this.target;
+    if (!foe) return null;
+    const key = `${clip}|${foe.profile.slug}|${this.slot}`;
+    const known = this.travels.get(key);
+    if (known !== undefined) return known;
+    const c = this.profile.clips[clip];
+    const events = c?.events ?? [];
+    const thrown = events.find((e) => e.name === 'throw')?.t ?? Infinity;
+    const blows = events.filter((e) => (e.name === 'impact' && e.t < thrown) || e.name === 'grab');
+    const d = apart.length();
+    let result: number | null = null;
+    if (c && blows.length && d > 0 && !events.some((e) => e.name === 'dig')) {
+      const dir = apart.clone().divideScalar(d);
+      const cell = 0.07 * Math.min(this.height, foe.height);
+      const frame = this.stage.slots[this.slot];
+      const home = new THREE.Vector3(this.profile.calibration.slots[this.slot].dx, 0, this.profile.calibration.slots[this.slot].dz);
+      const foeCells = foe.cellsToward(frame, home, home.clone().add(apart), dir, cell, -1);
+      const saved = this.holdBody();
+      const travels: number[] = [];
+      for (const b of blows) {
+        const sampled = this.animator.poseAt(clip, b.t);
+        const advance = sampled?.advance ?? 0;
+        if (!sampled || advance < 0.5) continue;
+        this.setAtHome(this.reachFoe(sampled, clip, b.t));
+        const own = this.cellsToward(frame, home, home, dir, cell, 1);
+        let touch = -Infinity;
+        for (const [k, ahead] of own) {
+          const back = foeCells.get(k);
+          if (back !== undefined) touch = Math.max(touch, ahead + back);
+        }
+        if (touch > -Infinity) travels.push((d - touch + BLOW_PRESS * foe.height) / advance);
+      }
+      saved();
+      if (travels.length) result = Math.max(0, travels.reduce((sum, x) => sum + x, 0) / travels.length);
+    }
+    this.travels.set(key, result);
+    return result;
+  }
+
+  /** Poses the body at home in `pose`, as update() places it (for measuring). */
+  private setAtHome(pose: Pose): void {
+    this.inst.rig.applyPose(pose);
+    const cal = this.profile.calibration.slots[this.slot];
+    const r = pose.root ?? {};
+    const root = this.inst.root;
+    root.rotation.set((r.pitch ?? 0) * DEG, (r.yaw ?? 0) * DEG, (r.roll ?? 0) * DEG, 'YXZ');
+    root.position.set(cal.dx, cal.lift, cal.dz).add(new THREE.Vector3(r.x ?? 0, r.y ?? 0, r.z ?? 0).multiplyScalar(this.height));
+    this.placeRoot(this.height * (pose.scale ?? 1));
+  }
+
+  /** Keeps the body as it is (its nodes and root); the returned function puts it back. */
+  private holdBody(): () => void {
+    const nodes = this.posed?.nodes ?? [];
+    const values = new Float32Array(nodes.length * 10);
+    nodes.forEach((n, i) => {
+      n.position.toArray(values, i * 10);
+      n.quaternion.toArray(values, i * 10 + 3);
+      n.scale.toArray(values, i * 10 + 7);
+    });
+    const root = this.inst.root;
+    const position = root.position.clone(), rotation = root.rotation.clone(), scale = root.scale.clone();
+    return () => {
+      nodes.forEach((n, i) => {
+        n.position.fromArray(values, i * 10);
+        n.quaternion.fromArray(values, i * 10 + 3);
+        n.scale.fromArray(values, i * 10 + 7);
+      });
+      root.position.copy(position);
+      root.rotation.copy(rotation);
+      root.scale.copy(scale);
+      root.updateMatrixWorld(true);
+    };
+  }
+
+  /**
+   * This body as it is posed now, in `frame`: across the line from `origin`
+   * along `dir` (its sides and heights, in cells of `cell`), how far it
+   * reaches from `place` along the line in each cell, ahead along `dir`
+   * (`toward` 1: an attacker from its home) or back along it (-1: a foe
+   * from its own place, toward the attacker).
+   */
+  cellsToward(frame: THREE.Object3D, origin: THREE.Vector3, place: THREE.Vector3, dir: THREE.Vector3, cell: number, toward: 1 | -1): Map<string, number> {
+    const out = new Map<string, number>();
+    const root = this.inst.root;
+    root.parent?.updateWorldMatrix(true, false);
+    root.updateMatrixWorld(true);
+    frame.updateWorldMatrix(true, false);
+    const toFrame = frame.matrixWorld.clone().invert();
+    const side = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
+    const v = new THREE.Vector3(), rel = new THREE.Vector3();
+    root.traverseVisible((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry?.attributes.position) return;
+      const n = mesh.geometry.attributes.position.count;
+      for (let i = 0; i < n; i += 2) {
+        mesh.getVertexPosition(i, v);
+        v.applyMatrix4(mesh.matrixWorld).applyMatrix4(toFrame);
+        const reach = rel.subVectors(v, place).dot(dir) * toward;
+        const k = `${Math.floor(rel.subVectors(v, origin).dot(side) / cell)},${Math.floor(v.y / cell)}`;
+        const was = out.get(k);
+        if (was === undefined || reach > was) out.set(k, reach);
+      }
+    });
+    return out;
   }
 
   /** Distance a contact move travels so the attacker ends up in front of its target. */
@@ -585,6 +720,15 @@ export class Battler3D {
   play(clip: string, opts: { fade?: number; speed?: number } = {}): Promise<void> {
     const name = this.animator.has(clip) ? clip : 'idle';
     this.playCount++;
+    // A clip that sets out from home sets the travel (its blows, or the
+    // move's it is a piece of); one that starts away (the next blow of a
+    // multi-hit move, the way home) keeps the move's. Measured now, before
+    // a frame places the body.
+    const c = this.profile.clips[name];
+    if ((c?.keys[0]?.pose.advance ?? 0) === 0) {
+      this.travelClip = c?.derived ?? name;
+      this.blowTravel(this.travelClip);
+    }
     return this.animator.play(name, {
       ...opts,
       onEvent: (e) => {

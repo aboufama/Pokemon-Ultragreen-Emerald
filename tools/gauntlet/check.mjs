@@ -28,6 +28,8 @@ const { SAME_ACTION, moveClipName, sameAction } = await importTs('src/battle3d/a
 const HANDOVER = 30;
 /** How far (in the foe's heights) a blow may stop short of the foe's body at its impact (--render). */
 const REACH = 0.1;
+// Frames either side of a blow whose poses count for it (stop motion shows a pose for 4).
+const BLOW_FRAMES = 4;
 
 function parseArgs(argv) {
   const args = {};
@@ -399,16 +401,23 @@ if (args.render) {
     await page.goto(`${base}?${q}`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__ready === true && !!window.__clip, null, { timeout: 180000 });
     await page.evaluate(() => window.__clip.start());
-    const run = async (what, arg) => {
+    const run = async (what, arg, gaps = false) => {
       errors = [];
-      await page.evaluate(([w, a]) => {
+      await page.evaluate(([w, a, g]) => {
         window.__clip.contacts.length = 0;
+        window.__clip.gaps.length = 0;
+        window.__clip.sampleGaps = g;
         window.__clip[w](a);
-      }, [what, arg]);
+      }, [what, arg, gaps]);
       for (let i = 0; i < 80 && !(await page.evaluate(() => window.__clip.done)); i++) await page.evaluate(() => window.__clip.tick(6));
+      const sampled = await page.evaluate(() => { window.__clip.sampleGaps = false; return window.__clip.gaps.slice(); });
       // Settle back into idle before the next.
       await page.evaluate(() => window.__clip.tick(20));
-      return { done: await page.evaluate(() => window.__clip.done), contacts: await page.evaluate(() => window.__clip.contacts.slice()), errors: errors.slice() };
+      // Each blow by the closest the bodies come in the poses shown around it
+      // (stop motion holds a pose BLOW_FRAMES frames; the hit is also counted
+      // before the frame that lands it places the body).
+      const contacts = (await page.evaluate(() => window.__clip.contacts.slice())).map((c) => sampled.filter((g) => Math.abs(g.frame - c.frame) <= BLOW_FRAMES).reduce((a, b) => (b.reach < a.reach ? { ...c, ...b } : a), c));
+      return { done: await page.evaluate(() => window.__clip.done), contacts, errors: errors.slice() };
     };
     const blows = (name, r, contact) => {
       if (!contact) return;
@@ -419,16 +428,22 @@ if (args.render) {
     for (const [clipName, moves] of byClip) {
       const m = moves[0];
       const move = data.moves[m.const];
-      const r = await run('perform', m.const.replace('MOVE_', ''));
-      gate(`performs ${m.name} (${clipName}) as ${side}`, r.done && r.errors.length === 0, r.errors.slice(0, 2).join(' | '));
       const role = roles.get(clipName);
-      blows(`${m.name} (${clipName})`, r, role?.contact && !(clips[clipName]?.events ?? []).some((e) => e.name === 'dig') ? true : false);
+      const events = clips[clipName]?.events ?? [];
+      const striking = !!role?.contact && !events.some((e) => e.name === 'dig');
+      const r = await run('perform', m.const.replace('MOVE_', ''), striking);
+      gate(`performs ${m.name} (${clipName}) as ${side}`, r.done && r.errors.length === 0, r.errors.slice(0, 2).join(' | '));
+      // A toss's blow is its grab (its impact is the foe it threw landing).
+      if (striking && events.some((e) => e.name === 'throw')) {
+        const rr = await run('play', clipName, true);
+        blows(`${m.name} (${clipName})`, { contacts: rr.contacts.filter((c) => c.event === 'grab') }, true);
+      } else blows(`${m.name} (${clipName})`, r, striking);
       // A multi-hit run from its first hit to its last; a first hit, then home.
       const own = clipName;
       if (own && moves.some((x) => MULTI_HIT_EFFECTS.has(data.moves[x.const].effect))) {
         const run1 = [`${own}_first`, `${own}_next`, `${own}_last`].filter((c) => clips[c]);
         for (const c of run1) {
-          const rr = await run('play', c);
+          const rr = await run('play', c, !!role?.contact);
           gate(`plays ${c} as ${side}`, rr.done && rr.errors.length === 0, rr.errors.slice(0, 2).join(' | '));
           blows(c, rr, role?.contact);
         }
