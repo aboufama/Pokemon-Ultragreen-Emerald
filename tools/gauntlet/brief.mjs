@@ -2,9 +2,10 @@
 // Everything the game says about a species, for writing its brief and its
 // clips: Pokédex entry, types, stats, abilities, and every move it can know in
 // Emerald (its movepool: its level-up moves and its pre-evolutions', TM/HM,
-// tutor and egg moves, and Struggle) with the move's motif, the clips it
-// needs (its own, named after it, and its multi-hit or two-turn variants)
-// and the clip it plays now; then the situation clips every species has.
+// tutor and egg moves, and Struggle) with the move's motif, the action clip
+// it needs (one per action, named after the motif, played by every move that
+// takes it) and the clip it plays now; then the situation clips every
+// species has.
 //
 //   node tools/gauntlet/brief.mjs --slug swampert [--json]
 
@@ -16,7 +17,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { importTs } from './tsimport.mjs';
 import { loadProfile } from './species.mjs';
 
-const { moveClipName } = await importTs('src/battle3d/actions.ts');
 const { MULTI_HIT_EFFECTS, MANY_HIT_EFFECTS, TWO_TURN_EFFECTS, SITUATIONS, ABILITY_SITUATIONS } = await importTs('src/battle3d/situations.ts');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -76,16 +76,20 @@ function eggMoves(src, speciesConst) {
 }
 
 /**
- * The clips a move needs (src/battle3d/actions.ts, situations.ts): its own,
- * and a multi-hit move's _first, _next (more than two hits) and _last, a
- * two-turn move's _charge.
+ * What a move needs (the gauntlet's standard, check.mjs section 7): a clip
+ * for its action, named after its motif (or a category clip the profile maps
+ * to that motif in motifClips), played by every move that takes it. The
+ * battles cut a multi-hit or two-turn move's pieces from that clip
+ * (src/battle3d/variants.ts), so it needs no clips of its own: Double Kick's
+ * two blows are two impacts in one clip, a two-turn move's turns a dig, or a
+ * charge and a release.
  */
-export function neededClips(move) {
-  const own = moveClipName(move);
-  const out = [own];
-  if (MULTI_HIT_EFFECTS.has(move.effect)) out.push(own + '_first', ...(MANY_HIT_EFFECTS.has(move.effect) ? [own + '_next'] : []), own + '_last');
-  if (TWO_TURN_EFFECTS.has(move.effect)) out.push(own + '_charge');
-  return out;
+export function neededClips(move, motif) {
+  const notes = [];
+  if (move.effect === 'EFFECT_DOUBLE_HIT') notes.push('two impacts');
+  else if (MULTI_HIT_EFFECTS.has(move.effect)) notes.push('a blow the battles repeat');
+  if (TWO_TURN_EFFECTS.has(move.effect)) notes.push(motif === 'burrow' ? 'a dig' : 'a charge and a release');
+  return [`a ${motif} clip${notes.length ? ` (${notes.join(', ')})` : ''}`];
 }
 
 /** Moves listed for a species in a C table ([SPECIES_X] = ... up to the next entry). */
@@ -142,7 +146,7 @@ export async function speciesBrief(slug) {
       contact: data.flags.includes('FLAG_MAKES_CONTACT'), target: data.target.replace('MOVE_TARGET_', '').toLowerCase(),
       description: descriptions[m.move] ?? '',
       motif: motifOf(data), motifByName: !!namedMotif(data), clip: clipOf(data), sources: [],
-      effect: data.effect, needs: neededClips(data),
+      effect: data.effect, needs: neededClips(data, motifOf(data)),
     };
     if (!e.sources.includes(m.source)) e.sources.push(m.source);
     seen.set(m.move, e);
@@ -182,8 +186,8 @@ if (args.slug && import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.log(`Level 50 moveset (Gen 3 wild rule): ${b.movesAtLevel50.join(', ')}`);
     console.log('\nMotifs across its moves (most common first) — clip each motif that matters:');
     for (const [motif, m] of Object.entries(b.motifs)) console.log(`  ${motif.padEnd(10)} ${m.kind.padEnd(8)} ${m.moves.join(', ')}${m.events.length ? `  [events: ${m.events.join(', ')}]` : ''}`);
-    console.log(`\nMovepool (${b.moves.length} moves): each needs the clips listed (its own, and its variants); it plays <now> today`);
-    for (const m of b.moves) console.log(`  ${m.const.padEnd(22)} ${m.type.padEnd(9)} ${String(m.power).padStart(3)} ${m.contact ? 'contact' : '       '}  ${m.motif.padEnd(10)} needs ${m.needs.join(', ').padEnd(36)} now ${m.clip.padEnd(16)} ${m.sources.join(',')}`);
+    console.log(`\nMovepool (${b.moves.length} moves): each needs a clip for its action (one per motif, not per move); it plays <now> today`);
+    for (const m of b.moves) console.log(`  ${m.const.padEnd(22)} ${m.type.padEnd(9)} ${String(m.power).padStart(3)} ${m.contact ? 'contact' : '       '}  ${m.motif.padEnd(10)} needs ${m.needs.join(', ').padEnd(40)} now ${m.clip.padEnd(16)} ${m.sources.join(',')}`);
     console.log(`\nSituations (${b.situations.length}): ${b.situations.join(', ')}`);
   }
 }
