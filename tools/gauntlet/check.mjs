@@ -74,6 +74,16 @@ const FIT_EXCEPTIONS = {
   // the balanced one measures IoU 0.435, box 0.837 on this side (0.483 / 0.736
   // on ours, which passes). The box floor is kept, raised to 0.8.
   grovyle: { enemy: { iou: 0.43, box: 0.8, why: 'side-on mid-leap front sprite (leaf fans ~40% of it); the model faces the foe' } },
+  // Combusken's stock front sprite is caught mid-kick in a crane pose on one
+  // leg: the right knee raised out to the side with its talons spread, over a
+  // thick feathered arm. The user asked for a grounded stance on both feet
+  // ("you don't have to match exactly when they're in a dynamic stance"), so
+  // the raised leg stays uncovered and the planted feet show where the sprite
+  // has none. Eleven grounded foe-facing stances were compared
+  // (tools/calibrate/candidates.mjs: arms, crouch, width, knee lift); all
+  // measure IoU 0.39-0.45 on this side. The chosen one measures 0.436, box
+  // 0.777 (0.528 / 0.676 on ours, which passes); the box floor is kept.
+  combusken: { enemy: { iou: 0.43, box: 0.75, why: 'front sprite mid-kick on one leg (crane pose); the stance stands on both feet as the user asked' } },
 };
 /** How far the stance's head may turn from the foe (degrees). */
 const MAX_HEAD_YAW = 20;

@@ -2,17 +2,19 @@ import type { SpeciesProfile } from '../profile';
 import { DEFAULT_OVERLAP } from '../../anim/animator';
 import { RIG } from './rig';
 import { STANCE } from './poses';
-import { COMBUSKEN_CLIPS, COMBUSKEN_EXPRESSIONS } from './clips';
+import { COMBUSKEN_CLIPS, COMBUSKEN_EXPRESSIONS } from './set';
 import { applyCalibration } from '../profile';
 import calibration from './calibration.json';
 
-/** Combusken: a lanky young fowl that fights with its feet. */
+/** Combusken: a young fowl that fights with its feet. */
 export async function createProfile(palettes: { normal: SpeciesProfile['palette']; shiny: SpeciesProfile['palette'] }): Promise<SpeciesProfile> {
   const cal = calibration as SpeciesProfile['calibration'];
   return {
     slug: 'combusken',
     rig: RIG,
     poses: { stance: STANCE },
+    // Blaziken's first clips and the clips added since in their style,
+    // ported to Combusken (./set.ts): a clip for every action its moves take.
     clips: COMBUSKEN_CLIPS,
     effectParts: [],
     effects: {},
@@ -20,22 +22,21 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     brief: {
       bodyPlan: 'biped',
       character:
-        'A lanky young fowl and a born kicker (Pokédex: it lashes out with ten kicks a second, and its fighting instinct keeps ' +
-        'it on the offensive until the foe gives up): light and quick on its long bird legs, it bounds about in skipping hops, ' +
-        'balances on one leg with the other knee drawn up to kick, and flings its long feathered arms out wide. Cocky and ' +
-        'restless; the kicks are its signature, its big talons spread as they strike.',
+        'A young fowl and a born kicker (Pokédex: it lashes out with ten kicks a second, and its fighting instinct keeps ' +
+        'it on the offensive until the foe gives up): lighter than Blaziken and as springy, it fights from a wide crouch ' +
+        'on its short, strong bird legs with its long feathered arms held wide like wings, leaps in to strike and hops ' +
+        'back out. Cocky and relentless; the kicks are its signature, its big talons spread as they strike.',
       powerSource:
         'The fire inside its body: it spits embers and streams of flame from its beak, the chest heaving to bring them up. ' +
-        'Its fighting power is in its legs (kicks, knees, talon rakes) and its clawed hands (slashes, chops, claw-fist punches).',
+        'Its fighting power is in its legs (kicks, knees) and its big clawed hands (slashes, claw-fist punches).',
     },
-    // Where its effects leave the body: fire from the beak (the default
-    // mouth; Toxic is spewed from it too), mud slapped from a claw (the
-    // default hands), stars flung and Hidden Power's orbs pushed from its
-    // hands.
-    emitterFor: { throw: 'hands', orb: 'hands', powder: 'mouth' },
+    // Where its effects leave the body (as Blaziken's): fire from the beak
+    // (the default mouth; Toxic is spat from it too), Mud-Slap flicked with a
+    // foot, thrown volleys (Rock Slide, Swift) from the claw.
+    emitterFor: { fling: 'feet', powder: 'mouth', throw: 'hands' },
     // Loose parts on springs: the crest's three plumes, the two tail
-    // feathers, the feathers round the waist (stiff), the claws of the hands
-    // are one mesh with the hand (keyframed).
+    // feathers, the feathers round the waist (stiff); the claws of the hands
+    // are one mesh with the hand.
     dynamics: [
       { bones: ['crest', 'crestTip'], damping: 0.2, elasticity: 0.12, maxDrift: 0.35 },
       { bones: ['crestL'], damping: 0.2, elasticity: 0.12, maxDrift: 0.35 },
@@ -48,66 +49,37 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       { bones: ['featherBR'], damping: 0.25, elasticity: 0.16, maxDrift: 0.3 },
       { bones: ['featherCR'], damping: 0.25, elasticity: 0.16, maxDrift: 0.3 },
     ],
-    // Overlapping action: a long neck (the head trails a little more than a
-    // short-necked biped's), the big feathered hands trail the forearms.
+    // Overlapping action: the crest's plumes and the second tail feather
+    // trail a little more than the head.
     overlap: { ...DEFAULT_OVERLAP, crest: 0.08, crestTip: 0.1, crestL: 0.08, crestR: 0.08, tail2: 0.08 },
-    // Every move it can know has a clip of its own, named after it.
     moveClips: {},
-    // Moves outside its movepool that Mimic or Mirror Move call play its
-    // closest clip for their motif (src/battle3d/motifs.ts).
+    // Clips by move motif (src/battle3d/motifs.ts). kick, kick_sand, punch,
+    // tackle, peck, toss, burrow, fling, afterimage, shield, heal, weather,
+    // charm, burst, throw and slam have clips of their own name; these
+    // motifs are performed by the category clips, as Blaziken's are. Where
+    // two motifs share a clip, its own action is listed first
+    // (tools/gauntlet/fundamentals.mjs reads a clip's role from the first).
     motifClips: {
-      strike: 'slash',
-      punch: 'mega_punch',
-      kick: 'mega_kick',
+      // Slash is a claw strike; the big kick is the spinning kick.
+      strike: 'physical_weak',
+      kick_strong: 'physical_strong',
+      // The spat ember serves spat and thrown orbs; the beak stream serves beams.
+      spit: 'special_weak',
+      orb: 'special_weak',
+      breath: 'special_strong',
+      beam: 'special_strong',
+      buff: 'status_self',
+      roar: 'status_target',
+      // Toxic spat from the beak; a stare and a snore are its cry at the foe.
+      powder: 'special_weak',
+      glare: 'status_target',
+      sound: 'status_target',
+      // Moves that Mimic or Mirror Move call from outside its movepool: a
+      // bite is its beak jab, a spin its spinning kick, a wing strike a
+      // sweep of its feathered arm.
       bite: 'peck',
-      tackle: 'quick_attack',
-      tackle_strong: 'double_edge',
-      slam: 'body_slam',
-      // Iron Tail, Wing Attack: a leap and a sweep down onto the foe.
-      tail: 'aerial_ace',
-      wing: 'aerial_ace',
-      peck: 'peck',
-      horn: 'peck',
-      // Rapid Spin, Rollout, Flame Wheel: its whirl of kicks.
-      spin: 'double_kick',
-      // Bind, Wrap: seizing and shoving with both hands.
-      grapple: 'strength',
-      vine: 'fury_cutter',
-      toss: 'seismic_toss',
-      burrow: 'dig',
-      breath: 'flamethrower',
-      spit: 'ember',
-      spit_strong: 'fire_blast',
-      // Hyper Beam, Aurora Beam: a sustained stream from the beak.
-      beam: 'flamethrower',
-      jet: 'flamethrower',
-      throw: 'swift',
-      // Surf: a heave up and a push down at the foe.
-      wave: 'rock_slide',
-      // Earthquake, Magnitude: the stamp of its talons that shakes the ground.
-      quake: 'rock_tomb',
-      burst: 'overheat',
-      // Thunder, Frenzy Plant: the heave and slam that calls it down on the foe.
-      erupt: 'rock_slide',
-      storm: 'fire_spin',
-      bolt: 'hidden_power',
-      mind: 'hidden_power',
-      orb: 'hidden_power',
-      drain: 'hidden_power',
-      // Hyper Voice, Uproar: a cry at the foe (its own sound move is a snore).
-      sound: 'growl',
-      fling: 'mud_slap',
-      roar: 'growl',
-      glare: 'growl',
-      kick_sand: 'sand_attack',
-      powder: 'toxic',
-      buff: 'bulk_up',
-      shield: 'protect',
-      heal: 'rest',
-      weather: 'sunny_day',
-      charm: 'attract',
-      afterimage: 'double_team',
-      flash: 'growl',
+      spin: 'physical_strong',
+      wing: 'physical_weak',
     },
     hiddenParts: [],
     showcaseMoves: ['DOUBLE_KICK', 'EMBER', 'BULK_UP', 'SKY_UPPERCUT'],

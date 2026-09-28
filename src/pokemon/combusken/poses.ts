@@ -8,41 +8,44 @@
 import type { Pose } from '../../anim/rig';
 
 /**
- * Battle stance matched to the stock Emerald front sprite: a kicker's crane
- * stance on its left leg, the right knee drawn up with the talons spread at
- * the foe, the right arm reaching at it with the claws open, the left arm
- * swept back and down, the body leaning in, the head a little down, the
- * crest swept back.
+ * Battle stance in the spirit of the stock Emerald sprites, grounded and
+ * square to the foe. The front sprite catches it mid-kick in a crane pose
+ * on one leg; the stance keeps that sprite's character on both feet: a
+ * kicker crouched in a wide split stance (the right foot forward, knees
+ * bent, as the sprite's second frame), the body leaning in, the long neck
+ * carrying the head forward at the foe, the crest standing up swept back,
+ * and the long feathered arms held wide like the sprite's: the right one
+ * out at the side with the forearm raised, claws up at the foe, the left
+ * one lowered out at its side. The hands are not aimed: they carry on the
+ * line of the forearms, so a clip's arm aims move them too. The claws stay
+ * about level with the talons of its front foot, so at a contact move's
+ * advance 1 (its front 0.15 of its height from the foe's) it fights close.
  */
 export const STANCE: Pose = {
   plantFeet: 1,
-  plantRight: 0,
-  pelvis: { y: -0.03, z: 0.005 },
+  pelvis: { y: -0.045, z: -0.01 },
   expression: 'open',
   bones: {
-    spine: { x: 4, y: 10 },
-    chest: { x: 4, y: 6 },
-    neck: { x: -6, y: -6 },
-    head: { x: 0, y: -8 },
-    crest: { x: -38 },
-    crestL: { x: -34 },
-    crestR: { x: -34 },
+    hips: { y: 4 },
+    spine: { x: 16, y: -4 },
+    chest: { x: 6, y: -2 },
+    neck: { x: -10, y: 2 },
+    head: { x: -8, y: 4 },
+    crest: { x: -14 },
+    crestL: { x: -12, z: 14 },
+    crestR: { x: -12, z: -14 },
     tail: { x: -12 },
+    handR: { z: 10 },
+    handL: { z: -8 },
   },
   aim: {
-    // The right knee drawn up at the foe, talons forward.
-    thighR: { dir: [-0.25, 0.3, 0.92] },
-    shinR: { dir: [-0.15, -0.15, 0.98] },
-    // Standing on the left leg, the foot a little forward.
-    thighL: { dir: [0.1, -0.9, 0.42] },
-    shinL: { dir: [0.06, -0.94, -0.33] },
-    // Right arm reaching forward and up at the foe, claws open.
-    armR: { dir: [-0.4, 0.35, 0.85] },
-    forearmR: { dir: [-0.3, 0.38, 0.87] },
-    handR: { dir: [-0.22, 0.36, 0.9] },
-    // Left arm swept back and down.
-    armL: { dir: [0.45, -0.5, -0.74] },
-    forearmL: { dir: [0.4, -0.55, -0.73] },
-    handL: { dir: [0.35, -0.62, -0.7] },
+    thighL: { dir: [0.2, -0.87, -0.45] },
+    shinL: { dir: [0.06, -0.97, 0.2] },
+    thighR: { dir: [-0.2, -0.83, 0.52] },
+    shinR: { dir: [-0.06, -0.97, -0.2] },
+    armR: { dir: [-0.9, 0.05, 0.3] },
+    forearmR: { dir: [-0.45, 0.62, 0.42] },
+    armL: { dir: [0.88, -0.35, 0.3] },
+    forearmL: { dir: [0.75, -0.3, 0.45] },
   },
 };
