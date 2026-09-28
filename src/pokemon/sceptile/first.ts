@@ -862,3 +862,6 @@ export const SCEPTILE_EXPRESSIONS: Record<string, [number, number]> = {
   focus: [1, 2],
   hurt: [0, 3],
 };
+
+// The first clips' own helpers, for the clips added since in the same style (./more.ts).
+export { key, snap, fall, ANGRY, FOCUS, SHUT, DROWSY, HAPPY, HURT, OPEN_EYES, jaw, pelvis, root, advance, bend, twist, tail, arms, both, GUARD, CROSSED, BRACED, ELBOWS_BACK, CLAWS_OUT, REACH, TUCK, HOP, DART, DROP, LAND };

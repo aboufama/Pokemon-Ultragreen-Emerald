@@ -5,6 +5,7 @@ import { DEFAULT_OVERLAP } from '../../anim/animator';
 import { RIG, TAIL_FRONDS } from './rig';
 import { STANCE } from './poses';
 import { SCEPTILE_CLIPS, SCEPTILE_EXPRESSIONS } from './first';
+import { MORE_CLIPS } from './more';
 import calibration from './calibration.json';
 
 /** The tail's fern leaflets: two-bone chains on Tail3..Tail5, stiff, so the frond rustles as the tail moves. */
@@ -18,7 +19,8 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     slug: 'sceptile',
     rig: RIG,
     poses: { stance: STANCE },
-    clips: SCEPTILE_CLIPS,
+    // The first clips, and clips in their style for the actions they had none for.
+    clips: { ...SCEPTILE_CLIPS, ...MORE_CLIPS },
     // The model has no effect meshes (no glow or flame parts).
     effectParts: [],
     effects: {},
@@ -33,12 +35,15 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
     // The leaf blades on the forearms: the tip of each front blade.
     emitters: {
       blades: { bones: ['bladeATipR', 'bladeATipL'] },
+      // The fern tail's tip (Mud Sport flings the mud with it).
+      tail: { bones: ['tail7'] },
     },
     emitterFor: {
       // Leaf volleys (Swift, Rock Tomb) fly off the forearm blades as the arms whip across.
       throw: 'blades',
       // Toxic is spat at the foe.
       powder: 'mouth',
+      kick_sand: 'tail',
     },
     // Loose parts on springs: the long tail (heavy, a little loose), the
     // forearm blades and the tail's leaflets (stiff).
@@ -87,6 +92,11 @@ export async function createProfile(palettes: { normal: SpeciesProfile['palette'
       heal: 'status_self_heal',
       charm: 'status_target_glare',
       glare: 'status_target_glare',
+      // As the first clips have it: Snore is its mouth attack, Hidden Power its
+      // strong ranged one; Toxic and Leech Seed are spat from the mouth.
+      sound: 'special_weak',
+      orb: 'special_strong',
+      powder: 'special_weak',
     },
     hiddenParts: [],
     showcaseMoves: ['LEAF_BLADE', 'SOLAR_BEAM', 'SLAM', 'AGILITY'],
