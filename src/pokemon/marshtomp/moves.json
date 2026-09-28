@@ -72,7 +72,7 @@
       "by": "hand"
     },
     "MOVE_WATER_PULSE": {
-      "part": "hands",
+      "part": "mouth",
       "by": "hand"
     },
     "MOVE_TOXIC": {
@@ -84,7 +84,7 @@
       "by": "hand"
     },
     "MOVE_HIDDEN_POWER": {
-      "part": "hands",
+      "part": "mouth",
       "by": "hand"
     },
     "MOVE_ICE_BEAM": {
