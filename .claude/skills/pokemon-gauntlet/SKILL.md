@@ -54,7 +54,11 @@ node tools/prepare_libs.mjs     # copies the Draco decoder into public/libs (npm
 npx vite --port 5173 --strictPort --host 127.0.0.1 &
 ```
 
-In a git worktree (several agents at once, each in its own):
+In a git worktree (an agent working beside another, each in its own).
+Run few at a time: at most two or three agents at once, one species each.
+The user asked for slower, less parallel work. Fourteen at once overloaded the
+4-core machine (load over 40) and used up the account's weekly limit in an
+hour.
 
 ```sh
 node tools/gauntlet/setup_worktree.mjs   # links the main checkout's node_modules, copies the
