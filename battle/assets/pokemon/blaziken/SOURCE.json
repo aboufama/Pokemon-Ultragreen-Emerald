@@ -1,0 +1,17 @@
+{
+  "dex": 257,
+  "slug": "blaziken",
+  "upstream": "https://github.com/Pokemon-3D-api/assets",
+  "fetchedAt": "2026-09-24T16:33:49.304Z",
+  "license": "Model assets are property of Nintendo / Creatures Inc. / GAME FREAK inc. (per upstream README).",
+  "files": [
+    {
+      "file": "model.glb",
+      "variant": "regular",
+      "url": "https://raw.githubusercontent.com/Pokemon-3D-api/assets/main/models/opt/regular/257.glb",
+      "bytes": 90552,
+      "sha256": "1dca0885fded1865e41696181cd57767ee206b2154f2da41d42b132486ca0016"
+    }
+  ],
+  "note": "Shiny Blaziken uses this mesh with the shiny GBA palette (same indices); the upstream shiny export has a different skeleton."
+}

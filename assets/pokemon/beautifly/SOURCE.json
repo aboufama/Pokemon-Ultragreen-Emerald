@@ -1,0 +1,16 @@
+{
+  "dex": 267,
+  "slug": "beautifly",
+  "upstream": "https://github.com/Pokemon-3D-api/assets",
+  "fetchedAt": "2026-09-27T18:37:05.465Z",
+  "license": "Model assets are property of Nintendo / Creatures Inc. / GAME FREAK inc. (per upstream README).",
+  "files": [
+    {
+      "file": "model.glb",
+      "variant": "regular",
+      "url": "https://raw.githubusercontent.com/Pokemon-3D-api/assets/main/models/opt/regular/267.glb",
+      "bytes": 64880,
+      "sha256": "a696f0b210e0659951b466d52ba095f3f96268b543f2ad86b526fd91c7a44ce7"
+    }
+  ]
+}

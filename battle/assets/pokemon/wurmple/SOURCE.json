@@ -1,0 +1,28 @@
+{
+  "dex": 265,
+  "slug": "wurmple",
+  "upstream": "https://github.com/Pokemon-3D-api/assets",
+  "fetchedAt": "2026-09-27T02:24:41.602Z",
+  "license": "Model assets are property of Nintendo / Creatures Inc. / GAME FREAK inc. (per upstream README).",
+  "files": [
+    {
+      "file": "model.glb",
+      "variant": "regular",
+      "url": "https://raw.githubusercontent.com/Pokemon-3D-api/assets/main/models/opt/regular/265.glb",
+      "bytes": 52196,
+      "sha256": "64855a4e034a43d08cd34f3fcd8d5512ff49c8057d168f9952c032a7cfb009b5"
+    }
+  ],
+  "rigged": {
+    "upstreamSha256": "64855a4e034a43d08cd34f3fcd8d5512ff49c8057d168f9952c032a7cfb009b5",
+    "joints": 11,
+    "note": "The upstream export is a static mesh with no skeleton: a caterpillar's skeleton was baked in with a one-off script (before tools/models/rig_static.mjs existed). Every joint is unrotated at bind, lying along the body (+Z head first, model units): Hips (0, 4.3, -2.0) > Spine1 (0, 4.3, 0.5) > Spine2 (0, 4.5, 3.0) > Neck (0, 5.2, 5.5) > Head (0, 8.5, 8.7) > Crest (0, 16.0, 12.0), Mouth (0, 8.4, 16.3); Hips > Tail1 (0, 4.3, -4.5) > Tail2 (0, 4.3, -7.0) > Tail3 (0, 4.4, -9.5) > TailSpikes (0, 7.0, -9.8). Weights: each vertex belongs to the body segment its z falls in (Tail3 < -9.5 < Tail2 < -7.0 < Tail1 < -4.5 < Hips < 0.5 < Spine1 < 3.0 < Spine2 < 5.5 < Neck < 8.7 < Head), blended across each joint by a smoothstep of radius 1.0; the crest (y 15.3..17.0 above z 9.2..10.2) and the yellow tail spikes (texture colour, z < -7.5, y 6.3..7.6) fade onto their own bones; the eyes follow the head.",
+    "sha256": "06fce15a1088e497a40a9c1addbeb87d1d40dd2d52bf0cb6c5bd8e9d760759f4",
+    "bytes": 61840
+  },
+  "tinted": {
+    "note": "The body texture (Body00, 512x256) warmed toward the stock sprite's hues, which palette snapping keeps: the official texture paints the belly and face a neutral white (only white or grey after snapping) where the sprite paints cream (255,255,214 / 222,214,165), and the spikes a pale orange-yellow where the sprite's are pure yellow (247,247,0 / 198,198,90). Belly strip (texture x 205..305) texels within 26 of neutral and r > 110: r, g, b x (1.0, 0.975, 0.8). Spike texels (r-b > 50, g > 120, g-b > 30, r-g < 60): g raised to 0.97 r, b x 0.7. Feet and belly sides unchanged. Re-encoded as WebP (quality 92) and Draco (edgebreaker, position 14 bits). Color fit loss 1.07 before, 0.68 after (tools/calibrate/run.mjs --phase color).",
+    "bytes": 66612,
+    "sha256": "4547f5b8c680e99c7eb69cf3738ca2ed7b4fcadca8e01a525f6fcc0b0f16c1d8"
+  }
+}

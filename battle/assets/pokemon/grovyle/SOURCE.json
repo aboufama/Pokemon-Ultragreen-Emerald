@@ -1,0 +1,29 @@
+{
+  "dex": 253,
+  "slug": "grovyle",
+  "upstream": "https://github.com/Pokemon-3D-api/assets",
+  "fetchedAt": "2026-09-27T18:38:37.235Z",
+  "license": "Model assets are property of Nintendo / Creatures Inc. / GAME FREAK inc. (per upstream README).",
+  "files": [
+    {
+      "file": "model.glb",
+      "variant": "regular",
+      "url": "https://raw.githubusercontent.com/Pokemon-3D-api/assets/main/models/opt/regular/253.glb",
+      "bytes": 380856,
+      "sha256": "b824ea4dfab122f6d092f2c746d2fecfe2fb76b8aa39eb0fdb582ff062cd4fdb"
+    }
+  ],
+  "optimized": {
+    "tool": "tools/models/optimize_model.mjs",
+    "removedAnimations": 27,
+    "droppedNodes": 0,
+    "bytesBefore": 380856,
+    "bytes": 77996,
+    "sha256": "d4cc6e5c27e1cc3b3095d07ef7951ba2ef93e2010ea7fc3c27a215cefca82364"
+  },
+  "recolored": {
+    "note": "The leaf texture (material_2: the head, arm and tail leaves) hue-rotated from the model's dark green to hue 192 (value x1.15), the teal the stock Emerald sprites draw Grovyle's leaves in, so the pixel pipeline snaps them to the sprite palette's teal ramp; materials renamed body/eye/leaves (the eye atlas is found by name). Re-encoded with gltf-transform (Draco geometry, WebP q92 texture).",
+    "bytes": 81724,
+    "sha256": "d05dd559a31e531f5fe4d25cd236280a614df5bae291be29a88752c361c6fce6"
+  }
+}
